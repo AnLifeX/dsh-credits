@@ -11,7 +11,25 @@ DeepSeek Harness（`dsh web`）额度插件：在输入框下方统计条同一�
 - **可视化设置**  
   齿轮图标打开：数据源、阈值滑块、API 凭证、连通性测试、模型单价、YAML 导出。保存后立即生效。
 
-![示例预览](./assets/preview.png)
+## 界面预览
+
+悬停底部读数，会展开双栏卡片：左侧是账户额度（DeepSeek 列出全部币种钱包，Go 列出三个用量窗口），右侧是本会话估算。
+
+![DeepSeek 官方余额悬停卡片](./assets/preview.png)
+
+底部统计条会跟输入框那一行并排：
+
+![DeepSeek 余额条](./assets/bar-deepseek.png)
+
+![OpenCode Go 额度条](./assets/bar-go.png)
+
+OpenCode Go 模式下，卡片改成三个窗口的用量百分比与重置时间：
+
+![OpenCode Go 额度卡片](./assets/card-go.png)
+
+右下角可拖动的累计消耗胶囊，按今天 / 昨天 / 本周 / 本月 / 自定义区间汇总跨会话估算：
+
+![累计消耗胶囊](./assets/capsule.png)
 
 ## 数据源
 
@@ -109,7 +127,7 @@ Go 模式展示 5 小时 / 每周 / 每月三个窗口的用量百分比与重�
       deepseek-v4-pro: { cacheHit: 0.0035, cacheMiss: 0.42, output: 0.84 }
 ```
 
-`prices` 是「当前 `currency` 下每 1M token」的单价。DeepSeek 账户的 CNY / USD 是两套独立钱包：底部会列出选定货币，以及其它仍有余额的钱包；悬停卡片列出全部钱包。计价货币只影响本会话估算和状态灯，不会把其它钱包藏掉。切换货币时会套用该币种官方推荐单价（不会做汇率换算）。
+`prices` 是「当前 `currency` 下每 1M token」的刊例单价。DeepSeek 账户的 CNY / USD 是两套独立钱包：底部会列出选定货币，以及其它仍有余额的钱包；悬停卡片列出全部钱包。计价货币只影响本会话/累计估算和状态灯，不会把其它钱包藏掉。切换货币时会套用该币种官方刊例单价，**不会做汇率换算**。V4 在 2026-08-17 之后按北京时间走峰谷价，人民币和美元同步切换（美元 = 人民币官方价 × 0.14）。
 
 ## 架构
 
@@ -123,7 +141,7 @@ Go 模式展示 5 小时 / 每周 / 每月三个窗口的用量百分比与重�
 | `POST /query-credits/config` | 保存配置并立即生效 |
 | `POST /query-credits/test-connection` | 连通性测试 |
 
-本会话花费由 `queryCreditsCost` 投影折叠，随 `session/projection` 推送。累计消耗在服务端按会话事件折叠 token，查询时再按当前单价计价；有 `sessionQuery` 时会回放历史会话，没有则只统计插件启动后的 live 事件。
+本会话花费由 `queryCreditsCost` 投影折叠 token（每笔带事件时间），按该笔发生时的北京时间峰谷价计价；前端切货币时仍按各自行情重算，不会用“此刻”的单价覆盖早上的高峰用量。累计消耗同样按事件时间计价，并落盘到 `$DSH_HOME/storages/dsh-credits-spend.json`。胶囊位置和所选时间范围记在浏览器 `localStorage`。
 
 密钥走 Harness `credentials`，默认不写进配置文件。
 
