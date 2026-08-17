@@ -10,8 +10,15 @@ const usdFlash = resolveModelPrice({
   currency: 'USD',
   prices: { 'deepseek-v4-flash': { cacheHit: 1, cacheMiss: 2, output: 3 } },
   defaultPrices: { cacheHit: 0, cacheMiss: 0, output: 0 },
-}, 'deepseek-v4-flash')
-assert.equal(usdFlash.cacheMiss, 2, 'non-CNY currency must use configured prices, not CNY peak table')
+}, 'deepseek-v4-flash', Date.parse('2026-08-17T05:30:00.000Z')) // 北京 13:30 非高峰
+assert.equal(usdFlash.cacheMiss, 0.21, 'USD V4 must use official off-peak table, not config.prices or CNY numbers')
+
+const usdChat = resolveModelPrice({
+  currency: 'USD',
+  prices: { 'deepseek-chat': { cacheHit: 1, cacheMiss: 2, output: 3 } },
+  defaultPrices: { cacheHit: 0, cacheMiss: 0, output: 0 },
+}, 'deepseek-chat')
+assert.equal(usdChat.cacheMiss, 2, 'non-V4 models still use configured prices')
 
 const config = {
   currency: 'CNY',
@@ -63,6 +70,8 @@ assert.equal(view.costByModel['deepseek-reasoner'], 0.00144)
 assert.equal(Math.round(view.cost * 1e6), 2152)
 assert.deepEqual(view.models, ['deepseek-chat', 'deepseek-reasoner'])
 assert.equal(view.currency, 'CNY')
+assert.deepEqual(view.tokensByModel['deepseek-chat'], { uncachedInput: 100, cacheRead: 60, cacheWrite: 10, output: 60 })
+assert.deepEqual(view.tokensByModel['deepseek-reasoner'], { uncachedInput: 200, cacheRead: 0, cacheWrite: 0, output: 40 })
 
 // 未知名模型使用回退价(deepseek-chat 默认)
 state = def.init()
@@ -82,4 +91,31 @@ assert.equal(liveDef.view(liveState).currency, 'CNY')
 live = { ...live, currency: 'USD', pricingEpoch: 1 }
 assert.equal(liveDef.view(liveState).currency, 'USD', 'view must pick up currency without new session events')
 assert.equal(liveDef.view(liveState).pricingEpoch, 1)
+
+const peak = Date.parse('2026-08-17T02:00:00.000Z') // 北京时间 10:00 高峰
+const cnyPeak = resolveModelPrice({ currency: 'CNY' }, 'deepseek-v4-flash', peak)
+const usdPeak = resolveModelPrice({ currency: 'USD' }, 'deepseek-v4-flash', peak)
+assert.equal(cnyPeak.cacheMiss, 3)
+assert.equal(usdPeak.cacheMiss, 0.42)
+assert.equal(usdPeak.output, 1.26)
+
+let v4 = { currency: 'CNY', prices: {}, defaultPrices: { cacheHit: 0, cacheMiss: 0, output: 0 }, pricingEpoch: 0 }
+const v4Def = makeCostProjection(() => v4)
+let v4State = v4Def.init()
+v4State = v4Def.apply(v4State, { type: 'request/header', data: { header: { config: { model: 'deepseek-v4-flash' } } } })
+v4State = v4Def.apply(v4State, {
+  type: 'assistant/message',
+  time: peak,
+  data: { turn: 0, step: 0, usage: { inputTokens: 1e6, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 } },
+})
+assert.equal(v4Def.view(v4State).cost, 3, 'peak sample must stay at peak price even if viewed later')
+const offPeak = Date.parse('2026-08-17T05:30:00.000Z') // 北京 13:30
+v4State = v4Def.apply(v4State, {
+  type: 'assistant/message',
+  time: offPeak,
+  data: { turn: 0, step: 1, usage: { inputTokens: 1e6, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 } },
+})
+assert.equal(v4Def.view(v4State).cost, 4.5, 'session cost must sum peak 3 + off-peak 1.5, not reprice everything at now')
+v4 = { ...v4, currency: 'USD', pricingEpoch: 1 }
+assert.equal(v4Def.view(v4State).cost, 0.63)
 console.log('PROJECTION TEST PASSED')

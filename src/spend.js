@@ -2,7 +2,7 @@
  * 跨会话累计消耗: 从会话事件折叠出带时间戳的用量样本, 再按区间聚合。
  * 样本只存 token, 查询时用当前单价/货币重算, 切换计价货币后累计金额会跟着变。
  */
-import { resolveModelPrice } from './pricing.js'
+import { priceBuckets } from './pricing.js'
 
 const round6 = (n) => Math.round(n * 1e6) / 1e6
 
@@ -137,13 +137,6 @@ export const foldSpendEvents = (events) => {
   let state = initSpendFold()
   for (const event of events ?? []) state = applySpendEvent(state, event)
   return Object.values(state.samples)
-}
-
-const priceBuckets = (cfg, model, buckets, timestamp) => {
-  const price = resolveModelPrice(cfg, model, timestamp)
-  return ((buckets.uncachedInputTokens + buckets.cacheWriteTokens) * price.cacheMiss +
-    buckets.cacheReadTokens * price.cacheHit +
-    buckets.outputTokens * price.output) / 1e6
 }
 
 export const aggregateSpend = (samples, cfg, from, to) => {

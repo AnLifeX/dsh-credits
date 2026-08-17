@@ -17,9 +17,9 @@
 import Schema from '@deepseek-ai/schemastery'
 import { z } from 'zod'
 import { homedir } from 'node:os'
-import { join } from 'node:path'
-import { readFile } from 'node:fs/promises'
-import { resolveModelPrice } from './pricing.js'
+import { join, dirname } from 'node:path'
+import { readFile, writeFile, mkdir } from 'node:fs/promises'
+import { resolveModelPrice, priceBuckets } from './pricing.js'
 import { applySpendEvent, aggregateSpend, initSpendFold, resolveSpendRange } from './spend.js'
 
 export { resolveModelPrice } from './pricing.js'
@@ -109,7 +109,7 @@ export const normalizeOpencodeUsage = (data) => {
   }
 }
 
-/** 构造会话花费投影单元。 */
+/** 构造会话花费投影单元。样本带事件时间, view 按当时峰谷价计价。 */
 export const makeCostProjection = (configOrGetter) => {
   const getConfig = () => typeof configOrGetter === 'function' ? configOrGetter() : configOrGetter
   const zero = () => ({ uncachedInputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0 })
@@ -122,19 +122,10 @@ export const makeCostProjection = (configOrGetter) => {
   const bucketsEqual = (a, b) =>
     a.uncachedInputTokens === b.uncachedInputTokens && a.cacheReadTokens === b.cacheReadTokens &&
     a.cacheWriteTokens === b.cacheWriteTokens && a.outputTokens === b.outputTokens
-  const addBuckets = (a, b) => ({
-    uncachedInputTokens: a.uncachedInputTokens + b.uncachedInputTokens,
-    cacheReadTokens: a.cacheReadTokens + b.cacheReadTokens,
-    cacheWriteTokens: a.cacheWriteTokens + b.cacheWriteTokens,
-    outputTokens: a.outputTokens + b.outputTokens,
-  })
-  const subBuckets = (a, b) => ({
-    uncachedInputTokens: a.uncachedInputTokens - b.uncachedInputTokens,
-    cacheReadTokens: a.cacheReadTokens - b.cacheReadTokens,
-    cacheWriteTokens: a.cacheWriteTokens - b.cacheWriteTokens,
-    outputTokens: a.outputTokens - b.outputTokens,
-  })
-  const priceOf = (model) => resolveModelPrice(getConfig(), model)
+  const eventTime = (event) => {
+    const t = Number(event?.time)
+    return Number.isFinite(t) && t > 0 ? t : Date.now()
+  }
   const round6 = (n) => Math.round(n * 1e6) / 1e6
 
   return {
@@ -149,10 +140,24 @@ export const makeCostProjection = (configOrGetter) => {
         cacheWrite: z.number().int().nonnegative(),
         output: z.number().int().nonnegative(),
       }).strict(),
+      tokensByModel: z.record(z.string(), z.object({
+        uncachedInput: z.number().int().nonnegative(),
+        cacheRead: z.number().int().nonnegative(),
+        cacheWrite: z.number().int().nonnegative(),
+        output: z.number().int().nonnegative(),
+      }).strict()),
+      legs: z.array(z.object({
+        t: z.number(),
+        model: z.string(),
+        uncachedInput: z.number().int().nonnegative(),
+        cacheRead: z.number().int().nonnegative(),
+        cacheWrite: z.number().int().nonnegative(),
+        output: z.number().int().nonnegative(),
+      }).strict()),
       currency: z.string(),
       pricingEpoch: z.number().int().nonnegative(),
     }).strict(),
-    init: () => ({ currentModel: null, last: null, byModel: {}, modelOrder: [] }),
+    init: () => ({ currentModel: null, last: null, samples: {}, modelOrder: [] }),
     apply: (state, event) => {
       let nextModel = state.currentModel
       if (event.type === 'request/header') {
@@ -172,59 +177,69 @@ export const makeCostProjection = (configOrGetter) => {
         ({ turn, step, usage } = event.data)
       }
       if (usage === null) {
-        // 与单元无关的事件: 返回同一引用(驱动以 Object.is 把关变更流)。
         return nextModel === state.currentModel ? state : { ...state, currentModel: nextModel }
       }
       const model = nextModel ?? 'unknown'
       const buckets = bucketsOf(usage)
-      const previous = state.last !== null && state.last.turn === turn && state.last.step === step ? state.last : null
-      if (previous !== null && previous.model === model && bucketsEqual(previous.buckets, buckets)) {
+      const t = eventTime(event)
+      const key = `${turn}:${step}`
+      const previous = state.samples?.[key]
+      if (previous && previous.model === model && bucketsEqual(previous.buckets, buckets) && previous.t === t) {
         return nextModel === state.currentModel ? state : { ...state, currentModel: nextModel }
       }
-      const isNewModel = !(model in state.byModel)
-      let byModel = state.byModel
-      if (previous !== null) {
-        // 同一步骤的替换样本: 先减去旧归属, 再加新归属。
-        byModel = { ...byModel, [previous.model]: subBuckets(byModel[previous.model] ?? zero(), previous.buckets) }
-      }
-      byModel = { ...byModel, [model]: addBuckets(byModel[model] ?? zero(), buckets) }
+      const isNewModel = !(state.modelOrder ?? []).includes(model)
       return {
-        ...state,
         currentModel: nextModel,
-        last: { turn, step, model, buckets },
-        byModel,
-        modelOrder: isNewModel ? [...state.modelOrder, model] : state.modelOrder,
+        last: { turn, step, model },
+        samples: { ...(state.samples ?? {}), [key]: { t, model, buckets } },
+        modelOrder: isNewModel ? [...(state.modelOrder ?? []), model] : state.modelOrder,
       }
     },
     view: (state) => {
       const cfg = getConfig()
       const tokens = { uncachedInput: 0, cacheRead: 0, cacheWrite: 0, output: 0 }
+      const tokensByModel = {}
       const costByModel = {}
+      const legs = []
       let cost = 0
-      for (const model of state.modelOrder) {
-        const b = state.byModel[model] ?? zero()
+      for (const sample of Object.values(state.samples ?? {})) {
+        const b = sample.buckets ?? zero()
+        const model = sample.model ?? 'unknown'
         tokens.uncachedInput += b.uncachedInputTokens
         tokens.cacheRead += b.cacheReadTokens
         tokens.cacheWrite += b.cacheWriteTokens
         tokens.output += b.outputTokens
-        // DeepSeek 计费: 未命中输入(含缓存写入)按 miss 价, 命中按 hit 价, 输出按 output 价。
-        // 配置价是"每 1M token"的价格, 因此除以 1e6。
-        const c = ((b.uncachedInputTokens + b.cacheWriteTokens) * priceOf(model).cacheMiss +
-          b.cacheReadTokens * priceOf(model).cacheHit +
-          b.outputTokens * priceOf(model).output) / 1e6
-        if (c > 0) costByModel[model] = round6(c)
+        const prevTok = tokensByModel[model] ?? { uncachedInput: 0, cacheRead: 0, cacheWrite: 0, output: 0 }
+        tokensByModel[model] = {
+          uncachedInput: prevTok.uncachedInput + b.uncachedInputTokens,
+          cacheRead: prevTok.cacheRead + b.cacheReadTokens,
+          cacheWrite: prevTok.cacheWrite + b.cacheWriteTokens,
+          output: prevTok.output + b.outputTokens,
+        }
+        const c = priceBuckets(cfg, model, b, sample.t)
+        if (c > 0) costByModel[model] = round6((costByModel[model] ?? 0) + c)
         cost += c
+        legs.push({
+          t: sample.t,
+          model,
+          uncachedInput: b.uncachedInputTokens,
+          cacheRead: b.cacheReadTokens,
+          cacheWrite: b.cacheWriteTokens,
+          output: b.outputTokens,
+        })
       }
       return {
-        models: state.modelOrder,
+        models: state.modelOrder ?? [],
         cost: round6(cost),
         costByModel,
         tokens,
+        tokensByModel,
+        legs,
         currency: cfg.currency,
         pricingEpoch: Number(cfg.pricingEpoch ?? 0),
       }
     },
-    stateVersion: 1,
+    stateVersion: 2,
   }
 }
 
@@ -273,17 +288,45 @@ export function apply(ctx, config) {
   let remountCostProjection = () => {}
 
   const spendFolds = new Map()
+  const spendFile = join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'storages', 'dsh-credits-spend.json')
+  let spendSaveTimer = null
+  const scheduleSaveSpend = () => {
+    if (spendSaveTimer !== null) return
+    spendSaveTimer = setTimeout(() => {
+      spendSaveTimer = null
+      const sessions = {}
+      for (const [sessionId, state] of spendFolds) sessions[sessionId] = state
+      mkdir(dirname(spendFile), { recursive: true })
+        .then(() => writeFile(spendFile, JSON.stringify({ version: 1, savedAt: Date.now(), sessions })))
+        .catch(() => { /* 磁盘不可写时累计仍在内存中 */ })
+    }, 800)
+  }
+  const mergeSpendFold = (sessionId, incoming) => {
+    const key = String(sessionId)
+    const cur = spendFolds.get(key)
+    if (!cur) {
+      spendFolds.set(key, incoming)
+      return
+    }
+    spendFolds.set(key, {
+      currentModel: cur.currentModel ?? incoming.currentModel,
+      last: cur.last ?? incoming.last,
+      samples: { ...(incoming.samples ?? {}), ...(cur.samples ?? {}) },
+    })
+  }
   const ingestSessionEvents = (sessionId, events) => {
     if (!sessionId) return
     let state = initSpendFold()
     for (const event of events ?? []) state = applySpendEvent(state, event)
     spendFolds.set(String(sessionId), state)
+    scheduleSaveSpend()
   }
   const ingestLiveEvent = (session, event) => {
     const id = session?.id ?? session?.header?.id
     if (!id || !event) return
     const key = String(id)
     spendFolds.set(key, applySpendEvent(spendFolds.get(key) ?? initSpendFold(), event))
+    scheduleSaveSpend()
   }
   const allSpendSamples = () => {
     const out = []
@@ -297,6 +340,22 @@ export function apply(ctx, config) {
     const off = ctx.on('session/event', (session, event) => ingestLiveEvent(session, event), { global: true })
     return typeof off === 'function' ? off : undefined
   }, 'dsh-credits: spend live')
+
+  ctx.effect(() => {
+    let cancelled = false
+    void (async () => {
+      try {
+        const raw = JSON.parse(await readFile(spendFile, 'utf8'))
+        if (cancelled) return
+        for (const [sessionId, state] of Object.entries(raw.sessions ?? {})) {
+          if (state && typeof state === 'object') mergeSpendFold(sessionId, state)
+        }
+      } catch {
+        /* 首次运行没有落盘文件 */
+      }
+    })()
+    return () => { cancelled = true }
+  }, 'dsh-credits: spend hydrate')
 
   ctx.inject(['sessionQuery'], (queryCtx) => {
     queryCtx.effect(() => {
@@ -498,6 +557,7 @@ export function apply(ctx, config) {
         refreshIntervalMs: runtimeConfig.refreshIntervalMs,
         clientPollIntervalMs: runtimeConfig.clientPollIntervalMs,
         currency: runtimeConfig.currency,
+        pricingEpoch: Number(runtimeConfig.pricingEpoch ?? 0),
         thresholds: {
           warning: runtimeConfig.warningThreshold,
           danger: runtimeConfig.dangerThreshold,
@@ -602,7 +662,7 @@ export function apply(ctx, config) {
               runtimeConfig.defaultPrices = { ...runtimeConfig.defaultPrices, ...body.defaultPrices }
             }
             runtimeConfig.pricingEpoch = Number(runtimeConfig.pricingEpoch ?? 0) + 1
-            remountCostProjection()
+            try { remountCostProjection() } catch { /* 宿主可能拒绝同 key 重挂; 客户端按最新单价重算 */ }
 
             // 配置变更后重设刷新循环并立即拉取一次最新数据
             resetLoop()
@@ -752,7 +812,7 @@ export function apply(ctx, config) {
   // 可选 sessionProjections: 会话花费投影 (使用动态 getter)
   ctx.inject(['sessionProjections'], (projectionCtx) => {
     let dispose = null
-    let stateVersion = 1
+    let stateVersion = 2
     const mount = () => {
       if (typeof dispose === 'function') {
         try { dispose() } catch { /* 旧单元卸载失败时仍注册新单元 */ }

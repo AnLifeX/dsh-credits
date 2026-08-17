@@ -78,4 +78,15 @@ const usd = aggregateSpend(tagged, { ...cfg, currency: 'USD', prices: { 'unknown
 assert.equal(usd.currency, 'USD')
 assert.equal(usd.cost, 0.1)
 
+const peak = Date.parse('2026-08-17T02:00:00.000Z')
+const v4Samples = [{
+  t: peak,
+  model: 'deepseek-v4-flash',
+  sessionId: 's1',
+  buckets: { uncachedInputTokens: 1e6, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0 },
+}]
+const v4Cny = aggregateSpend(v4Samples, { currency: 'CNY', prices: {}, defaultPrices: { cacheHit: 0, cacheMiss: 0, output: 0 } }, peak - 1000, peak + 1000)
+const v4Usd = aggregateSpend(v4Samples, { currency: 'USD', prices: {}, defaultPrices: { cacheHit: 0, cacheMiss: 0, output: 0 } }, peak - 1000, peak + 1000)
+assert.equal(v4Cny.cost, 3)
+assert.equal(v4Usd.cost, 0.42)
 console.log('SPEND TEST PASSED')
