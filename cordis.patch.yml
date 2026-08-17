@@ -1,0 +1,18 @@
+# dsh-credits bundle 层。
+# 安装: dsh plugin --profile web add <本目录>
+#
+# 默认使用 OpenCode Go 订阅额度。切回 DeepSeek 官方余额:
+#   provider: deepseek
+#   baseUrl: https://api.deepseek.com
+#   apiKeyRef: DEEPSEEK_API_KEY
+- insert:
+    - id: dsh-credits
+      name: dsh-credits
+      config:
+        provider: opencode-go
+        opencodeApiKeyRef: OPENCODE_GO_API_KEY
+        opencodeBaseUrl: https://opencode.ai/zen/go/v1/usage
+        warningThreshold: 10          # OpenCode Go: 剩余额度 < 10% 黄灯
+        dangerThreshold: 5            # OpenCode Go: 剩余额度 < 5% 红灯
+        refreshIntervalMs: 300000
+        clientPollIntervalMs: 30000

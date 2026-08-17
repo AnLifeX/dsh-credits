@@ -1,0 +1,75 @@
+{
+  "name": "dsh-credits",
+  "version": "0.1.0",
+  "description": "DeepSeek Harness 额度插件：DeepSeek 官方余额 / OpenCode Go 订阅用量、本会话估算消耗、可视化设置",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "deepseek",
+    "opencode-go",
+    "balance",
+    "quota",
+    "credits",
+    "cost"
+  ],
+  "license": "MIT",
+  "homepage": "https://github.com/Gaq152/dsh-credits#readme",
+  "bugs": {
+    "url": "https://github.com/Gaq152/dsh-credits/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Gaq152/dsh-credits.git"
+  },
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./client": "./client/client.js",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "test": "node test/smoke-projection.mjs && node test/smoke-config-api.mjs && node test/smoke-client.mjs"
+  },
+  "files": [
+    "src",
+    "client",
+    "cordis.patch.yml",
+    "README.md",
+    "LICENSE",
+    "assets"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "inject": [
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ]
+    }
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.1",
+    "zod": "^4.4.3"
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/dsh-credentials": "^0.1.0-rc.6"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    },
+    "@deepseek-ai/dsh-credentials": {
+      "optional": true
+    }
+  }
+}
