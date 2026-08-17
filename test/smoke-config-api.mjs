@@ -27,6 +27,9 @@ const mockCtx = {
     info() {},
     error() {},
   },
+  on() {
+    return () => {}
+  },
   effect(fn) {
     fn()
   },
@@ -226,6 +229,13 @@ async function runTests() {
 
   // 4. 验证 /query-credits/test-connection 路由注册
   assert.ok(routes.has('/query-credits/test-connection'), 'test-connection route should be registered')
+
+  const resSpend = await invokeRoute('/query-credits/spend', 'GET', null, 'range=today')
+  assert.equal(resSpend.status, 200)
+  assert.equal(resSpend.data.ok, true)
+  assert.equal(resSpend.data.range, 'today')
+  assert.equal(typeof resSpend.data.cost, 'number')
+  console.log('GET /query-credits/spend passed')
 
   console.log('ALL CONFIG API TESTS PASSED')
   process.exit(0)

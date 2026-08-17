@@ -19,7 +19,10 @@ import { z } from 'zod'
 import { homedir } from 'node:os'
 import { join } from 'node:path'
 import { readFile } from 'node:fs/promises'
+import { resolveModelPrice } from './pricing.js'
+import { applySpendEvent, aggregateSpend, initSpendFold, resolveSpendRange } from './spend.js'
 
+export { resolveModelPrice } from './pricing.js'
 export const name = 'dsh-credits'
 
 /** 支持的额度数据源。 */
@@ -70,43 +73,6 @@ export const Config = Schema.object({
   /** 未列出的模型的回退单价 */
   defaultPrices: ModelPrice.default({ cacheHit: 0.1, cacheMiss: 1, output: 2 }),
 })
-
-/** 实时计算指定模型在指定时间戳下的单价(内置 DeepSeek V4 8月17日谷峰费率自动切换规则) */
-export const resolveModelPrice = (configOrGetter, model, timestamp = Date.now()) => {
-  const config = typeof configOrGetter === 'function' ? configOrGetter() : configOrGetter
-  const isV4Flash = model === 'deepseek-v4-flash'
-  const isV4Pro = model === 'deepseek-v4-pro'
-
-  // 峰谷引擎内置的是人民币官方价; 非 CNY 时使用配置表(切换货币后金额才会跟着变)。
-  if ((config.currency || 'CNY') !== 'CNY') {
-    return config.prices?.[model] ?? config.defaultPrices
-  }
-
-  if (!isV4Flash && !isV4Pro) {
-    return config.prices?.[model] ?? config.defaultPrices
-  }
-
-  // 2026-08-17T00:00:00+08:00 (北京时间 8月17日 00:00)
-  const isAfterCutoff = timestamp >= 1786896000000
-
-  if (!isAfterCutoff) {
-    if (isV4Flash) return { cacheHit: 0.02, cacheMiss: 1, output: 2 }
-    if (isV4Pro) return { cacheHit: 0.025, cacheMiss: 3, output: 6 }
-  }
-
-  const d = new Date(timestamp)
-  const hourBJT = (d.getUTCHours() + 8) % 24
-  const isPeak = (hourBJT >= 9 && hourBJT < 12) || (hourBJT >= 14 && hourBJT < 18)
-
-  if (isPeak) {
-    if (isV4Flash) return { cacheHit: 0.10, cacheMiss: 3.0, output: 9.0 }
-    if (isV4Pro) return { cacheHit: 0.30, cacheMiss: 9.0, output: 27.0 }
-  } else {
-    if (isV4Flash) return { cacheHit: 0.05, cacheMiss: 1.5, output: 4.5 }
-    if (isV4Pro) return { cacheHit: 0.15, cacheMiss: 4.5, output: 13.5 }
-  }
-  return config.defaultPrices
-}
 
 /** 归一化 DeepSeek 余额响应中的金额字符串。 */
 const toAmount = (value) => {
@@ -305,6 +271,57 @@ export function apply(ctx, config) {
 
   const getConfig = () => runtimeConfig
   let remountCostProjection = () => {}
+
+  const spendFolds = new Map()
+  const ingestSessionEvents = (sessionId, events) => {
+    if (!sessionId) return
+    let state = initSpendFold()
+    for (const event of events ?? []) state = applySpendEvent(state, event)
+    spendFolds.set(String(sessionId), state)
+  }
+  const ingestLiveEvent = (session, event) => {
+    const id = session?.id ?? session?.header?.id
+    if (!id || !event) return
+    const key = String(id)
+    spendFolds.set(key, applySpendEvent(spendFolds.get(key) ?? initSpendFold(), event))
+  }
+  const allSpendSamples = () => {
+    const out = []
+    for (const [sessionId, state] of spendFolds) {
+      for (const sample of Object.values(state.samples ?? {})) out.push({ ...sample, sessionId })
+    }
+    return out
+  }
+
+  ctx.effect(() => {
+    const off = ctx.on('session/event', (session, event) => ingestLiveEvent(session, event), { global: true })
+    return typeof off === 'function' ? off : undefined
+  }, 'dsh-credits: spend live')
+
+  ctx.inject(['sessionQuery'], (queryCtx) => {
+    queryCtx.effect(() => {
+      let cancelled = false
+      void (async () => {
+        try {
+          const records = await queryCtx.sessionQuery.listSessions()
+          for (const rec of records ?? []) {
+            if (cancelled) return
+            const id = rec.header?.id ?? rec.id
+            if (!id) continue
+            try {
+              const snap = await queryCtx.sessionQuery.readSession(id)
+              ingestSessionEvents(id, snap.events ?? [])
+            } catch {
+              /* 单会话回放失败不影响其它 */
+            }
+          }
+        } catch {
+          /* 列出会话失败时仍可从 live session/event 累计 */
+        }
+      })()
+      return () => { cancelled = true }
+    }, 'dsh-credits: spend backfill')
+  })
 
   /** 经 credentials seam / 环境变量解析一个密钥引用。 */
   const resolveCredential = async (ref) => {
@@ -690,6 +707,46 @@ export function apply(ctx, config) {
         }
       },
     }), 'dsh-credits: test connection route')
+
+    webCtx.effect(() => webCtx.webServer.register({
+      kind: 'exact',
+      path: '/query-credits/spend',
+      async handler(req, res) {
+        if (req.method !== 'GET' && req.method !== 'HEAD') {
+          res.writeHead(405, { Allow: 'GET, HEAD' })
+          res.end()
+          return
+        }
+        const parsedUrl = new URL(req.url ?? '/', 'http://127.0.0.1')
+        const window = resolveSpendRange(
+          parsedUrl.searchParams.get('range'),
+          parsedUrl.searchParams.get('from'),
+          parsedUrl.searchParams.get('to'),
+        )
+        if (!window.ok) {
+          sendJson(res, 400, { ok: false, error: window.error })
+          return
+        }
+        if (req.method === 'HEAD') {
+          res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' })
+          res.end()
+          return
+        }
+        const agg = aggregateSpend(allSpendSamples(), getConfig(), window.from, window.to)
+        sendJson(res, 200, {
+          ok: true,
+          range: window.range,
+          from: window.from,
+          to: window.to,
+          currency: agg.currency,
+          cost: agg.cost,
+          costByModel: agg.costByModel,
+          tokens: agg.tokens,
+          calls: agg.calls,
+          sessions: agg.sessions,
+        })
+      },
+    }), 'dsh-credits: spend route')
   })
 
   // 可选 sessionProjections: 会话花费投影 (使用动态 getter)

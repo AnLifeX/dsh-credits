@@ -30,7 +30,7 @@
     "./package.json": "./package.json"
   },
   "scripts": {
-    "test": "node test/smoke-projection.mjs && node test/smoke-config-api.mjs && node test/smoke-client.mjs"
+    "test": "node test/smoke-projection.mjs && node test/smoke-config-api.mjs && node test/smoke-spend.mjs && node test/smoke-client.mjs"
   },
   "files": [
     "src",
