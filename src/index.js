@@ -1,10 +1,11 @@
 /**
  * dsh-credits — server half.
  *
- * 1. 额度服务: 按 `refreshIntervalMs` 从所选数据源拉取额度并缓存, 通过 HTTP 路由
- *    `/query-credits` 提供给浏览器(浏览器只读缓存, 不打上游 API)。
- *    - provider=deepseek:      DeepSeek `/user/balance` 官方余额
- *    - provider=opencode-go:   OpenCode Go 订阅用量 `/zen/go/v1/usage`
+ * 1. 额度服务: 按 `refreshIntervalMs` 并行缓存 DeepSeek 官方余额与 OpenCode Go
+ *    订阅用量, 通过 HTTP 路由 `/query-credits` 提供给浏览器(浏览器只读缓存,
+ *    不打上游 API)。底部读数跟随当前对话模型供应商: 仅 `opencode-go` 显示订阅
+ *    用量, 其余供应商(含 DeepSeek 官方)显示官方余额。配置里的 `provider` 只在
+ *    无法识别当前模型时作为默认。
  *    DeepSeek 密钥优先取 `apiKey`, 否则经 credentials 解析 `apiKeyRef`; OpenCode Go
  *    密钥优先取 `opencodeApiKey`, 再经 credentials/环境变量解析 `opencodeApiKeyRef`,
  *    最后回退读取 OpenCode CLI 的 `~/.local/share/opencode/auth.json`。
@@ -29,6 +30,10 @@ export const name = 'dsh-credits'
 export const PROVIDERS = ['deepseek', 'opencode-go']
 export const OPENCODE_GO_DEFAULT_BASE_URL = 'https://opencode.ai/zen/go/v1/usage'
 
+/** 对话模型供应商 → 额度展示。仅 OpenCode Go 走订阅用量, 其余一律官方余额。 */
+export const quotaSourceFromProvider = (provider) =>
+  String(provider ?? '').trim().toLowerCase() === 'opencode-go' ? 'opencode-go' : 'deepseek'
+
 /** 每个模型每 100 万 token 的价格(以 `currency` 计价)。 */
 const ModelPrice = Schema.object({
   /** 缓存命中输入价 */
@@ -40,7 +45,7 @@ const ModelPrice = Schema.object({
 })
 
 export const Config = Schema.object({
-  /** 额度数据源: deepseek = DeepSeek 官方余额; opencode-go = OpenCode Go 订阅用量 */
+  /** 无法识别当前对话模型时的默认数据源; 选了 OpenCode Go / 其他模型时读数会自动跟随 */
   provider: Schema.union(PROVIDERS).default('deepseek'),
   /** 显式 DeepSeek API 密钥; 留空则走 apiKeyRef(credentials / 环境变量) */
   apiKey: Schema.string().default(''),
@@ -420,36 +425,37 @@ export function apply(ctx, config) {
     return ''
   }
 
-  let cache = { state: 'empty', payload: null, error: null, fetchedAt: 0, lastErrorAt: 0 }
-  let inflight = null
-  let consecutiveFailures = 0
+  const emptyQuotaCache = () => ({ state: 'empty', payload: null, error: null, fetchedAt: 0, lastErrorAt: 0 })
+  const caches = {
+    deepseek: emptyQuotaCache(),
+    'opencode-go': emptyQuotaCache(),
+  }
+  const inflights = { deepseek: null, 'opencode-go': null }
+  const consecutiveFailures = { deepseek: 0, 'opencode-go': 0 }
 
-  const refresh = () => {
-    if (inflight !== null) return inflight
-    inflight = (async () => {
-      const provider = runtimeConfig.provider === 'opencode-go' ? 'opencode-go' : 'deepseek'
-      const key = provider === 'opencode-go' ? await resolveOpencodeKey() : await resolveKey()
+  const refreshOne = (provider) => {
+    const source = quotaSourceFromProvider(provider)
+    if (inflights[source] !== null) return inflights[source]
+    inflights[source] = (async () => {
+      const key = source === 'opencode-go' ? await resolveOpencodeKey() : await resolveKey()
       if (key === '') {
-        cache = { state: 'error', payload: null, error: 'api-key-missing', fetchedAt: 0, lastErrorAt: Date.now() }
-        consecutiveFailures++
+        caches[source] = { state: 'error', payload: null, error: 'api-key-missing', fetchedAt: 0, lastErrorAt: Date.now() }
+        consecutiveFailures[source]++
         return
       }
       const controller = new AbortController()
       const timer = setTimeout(() => controller.abort(), runtimeConfig.timeoutMs)
       try {
-        if (provider === 'opencode-go') {
+        if (source === 'opencode-go') {
           const res = await fetch(runtimeConfig.opencodeBaseUrl.replace(/\/+$/, ''), {
             headers: { Authorization: `Bearer ${key}`, Accept: 'application/json' },
             signal: controller.signal,
           })
           if (!res.ok) throw new Error(`OpenCode Go API HTTP ${res.status}`)
           const data = await res.json()
-          cache = {
+          caches[source] = {
             state: 'ok',
-            payload: {
-              provider: 'opencode-go',
-              usage: normalizeOpencodeUsage(data),
-            },
+            payload: { provider: 'opencode-go', usage: normalizeOpencodeUsage(data) },
             error: null,
             fetchedAt: Date.now(),
             lastErrorAt: 0,
@@ -461,7 +467,7 @@ export function apply(ctx, config) {
           })
           if (!res.ok) throw new Error(`DeepSeek API HTTP ${res.status}`)
           const data = await res.json()
-          cache = {
+          caches[source] = {
             state: 'ok',
             payload: {
               provider: 'deepseek',
@@ -473,26 +479,31 @@ export function apply(ctx, config) {
             lastErrorAt: 0,
           }
         }
-        consecutiveFailures = 0
+        consecutiveFailures[source] = 0
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
-        consecutiveFailures++
-        if (consecutiveFailures === 1) ctx.logger.warn(`[dsh-credits] quota fetch failed (${provider}): ${message}`)
-        // 保留上次成功值(stale-while-error), 仅标记错误。
-        cache = {
-          state: cache.state === 'ok' ? 'ok' : 'error',
-          payload: cache.payload,
+        consecutiveFailures[source]++
+        if (consecutiveFailures[source] === 1) ctx.logger.warn(`[dsh-credits] quota fetch failed (${source}): ${message}`)
+        const prev = caches[source]
+        caches[source] = {
+          state: prev.state === 'ok' ? 'ok' : 'error',
+          payload: prev.payload,
           error: message,
-          fetchedAt: cache.fetchedAt,
+          fetchedAt: prev.fetchedAt,
           lastErrorAt: Date.now(),
         }
       } finally {
         clearTimeout(timer)
       }
     })().finally(() => {
-      inflight = null
+      inflights[source] = null
     })
-    return inflight
+    return inflights[source]
+  }
+
+  const refresh = (provider = null) => {
+    if (provider) return refreshOne(provider)
+    return Promise.all([refreshOne('deepseek'), refreshOne('opencode-go')])
   }
 
   let loopTimer = null
@@ -503,8 +514,8 @@ export function apply(ctx, config) {
     }
     const run = () => {
       void refresh().then(() => {
-        const missingKey = cache.state === 'error' && cache.error === 'api-key-missing'
-        const delay = missingKey ? 5000 : runtimeConfig.refreshIntervalMs
+        const bothMissing = PROVIDERS.every((p) => caches[p].state === 'error' && caches[p].error === 'api-key-missing')
+        const delay = bothMissing ? 5000 : runtimeConfig.refreshIntervalMs
         loopTimer = setTimeout(run, delay)
       })
     }
@@ -548,12 +559,43 @@ export function apply(ctx, config) {
 
   // 可选 webServer: 提供浏览器读取的缓存端点与设置端点
   ctx.inject(['webServer'], (webCtx) => {
-    const serialize = () => {
-      const provider = runtimeConfig.provider === 'opencode-go' ? 'opencode-go' : 'deepseek'
-      const base = {
-        ok: cache.state === 'ok',
-        provider,
+    const serializeView = (source) => {
+      const cache = caches[source]
+      if (cache.state === 'ok' && cache.payload?.provider === source) {
+        if (source === 'opencode-go') {
+          return {
+            ok: true,
+            provider: source,
+            usage: cache.payload.usage,
+            fetchedAt: cache.fetchedAt,
+            ...(cache.error !== null ? { error: cache.error, stale: true } : {}),
+          }
+        }
+        return {
+          ok: true,
+          provider: source,
+          isAvailable: cache.payload.isAvailable,
+          balances: cache.payload.balances,
+          fetchedAt: cache.fetchedAt,
+          ...(cache.error !== null ? { error: cache.error, stale: true } : {}),
+        }
+      }
+      return {
+        ok: false,
+        provider: source,
+        error: cache.error ?? 'unknown',
         fetchedAt: cache.fetchedAt,
+      }
+    }
+
+    const serialize = (source = quotaSourceFromProvider(runtimeConfig.provider)) => {
+      const picked = quotaSourceFromProvider(source)
+      const view = serializeView(picked)
+      return {
+        ok: view.ok,
+        provider: picked,
+        defaultProvider: quotaSourceFromProvider(runtimeConfig.provider),
+        fetchedAt: view.fetchedAt,
         refreshIntervalMs: runtimeConfig.refreshIntervalMs,
         clientPollIntervalMs: runtimeConfig.clientPollIntervalMs,
         currency: runtimeConfig.currency,
@@ -562,30 +604,20 @@ export function apply(ctx, config) {
           warning: runtimeConfig.warningThreshold,
           danger: runtimeConfig.dangerThreshold,
         },
-        // 定价表随响应动态下发 (内置 8月17日谷峰费率自动切换规则), 供客户端 "?" 图标展示
         prices: {
           ...runtimeConfig.prices,
           'deepseek-v4-flash': resolveModelPrice(runtimeConfig, 'deepseek-v4-flash'),
           'deepseek-v4-pro': resolveModelPrice(runtimeConfig, 'deepseek-v4-pro'),
         },
         defaultPrices: runtimeConfig.defaultPrices,
+        views: {
+          deepseek: serializeView('deepseek'),
+          'opencode-go': serializeView('opencode-go'),
+        },
+        ...(view.usage ? { usage: view.usage } : {}),
+        ...(view.balances ? { isAvailable: view.isAvailable, balances: view.balances } : {}),
+        ...(view.error ? { error: view.error, ...(view.stale ? { stale: true } : {}) } : {}),
       }
-      if (cache.state === 'ok' && cache.payload?.provider === provider) {
-        if (cache.payload.provider === 'opencode-go') {
-          return {
-            ...base,
-            usage: cache.payload.usage,
-            ...(cache.error !== null ? { error: cache.error, stale: true } : {}),
-          }
-        }
-        return {
-          ...base,
-          isAvailable: cache.payload.isAvailable,
-          balances: cache.payload.balances,
-          ...(cache.error !== null ? { error: cache.error, stale: true } : {}),
-        }
-      }
-      return { ...base, error: cache.error ?? 'unknown' }
     }
 
     const sendJson = (res, statusCode, data) => {
@@ -610,19 +642,25 @@ export function apply(ctx, config) {
         }
         const parsedUrl = new URL(req.url ?? '/', 'http://127.0.0.1')
         const force = parsedUrl.searchParams.get('force') === '1' || parsedUrl.searchParams.get('force') === 'true' || req.method === 'POST'
+        const sourceParam = parsedUrl.searchParams.get('source')
+        const source = sourceParam
+          ? quotaSourceFromProvider(sourceParam)
+          : quotaSourceFromProvider(runtimeConfig.provider)
         if (force) {
-          // 冷却防刷保护: 距离上次主动拉取至少间隔 2000ms
           const now = Date.now()
-          if (now - cache.fetchedAt > 2000 || cache.state !== 'ok') {
-            await refresh()
-          }
+          const targets = sourceParam ? [source] : PROVIDERS
+          await Promise.all(targets.map((p) => {
+            const c = caches[p]
+            if (now - c.fetchedAt > 2000 || c.state !== 'ok') return refreshOne(p)
+            return Promise.resolve()
+          }))
         }
         if (req.method === 'HEAD') {
           res.writeHead(200, { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' })
           res.end()
           return
         }
-        sendJson(res, 200, serialize())
+        sendJson(res, 200, serialize(source))
       },
     }), 'dsh-credits: route')
 

@@ -4,12 +4,14 @@ DeepSeek Harness（`dsh web`）额度插件：在输入框下方统计条同一�
 
 - **账户额度 + 状态灯**  
   DeepSeek 模式如 `🟢 余额 ¥97.69`；OpenCode Go 模式如 `🟢 Go 额度 月 6% · 周 12% · 5h 9%`。点击圆点可立即强刷。
+- **跟随当前对话模型**  
+  底部读数跟输入框选中的模型供应商走：只有 `opencode-go` 显示订阅用量，DeepSeek 官方以及其他供应商都显示官方余额。设置里的「额度数据源」只在还认不出模型时作为默认。
 - **本会话估算消耗**  
   按模型单价估算（单价可在设置面板修改）。DeepSeek V4 自 2026-08-17 起按北京时间自动套用峰谷价。
 - **累计消耗胶囊**  
   右下角可拖动气泡，查看今天 / 昨天 / 本周 / 本月 / 自定义时间范围内的跨会话估算总额（按当前计价货币与单价现算）。
 - **可视化设置**  
-  齿轮图标打开：数据源、阈值滑块、API 凭证、连通性测试、模型单价、YAML 导出。保存后立即生效。
+  齿轮图标打开：默认数据源、阈值滑块、API 凭证、连通性测试、模型单价、YAML 导出。保存后立即生效。
 
 ## 界面预览
 
@@ -38,7 +40,15 @@ OpenCode Go 模式下，卡片改成三个窗口的用量百分比与重置时�
 | `deepseek` | DeepSeek 官方余额 | `GET /user/balance` | `DEEPSEEK_API_KEY` |
 | `opencode-go` | OpenCode Go 订阅用量 | `GET https://opencode.ai/zen/go/v1/usage` | `OPENCODE_GO_API_KEY` 或 OpenCode `auth.json` |
 
-本仓库默认 `provider: opencode-go`。切回官方余额时把 `provider` 改成 `deepseek` 即可。
+服务端会**同时缓存**官方余额和 Go 用量；切模型时底部直接换展示，不必再等一轮查询。
+
+| 当前对话模型的供应商 | 底部展示 |
+| :--- | :--- |
+| `opencode-go` | OpenCode Go 订阅用量（5 小时 / 周 / 月） |
+| `deepseek` | DeepSeek 官方余额 |
+| 其他（Anthropic、OpenAI、OpenCode Zen 等） | DeepSeek 官方余额（默认） |
+
+配置项 `provider`（以及设置面板里的「额度数据源」）只在还认不出当前模型时作为回退，**不会覆盖**已经识别到的模型供应商。本仓库默认回退值是 `opencode-go`。
 
 OpenCode Go 密钥解析顺序：`opencodeApiKey` → `OPENCODE_GO_API_KEY`（credentials / 环境变量）→ `~/.local/share/opencode/auth.json`。
 
@@ -68,6 +78,16 @@ dsh plugin --profile web add dsh-credits@latest
 dsh plugin --profile web remove dsh-credits
 ```
 
+## 从 dsh-balance 迁移
+
+`dsh-credits` 已覆盖旧插件的全部能力（官方余额、本会话估算、设置面板），并加上 Go 订阅用量、累计胶囊、跟随当前模型。装上本包并确认底部只有一条额度读数后：
+
+```sh
+dsh plugin --profile web remove dsh-balance
+```
+
+然后删掉 profile 里的本地目录（常见是 `$DSH_HOME/profiles/web/dsh-balance-local`）以及 `cordis.patch.yml` 里给 `dsh-balance` 写的 `disabled: true`。源码仓库（例如 `dsh-balance`）也可以删，不再被引用。
+
 ## 配置
 
 覆盖文件：`$DSH_HOME/profiles/web/cordis.patch.yml`。也可在 Web 设置面板改完点「保存并生效」。
@@ -80,7 +100,7 @@ dsh plugin --profile web remove dsh-credits
     provider: opencode-go
     opencodeApiKeyRef: OPENCODE_GO_API_KEY
     opencodeBaseUrl: https://opencode.ai/zen/go/v1/usage
-    warningThreshold: 10          # 剩余额度 < 10% 黄灯
+    warningThreshold: 10          # 无法识别模型时的默认回退; 选了 Go 模型会改看剩余额度 %
     dangerThreshold: 5            # 剩余额度 < 5% 红灯
     refreshIntervalMs: 300000
     clientPollIntervalMs: 30000
@@ -88,7 +108,7 @@ dsh plugin --profile web remove dsh-credits
     currency: USD
 ```
 
-Go 模式展示 5 小时 / 每周 / 每月三个窗口的用量百分比与重置时间；状态灯按「剩余最少」的窗口判定。套餐没有固定美元上限可展示。
+这段 `provider: opencode-go` 只决定「还没选模型 / 识别失败」时先看哪一套。真正切到 Go 模型后才会用三个窗口的用量百分比与重置时间；状态灯按「剩余最少」的窗口判定。套餐没有固定美元上限可展示。
 
 ### DeepSeek 人民币账户
 
@@ -135,7 +155,7 @@ Go 模式展示 5 小时 / 每周 / 每月三个窗口的用量百分比与重�
 
 | 路径 | 作用 |
 | :--- | :--- |
-| `GET /query-credits` | 账户额度缓存（`?force=1` 强刷） |
+| `GET /query-credits` | 账户额度缓存。响应里同时带 `views.deepseek` 与 `views['opencode-go']`；`?source=` 只决定顶层摊平哪一套，`?force=1` 强刷 |
 | `GET /query-credits/spend?range=today` | 跨会话累计消耗。`range` 可为 `today` / `yesterday` / `week` / `month` / `custom`；自定义时再带 `from`、`to`（`YYYY-MM-DD` 或 ISO） |
 | `GET /query-credits/config` | 读当前配置 |
 | `POST /query-credits/config` | 保存配置并立即生效 |
@@ -190,6 +210,9 @@ A: 请求头带你的 API Key。DeepSeek 默认复用聊天用的 `DEEPSEEK_API_
 
 **Q: 状态灯规则？**  
 A: DeepSeek 按余额金额对比 `warningThreshold` / `dangerThreshold`。OpenCode Go 按剩余额度百分比对比同一组阈值。🟢 ≥ 预警线；🟡 告急线～预警线；🔴 < 告急线或接口不可用。
+
+**Q: 切模型后底部读数会跟着变吗？**  
+A: 会，跟着输入框当前模型的供应商走。只有供应商 id 恰好是 `opencode-go` 时才显示订阅用量；`deepseek`、Anthropic、OpenAI、普通 OpenCode Zen 等都走官方余额。设置里的数据源不会盖过已经识别到的模型。
 
 **Q: 8 月 17 日峰谷价会自动切吗？**  
 A: 会。北京时间 2026-08-17 00:00 之后，V4 Flash / Pro 按 09:00–12:00、14:00–18:00 高峰价，其余时段半价。

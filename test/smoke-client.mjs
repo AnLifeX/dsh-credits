@@ -38,6 +38,8 @@ const ReactMock = {
   Fragment: Symbol.for('react.fragment'),
   memo: (comp) => comp,
   useState: (init) => [typeof init === 'function' ? init() : init, () => {}],
+  useEffect() {},
+  useMemo: (fn) => fn(),
   useRef: (init) => ({ current: init ?? null }),
   useSyncExternalStore: (subscribe, getSnapshot) => {
     subscribe(() => {})
@@ -115,6 +117,7 @@ if (JSON.stringify(api.inject) !== JSON.stringify(['slots', 'locale'])) throw ne
 const capturedRegister = []
 const ctx = {
   effect(fn) { this._cleanup = fn() },
+  inject() {},
   locale: { register() {} },
   slots: {
     inject(name, factory) {
@@ -325,6 +328,7 @@ const opencodeApi = captured.factory((id) => {
 const opencodeRegs = []
 const opencodeCtx = {
   effect(fn) { this._cleanup = fn() },
+  inject() {},
   locale: { register() {} },
   slots: {
     inject(name, factory) {
@@ -402,6 +406,130 @@ if (!htmlQuota.includes('dshqb_cap')) throw new Error('spend capsule missing in 
 if (!htmlQuota.includes('dshqb_card_badge_btn')) throw new Error('quota remaining badge should be a refresh button')
 if (!htmlQuota.includes('dshqb_quota_pct_btn')) throw new Error('quota percent should be a refresh button')
 console.log('OPENCODE CLIENT SMOKE TEST PASSED')
+
+// ---------- 跟随对话模型供应商 ----------
+installFetch(() => ({
+  ok: true,
+  provider: 'deepseek',
+  defaultProvider: 'deepseek',
+  fetchedAt: Date.now(),
+  refreshIntervalMs: 300000,
+  clientPollIntervalMs: 30000,
+  currency: 'CNY',
+  thresholds: { warning: 10, danger: 5 },
+  isAvailable: true,
+  balances: [
+    { currency: 'CNY', total: 100.23, granted: 0, toppedUp: 100.23 },
+  ],
+  views: {
+    deepseek: {
+      ok: true,
+      provider: 'deepseek',
+      isAvailable: true,
+      fetchedAt: Date.now(),
+      balances: [
+        { currency: 'CNY', total: 100.23, granted: 0, toppedUp: 100.23 },
+      ],
+    },
+    'opencode-go': {
+      ok: true,
+      provider: 'opencode-go',
+      fetchedAt: Date.now(),
+      usage: {
+        rolling: { status: 'ok', percent: 9, resetsAt: '2026-08-14T07:20:04.810Z' },
+        weekly: { status: 'ok', percent: 12, resetsAt: '2026-08-17T00:00:00.810Z' },
+        monthly: { status: 'ok', percent: 6, resetsAt: '2026-09-09T00:41:03.810Z' },
+      },
+    },
+  },
+  prices: {},
+  defaultPrices: {},
+}))
+
+const dirSnap = {
+  current: { provider: 'opencode-go', model: 'deepseek-v4-pro' },
+  routable: true,
+  groups: [],
+  failures: [],
+  status: 'ready',
+  error: null,
+}
+const mockDirectory = {
+  store: {
+    subscribe(fn) { return () => {} },
+    getSnapshot() { return dirSnap },
+  },
+  load: async () => dirSnap,
+}
+new Function('window', 'require', code)(globalThis.window, (id) => {
+  if (id === 'react') return ReactMock
+  if (id === '@deepseek-ai/dsh-client-ui-primitives') return stubPrimitives(ReactMock)
+  throw new Error('unexpected require: ' + id)
+})
+const followApi = captured.factory((id) => {
+  if (id === 'react') return ReactMock
+  if (id === '@deepseek-ai/dsh-client-ui-primitives') return stubPrimitives(ReactMock)
+  throw new Error('unexpected require: ' + id)
+})
+const followRegs = []
+const followCtx = {
+  effect(fn) { fn() },
+  inject(keys, fn) {
+    if (keys.includes('modelDirectories')) {
+      fn({
+        modelDirectories: {
+          directoryFor() { return mockDirectory },
+        },
+      })
+    }
+  },
+  locale: { register() {} },
+  slots: {
+    inject(name, factory) {
+      const wrapped = {
+        register(opts, comp) {
+          followRegs.push(comp)
+          return () => {}
+        },
+      }
+      followCtx.slots = wrapped
+      factory()
+    },
+  },
+}
+followApi.apply(followCtx)
+const followT = (key, params) => {
+  const dict = { ...quotaDict, 'balance': '余额 {amount}', 'card.balanceTitle': '📊 账户余额' }
+  let out = dict[key] ?? key
+  for (const [k, v] of Object.entries(params ?? {})) out = out.replaceAll('{' + k + '}', String(v))
+  return out
+}
+const FollowComp = followRegs[0]
+const followProps = {
+  t: followT,
+  sessionId: 'sess-follow',
+  session: { sessionId: 'sess-follow', nodes: [] },
+  useProjection: () => ({
+    models: [],
+    cost: 0,
+    costByModel: {},
+    tokens: { uncachedInput: 0, cacheRead: 0, cacheWrite: 0, output: 0 },
+    tokensByModel: {},
+    legs: [],
+    currency: 'CNY',
+  }),
+}
+renderToStaticMarkup(ReactMock.createElement(FollowComp, followProps))
+await new Promise((r) => setTimeout(r, 400))
+const htmlFollowGo = renderToStaticMarkup(ReactMock.createElement(FollowComp, followProps))
+if (!htmlFollowGo.includes('Go 额度 月 6% · 周 12% · 5h 9%')) throw new Error('switching to opencode-go model should show quota readout')
+if (htmlFollowGo.includes('余额 ¥100.23')) throw new Error('opencode-go model should not show DeepSeek balance')
+
+dirSnap.current = { provider: 'anthropic', model: 'claude-sonnet-4' }
+const htmlFollowOther = renderToStaticMarkup(ReactMock.createElement(FollowComp, followProps))
+if (!htmlFollowOther.includes('余额 ¥100.23')) throw new Error('other providers should fall back to DeepSeek balance')
+if (htmlFollowOther.includes('Go 额度')) throw new Error('other providers should not show Go quota')
+console.log('MODEL FOLLOW CLIENT SMOKE TEST PASSED')
 
 console.log('CLIENT SMOKE TEST PASSED (ZERO-DEPENDENCY)')
 process.exit(0)

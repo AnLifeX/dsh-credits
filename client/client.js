@@ -206,6 +206,31 @@ window.__ModuleLoader__.load({
 			if (!Number.isFinite(num)) return currencySymbol(currency) + "?";
 			return currencySymbol(currency) + (num % 1 === 0 ? String(num) : String(Math.round(num * 1000) / 1000));
 		}
+		/** 仅 OpenCode Go 走订阅用量, 其余供应商(含 DeepSeek 官方)显示官方余额。 */
+		function quotaSourceFromProvider(provider) {
+			return String(provider ?? "").trim().toLowerCase() === "opencode-go" ? "opencode-go" : "deepseek";
+		}
+		function mergeQuotaView(payload, source) {
+			if (!payload || typeof payload !== "object") return payload;
+			const view = payload.views?.[source];
+			const next = view && typeof view === "object"
+				? { ...payload, ...view, provider: source }
+				: { ...payload, provider: source };
+			if (source === "opencode-go") {
+				delete next.balances;
+				delete next.isAvailable;
+			} else {
+				delete next.usage;
+			}
+			return next;
+		}
+		const noopSubscribe = () => () => {};
+		let modelDirectories = null;
+		const modelDirListeners = new Set();
+		function setModelDirectories(value) {
+			modelDirectories = value ?? null;
+			for (const fn of [...modelDirListeners]) fn();
+		}
 		/** 余额状态等级判定 (充足 success / 偏低 warning / 告急 danger) */
 		function getStatusLevel(total, isAvailable, thresholds) {
 			if (!isAvailable) return "danger";
@@ -314,7 +339,7 @@ window.__ModuleLoader__.load({
 			for (const fn of [...listeners]) fn();
 		}
 
-		async function refresh(force = false) {
+		async function refresh(force = false, source = null) {
 			if (inflight !== null) return inflight;
 			if (force && snapshot.isRefreshing !== true) {
 				snapshot = { ...snapshot, isRefreshing: true };
@@ -322,7 +347,10 @@ window.__ModuleLoader__.load({
 			}
 			inflight = (async () => {
 				try {
-					const url = force ? "/query-credits?force=1" : "/query-credits";
+					const params = [];
+					if (force) params.push("force=1");
+					if (source === "opencode-go" || source === "deepseek") params.push("source=" + encodeURIComponent(source));
+					const url = "/query-credits" + (params.length ? "?" + params.join("&") : "");
 					const res = await fetch(url, {
 						cache: "no-store",
 						headers: { accept: "application/json" }
@@ -377,8 +405,8 @@ window.__ModuleLoader__.load({
 			getSnapshot() {
 				return snapshot;
 			},
-			forceRefresh() {
-				return refresh(true);
+			forceRefresh(source) {
+				return refresh(true, source === "opencode-go" || source === "deepseek" ? source : null);
 			}
 		};
 
@@ -528,7 +556,7 @@ window.__ModuleLoader__.load({
 			"settings.provider": "额度数据源",
 			"settings.provider.deepseek": "DeepSeek 官方余额",
 			"settings.provider.opencode": "OpenCode Go 订阅用量",
-			"settings.providerHint": "Go 模式展示 5 小时 / 周 / 月用量；阈值按剩余额度百分比生效。",
+			"settings.providerHint": "跟随当前对话模型：Go 显示订阅用量，其他供应商显示官方余额。无法识别模型时才用此项。",
 			"settings.opencodeApiKeyRef": "OpenCode Go 凭证引用名",
 			"settings.opencodeApiKeyRefHint": "优先从 credentials / 环境变量读取此名称。",
 			"settings.opencodeApiKey": "OpenCode Go API Key",
@@ -640,7 +668,7 @@ window.__ModuleLoader__.load({
 			"settings.provider": "Quota Source",
 			"settings.provider.deepseek": "DeepSeek official balance",
 			"settings.provider.opencode": "OpenCode Go subscription usage",
-			"settings.providerHint": "Go mode shows 5h / weekly / monthly usage; thresholds use remaining quota percent.",
+			"settings.providerHint": "Follows the current chat model: Go shows subscription usage; every other provider shows the official balance. This is only the fallback when the model is unknown.",
 			"settings.opencodeApiKeyRef": "OpenCode Go Credential Ref",
 			"settings.opencodeApiKeyRefHint": "Resolved from the credentials seam / environment by this name.",
 			"settings.opencodeApiKey": "OpenCode Go API Key",
@@ -1603,9 +1631,38 @@ window.__ModuleLoader__.load({
 			}, body);
 		});
 
-		const BalanceReadout = react.memo(function BalanceReadout({ useProjection, t }) {
+		const BalanceReadout = react.memo(function BalanceReadout({ useProjection, t, session, sessionId }) {
 			const rawCost = useProjection("queryCreditsCost");
 			const balance = react.useSyncExternalStore(balanceStore.subscribe, balanceStore.getSnapshot, balanceStore.getSnapshot);
+			const resolver = react.useSyncExternalStore(
+				(fn) => {
+					modelDirListeners.add(fn);
+					return () => modelDirListeners.delete(fn);
+				},
+				() => modelDirectories,
+				() => null
+			);
+			const sid = sessionId ?? session?.sessionId ?? null;
+			let directory = null;
+			if (resolver && sid) {
+				try { directory = resolver.directoryFor(sid); } catch { directory = null; }
+			}
+			const modelProvider = react.useSyncExternalStore(
+				directory ? (fn) => directory.store.subscribe(fn) : noopSubscribe,
+				() => {
+					const current = directory?.store.getSnapshot()?.current;
+					return typeof current?.provider === "string" ? current.provider : null;
+				},
+				() => null
+			);
+			react.useEffect(() => {
+				if (!directory || typeof directory.load !== "function") return;
+				if (directory.store.getSnapshot()?.current == null) void directory.load().catch(() => {});
+			}, [directory]);
+			const fallbackProvider = balance.status === "ok"
+				? (balance.payload?.defaultProvider ?? balance.payload?.provider)
+				: null;
+			const quotaSource = quotaSourceFromProvider(modelProvider ?? fallbackProvider);
 			const cost = priceSession(rawCost, balance.status === "ok" ? balance.payload : null);
 			const [isSettingsOpen, setSettingsOpen] = react.useState(false);
 			const rootRef = react.useRef(null);
@@ -1616,7 +1673,7 @@ window.__ModuleLoader__.load({
 					e.stopPropagation();
 					e.preventDefault();
 				}
-				void balanceStore.forceRefresh();
+				void balanceStore.forceRefresh(quotaSource);
 			};
 
 			const handleOpenSettings = (e) => {
@@ -1630,7 +1687,7 @@ window.__ModuleLoader__.load({
 
 			// 1. 账户余额读数节点与左栏卡片内容
 			if (balance.status === "ok") {
-				const info = balance.payload;
+				const info = mergeQuotaView(balance.payload, quotaSource);
 				if (info.provider === "opencode-go" && info.ok === true && info.usage) {
 					const usage = info.usage || {};
 					const quota = opencodeQuotaStatus(usage, info.thresholds);
@@ -1864,13 +1921,13 @@ window.__ModuleLoader__.load({
 							]);
 						})()
 						: null,
-					react.createElement("div", { key: "tip" }, balance.status === "ok" && balance.payload?.provider === "opencode-go" ? t("card.sessionHintQuota") : t("card.pricingHint"))
+					react.createElement("div", { key: "tip" }, quotaSource === "opencode-go" ? t("card.sessionHintQuota") : t("card.pricingHint"))
 				])
 			]);
 
 			// 3. 定价策略 "?" 图标与毛玻璃卡片 (展示 V4 系列)
 			let pricingNode = null;
-			if (balance.status === "ok" && balance.payload !== null && balance.payload.provider !== "opencode-go") {
+			if (balance.status === "ok" && balance.payload !== null && quotaSource !== "opencode-go") {
 				const payload = balance.payload;
 				const currency = typeof payload.currency === "string" ? payload.currency : "CNY";
 				const prices = payload.prices !== null && typeof payload.prices === "object" ? payload.prices : {};
@@ -2009,6 +2066,12 @@ window.__ModuleLoader__.load({
 
 		function apply(ctx) {
 			ctx.effect(() => ctx.locale.register(NS, { zh, en }), "dsh-credits: dictionaries");
+			if (typeof ctx.inject === "function") {
+				ctx.inject(["modelDirectories"], (scope) => {
+					setModelDirectories(scope.modelDirectories ?? scope.get?.("modelDirectories"));
+					return () => setModelDirectories(null);
+				});
+			}
 			// 等待 ui-conversation 声明 composer.dock 槽位后再注册本条目。
 			ctx.slots.inject("conversation.composer.dock", () => {
 				const dispose = ctx.slots.register({

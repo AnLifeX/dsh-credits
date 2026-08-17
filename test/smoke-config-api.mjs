@@ -5,7 +5,7 @@
  */
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
-import { apply } from '../src/index.js'
+import { apply, quotaSourceFromProvider } from '../src/index.js'
 
 // 模拟 webServer 上下文与注册表
 const routes = new Map()
@@ -191,10 +191,29 @@ async function runTests() {
 
   const resOpenCodeQuota = await invokeRoute('/query-credits', 'GET')
   assert.equal(resOpenCodeQuota.data.provider, 'opencode-go')
+  assert.equal(resOpenCodeQuota.data.defaultProvider, 'opencode-go')
   assert.equal(resOpenCodeQuota.data.usage.rolling.percent, 9)
   assert.equal(resOpenCodeQuota.data.usage.weekly.percent, 12)
   assert.equal(resOpenCodeQuota.data.usage.monthly.percent, 6)
+  assert.equal(resOpenCodeQuota.data.views['opencode-go'].usage.rolling.percent, 9)
+  assert.equal(resOpenCodeQuota.data.views.deepseek.ok, true)
+  assert.ok(Array.isArray(resOpenCodeQuota.data.views.deepseek.balances))
   console.log('GET /query-credits (opencode-go) passed')
+
+  const resDeepseekView = await invokeRoute('/query-credits', 'GET', null, 'source=deepseek')
+  assert.equal(resDeepseekView.data.provider, 'deepseek')
+  assert.equal(resDeepseekView.data.defaultProvider, 'opencode-go')
+  assert.ok(Array.isArray(resDeepseekView.data.balances))
+  assert.equal(resDeepseekView.data.views['opencode-go'].usage.rolling.percent, 9)
+  console.log('GET /query-credits?source=deepseek passed')
+
+  assert.equal(quotaSourceFromProvider('opencode-go'), 'opencode-go')
+  assert.equal(quotaSourceFromProvider('OPENCODE-GO'), 'opencode-go')
+  assert.equal(quotaSourceFromProvider('deepseek'), 'deepseek')
+  assert.equal(quotaSourceFromProvider('anthropic'), 'deepseek')
+  assert.equal(quotaSourceFromProvider('openai'), 'deepseek')
+  assert.equal(quotaSourceFromProvider('opencode'), 'deepseek')
+  console.log('quotaSourceFromProvider mapping passed')
 
   const resOpenCodeConn = await invokeRoute('/query-credits/test-connection', 'POST', {
     provider: 'opencode-go',
