@@ -197,7 +197,7 @@ const props = {
       'card.topup': '充值 {amount}',
       'card.granted': '赠送 {amount}',
       'card.updated': '更新于 {time} · 每 {interval} 刷新',
-      'card.refreshHint': '💡 点击状态指示灯可立即手动刷新',
+      'card.refreshHint': '💡 点击状态灯或卡片上的状态/百分比可立即刷新',
       'card.tokens': 'Token: 输入 {input} · 输出 {output}',
       'card.tokensHit': '命中: {hit} ({hitRate}%)',
       'card.noCost': '本会话暂未产生消耗',
@@ -232,6 +232,7 @@ const props = {
       'spend.empty': '该区间暂无消耗',
       'spend.open': '打开累计消耗',
       'spend.close': '收起',
+      'spend.settings': '打开设置',
     }
     let out = dict[key] ?? key
     for (const [k, v] of Object.entries(params ?? {})) out = out.replaceAll('{' + k + '}', String(v))
@@ -242,6 +243,8 @@ const props = {
     cost: 0.000712,
     costByModel: { 'deepseek-chat': 0.000712 },
     tokens: { uncachedInput: 100, cacheRead: 60, cacheWrite: 10, output: 60 },
+    tokensByModel: { 'deepseek-chat': { uncachedInput: 100, cacheRead: 60, cacheWrite: 10, output: 60 } },
+    legs: [{ t: Date.now(), model: 'deepseek-chat', uncachedInput: 100, cacheRead: 60, cacheWrite: 10, output: 60 }],
     currency: 'CNY',
   }),
 }
@@ -284,7 +287,7 @@ if (!htmlGreen.includes('<svg')) throw new Error('gear svg icon missing')
 if (!htmlGreen.includes('CNY 钱包')) throw new Error('CNY wallet row missing')
 if (!htmlGreen.includes('USD 钱包')) throw new Error('USD wallet row missing')
 if (!htmlGreen.includes('$0.00')) throw new Error('zero USD wallet should still appear on card')
-if (!htmlGreen.includes('dshqb_wallets')) throw new Error('wallets container missing')
+if (!htmlGreen.includes('dshqb_card_badge_btn')) throw new Error('balance status badge should be a refresh button')
 if (!htmlGreen.includes('余额 ¥100.23')) throw new Error('CNY preferred readout should hide empty extra currencies')
 if (!htmlGreen.includes('dshqb_cap')) throw new Error('spend capsule missing')
 if (!htmlGreen.includes('dshqb_cap_pill')) throw new Error('spend pill missing')
@@ -352,12 +355,12 @@ const quotaDict = {
   'status.warning': '偏低',
   'status.danger': '告急',
   'card.updated': '更新于 {time} · 每 {interval} 刷新',
-  'card.refreshHint': '💡 点击状态指示灯可立即手动刷新',
+  'card.refreshHint': '💡 点击状态灯或卡片上的状态/百分比可立即刷新',
   'card.openSettings': '⚙️ 打开偏好设置',
   'sessionCost': '本会话约 {amount}',
   'card.sessionTitle': '⚡ 本会话消耗',
   'card.noCost': '本会话暂未产生消耗',
-  'card.sessionHintQuota': '💡 本会话金额按设置中的模型单价估算',
+  'card.sessionHintQuota': '💡 本会话按设置单价估算，实际扣减以 Go 套餐窗口为准。',
   'btn.settings': '插件设置',
   'unit.minutes': '{n} 分钟',
   'unit.seconds': '{n} 秒',
@@ -365,6 +368,7 @@ const quotaDict = {
   'spend.pill': '{range} {amount}',
   'spend.today': '今天',
   'spend.open': '打开累计消耗',
+  'spend.settings': '打开设置',
 }
 const quotaT = (key, params) => {
   let out = quotaDict[key] ?? key
@@ -379,6 +383,8 @@ const quotaProps = {
     cost: 0,
     costByModel: {},
     tokens: { uncachedInput: 0, cacheRead: 0, cacheWrite: 0, output: 0 },
+    tokensByModel: {},
+    legs: [],
     currency: 'USD',
   }),
 }
@@ -393,6 +399,8 @@ if (!htmlQuota.includes('dshqb_quota_rows')) throw new Error('opencode quota row
 if (htmlQuota.includes('dshqb_pricing_wrap')) throw new Error('DeepSeek pricing must be hidden in opencode-go mode')
 if (!htmlQuota.includes('dshqb_quota_fill')) throw new Error('opencode quota progress fill missing')
 if (!htmlQuota.includes('dshqb_cap')) throw new Error('spend capsule missing in opencode-go mode')
+if (!htmlQuota.includes('dshqb_card_badge_btn')) throw new Error('quota remaining badge should be a refresh button')
+if (!htmlQuota.includes('dshqb_quota_pct_btn')) throw new Error('quota percent should be a refresh button')
 console.log('OPENCODE CLIENT SMOKE TEST PASSED')
 
 console.log('CLIENT SMOKE TEST PASSED (ZERO-DEPENDENCY)')
