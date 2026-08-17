@@ -77,6 +77,15 @@ window.__ModuleLoader__.load({
 				".dshqb_quota_fill_warning{background:var(--dsw-alias-state-warn-primary,var(--dsw-alias-state-warning-primary,#f59e0b))}",
 				".dshqb_quota_fill_danger{background:var(--dsw-alias-state-error-primary,#ef4444)}",
 				".dshqb_quota_meta{display:flex;justify-content:space-between;font-size:10.5px;color:var(--dsw-alias-label-tertiary);font-variant-numeric:tabular-nums}",
+				".dshqb_cap{position:fixed;z-index:10050;font-size:12px;color:var(--dsw-alias-label-primary);line-height:1.4;user-select:none;cursor:grab}",
+				".dshqb_cap_pill{display:inline-flex;align-items:center;gap:8px;padding:8px 12px;border-radius:999px;cursor:pointer;border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.2));background:var(--dsw-alias-bg-layer-1,rgba(20,20,24,0.88));box-shadow:var(--dsw-shadow-lv3,0 8px 24px rgba(0,0,0,0.18));backdrop-filter:blur(16px);font-variant-numeric:tabular-nums}",
+				".dshqb_cap_panel{width:320px;max-width:92vw;border-radius:12px;padding:12px;display:flex;flex-direction:column;gap:10px;border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.2));background:var(--dsw-alias-bg-layer-1,rgba(20,20,24,0.94));box-shadow:var(--dsw-shadow-lv3,0 12px 32px rgba(0,0,0,0.22));backdrop-filter:blur(16px)}",
+				".dshqb_cap_head{display:flex;align-items:center;justify-content:space-between;cursor:move;font-weight:600}",
+				".dshqb_cap_chips{display:flex;flex-wrap:wrap;gap:6px}",
+				".dshqb_cap_chip{border:1px solid var(--dsw-alias-border-l3,rgba(128,128,128,0.18));background:transparent;color:inherit;border-radius:999px;padding:3px 9px;cursor:pointer;font-size:11px;font-family:inherit}",
+				".dshqb_cap_chip_on{background:var(--dsw-alias-brand-primary,rgba(59,130,246,0.18));border-color:var(--dsw-alias-brand-primary,#3b82f6)}",
+				".dshqb_cap_custom{display:flex;flex-direction:column;gap:6px}",
+				".dshqb_cap_custom label{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--dsw-alias-label-tertiary)}",
 				".dshqb_card_settings_link{color:var(--dsw-alias-brand-primary,var(--dsw-alias-accent-primary,#3b82f6));text-decoration:none;font-size:11px;display:inline-flex;align-items:center;margin-top:4px;cursor:pointer;background:none;border:none;padding:0;font-family:inherit}",
 				".dshqb_card_settings_link:hover{text-decoration:underline}",
 				".dshqb_pricing_wrap{position:relative;display:inline-flex;align-items:center}",
@@ -283,6 +292,73 @@ window.__ModuleLoader__.load({
 				return refresh(true);
 			}
 		};
+
+		let spendSnap = { status: "loading", payload: null, range: "today", from: "", to: "" };
+		const spendListeners = new Set();
+		let spendTimer = null;
+		let spendStarted = false;
+		function notifySpend() {
+			for (const fn of [...spendListeners]) fn();
+		}
+		async function refreshSpend() {
+			try {
+				const q = new URLSearchParams({ range: spendSnap.range });
+				if (spendSnap.range === "custom") {
+					if (spendSnap.from) q.set("from", spendSnap.from);
+					if (spendSnap.to) q.set("to", spendSnap.to);
+				}
+				const res = await fetch("/query-credits/spend?" + q.toString(), {
+					cache: "no-store",
+					headers: { accept: "application/json" }
+				});
+				if (!res.ok) throw new Error("HTTP " + res.status);
+				const data = await res.json();
+				spendSnap = { ...spendSnap, status: data && data.ok ? "ok" : "error", payload: data };
+			} catch (error) {
+				spendSnap = {
+					...spendSnap,
+					status: "error",
+					payload: { error: error instanceof Error ? error.message : String(error) }
+				};
+			}
+			notifySpend();
+		}
+		function scheduleSpend() {
+			if (spendTimer !== null) return;
+			spendTimer = setTimeout(() => {
+				spendTimer = null;
+				if (document.hidden) return;
+				refreshSpend().then(scheduleSpend, scheduleSpend);
+			}, 30000);
+		}
+		const spendStore = {
+			subscribe(fn) {
+				spendListeners.add(fn);
+				if (!spendStarted) {
+					spendStarted = true;
+					refreshSpend().then(scheduleSpend, scheduleSpend);
+				}
+				return () => {
+					spendListeners.delete(fn);
+					if (spendListeners.size === 0) {
+						spendStarted = false;
+						if (spendTimer !== null) {
+							clearTimeout(spendTimer);
+							spendTimer = null;
+						}
+					}
+				};
+			},
+			getSnapshot() {
+				return spendSnap;
+			},
+			setRange(range, from, to) {
+				spendSnap = { ...spendSnap, range, from: from ?? "", to: to ?? "" };
+				notifySpend();
+				return refreshSpend();
+			},
+			refresh: refreshSpend
+		};
 		//#endregion
 
 		//#region locale
@@ -383,7 +459,20 @@ window.__ModuleLoader__.load({
 			"settings.btnCancel": "取消",
 			"settings.btnSave": "保存并生效",
 			"settings.saving": "正在保存...",
-			"settings.savedToast": "✓ 设置已成功保存并立即生效"
+			"settings.savedToast": "✓ 设置已成功保存并立即生效",
+			"spend.pill": "{range} {amount}",
+			"spend.title": "累计消耗",
+			"spend.today": "今天",
+			"spend.yesterday": "昨天",
+			"spend.week": "本周",
+			"spend.month": "本月",
+			"spend.custom": "自定义",
+			"spend.from": "开始时间",
+			"spend.to": "结束时间",
+			"spend.meta": "{calls} 次调用 · {sessions} 个会话",
+			"spend.empty": "该区间暂无消耗",
+			"spend.open": "打开累计消耗",
+			"spend.close": "收起"
 		};
 		const en = {
 			"balance": "Balance {amount}",
@@ -481,7 +570,20 @@ window.__ModuleLoader__.load({
 			"settings.btnCancel": "Cancel",
 			"settings.btnSave": "Save Changes",
 			"settings.saving": "Saving...",
-			"settings.savedToast": "✓ Settings saved and applied successfully"
+			"settings.savedToast": "✓ Settings saved and applied successfully",
+			"spend.pill": "{range} {amount}",
+			"spend.title": "Spend",
+			"spend.today": "Today",
+			"spend.yesterday": "Yesterday",
+			"spend.week": "This week",
+			"spend.month": "This month",
+			"spend.custom": "Custom",
+			"spend.from": "From",
+			"spend.to": "To",
+			"spend.meta": "{calls} calls · {sessions} sessions",
+			"spend.empty": "No spend in this range",
+			"spend.open": "Open spend tracker",
+			"spend.close": "Collapse"
 		};
 		//#endregion
 
@@ -765,6 +867,7 @@ window.__ModuleLoader__.load({
 					if (data.ok) {
 						showToast(t("settings.savedToast"));
 						void balanceStore.forceRefresh();
+						void spendStore.refresh();
 						setTimeout(onClose, 400);
 					} else {
 						alert("Save failed: " + (data.error || "unknown error"));
@@ -1252,6 +1355,143 @@ window.__ModuleLoader__.load({
 		 * 余额读数: 与统计条同行的右对齐读数。
 		 * 包含余额指示灯、本会话消耗、悬停双栏卡片、V4 定价卡片与可视化设置弹窗。
 		 */
+		function toLocalInput(ms) {
+			const d = new Date(ms);
+			if (Number.isNaN(d.getTime())) return "";
+			const p = (n) => String(n).padStart(2, "0");
+			return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + "T" + p(d.getHours()) + ":" + p(d.getMinutes());
+		}
+
+		const SpendCapsule = react.memo(function SpendCapsule({ t }) {
+			const snap = react.useSyncExternalStore(spendStore.subscribe, spendStore.getSnapshot, spendStore.getSnapshot);
+			const [open, setOpen] = react.useState(false);
+			const [pos, setPos] = react.useState(() => {
+				try {
+					const raw = JSON.parse((typeof localStorage !== "undefined" && localStorage.getItem("dsh-credits-cap-pos")) || "null");
+					if (raw && Number.isFinite(raw.right) && Number.isFinite(raw.bottom)) return raw;
+				} catch { /* ignore */ }
+				return { right: 20, bottom: 20 };
+			});
+			const drag = react.useRef(null);
+			const payload = snap.status === "ok" ? snap.payload : null;
+			const amount = formatMoney(payload?.cost ?? 0, payload?.currency ?? "CNY");
+			const chips = [
+				["today", t("spend.today")],
+				["yesterday", t("spend.yesterday")],
+				["week", t("spend.week")],
+				["month", t("spend.month")],
+				["custom", t("spend.custom")]
+			];
+			const lastMoved = react.useRef(false);
+			const onDragStart = (e) => {
+				if (e.button !== 0) return;
+				if (e.target && typeof e.target.closest === "function" && e.target.closest("input, .dshqb_cap_chip, .dshqb_btn_icon")) return;
+				lastMoved.current = false;
+				drag.current = { x: e.clientX, y: e.clientY, right: pos.right, bottom: pos.bottom };
+				const move = (ev) => {
+					if (!drag.current) return;
+					if (Math.abs(ev.clientX - drag.current.x) + Math.abs(ev.clientY - drag.current.y) > 4) lastMoved.current = true;
+					setPos({
+						right: Math.max(8, drag.current.right - (ev.clientX - drag.current.x)),
+						bottom: Math.max(8, drag.current.bottom - (ev.clientY - drag.current.y))
+					});
+				};
+				const up = () => {
+					document.removeEventListener("mousemove", move);
+					document.removeEventListener("mouseup", up);
+					drag.current = null;
+					setPos((p) => {
+						try { if (typeof localStorage !== "undefined") localStorage.setItem("dsh-credits-cap-pos", JSON.stringify(p)); } catch { /* ignore */ }
+						return p;
+					});
+				};
+				document.addEventListener("mousemove", move);
+				document.addEventListener("mouseup", up);
+			};
+			const rangeLabel = (chips.find(([id]) => id === snap.range) || chips[0])[1];
+			const body = open
+				? react.createElement("div", { className: "dshqb_cap_panel", key: "panel" }, [
+					react.createElement("div", { className: "dshqb_cap_head", key: "head" }, [
+						react.createElement("span", { key: "t" }, t("spend.title")),
+						react.createElement("button", {
+							type: "button",
+							className: "dshqb_btn_icon",
+							key: "close",
+							onClick: () => setOpen(false),
+							title: t("spend.close")
+						}, "×")
+					]),
+					react.createElement("div", { className: "dshqb_card_val_main", key: "amt" }, amount),
+					react.createElement("div", { className: "dshqb_cap_chips", key: "chips" },
+						chips.map(([id, label]) =>
+							react.createElement("button", {
+								type: "button",
+								className: "dshqb_cap_chip" + (snap.range === id ? " dshqb_cap_chip_on" : ""),
+								key: id,
+								onClick: () => {
+									if (id === "custom") {
+										const now = Date.now();
+										const from = snap.from || toLocalInput(now - (now % 86400000));
+										const to = snap.to || toLocalInput(now);
+										void spendStore.setRange("custom", from, to);
+									} else {
+										void spendStore.setRange(id, "", "");
+									}
+								}
+							}, label)
+						)
+					),
+					snap.range === "custom"
+						? react.createElement("div", { className: "dshqb_cap_custom", key: "custom" }, [
+							react.createElement("label", { key: "from" }, [
+								t("spend.from"),
+								react.createElement("input", {
+									type: "datetime-local",
+									className: "dshqb_input",
+									value: snap.from,
+									onChange: (e) => void spendStore.setRange("custom", e.target.value, snap.to)
+								})
+							]),
+							react.createElement("label", { key: "to" }, [
+								t("spend.to"),
+								react.createElement("input", {
+									type: "datetime-local",
+									className: "dshqb_input",
+									value: snap.to,
+									onChange: (e) => void spendStore.setRange("custom", snap.from, e.target.value)
+								})
+							])
+						])
+						: null,
+					payload && payload.calls > 0
+						? react.createElement("div", { key: "meta", className: "dshqb_card_sub" }, t("spend.meta", { calls: payload.calls, sessions: payload.sessions }))
+						: react.createElement("div", { key: "empty", className: "dshqb_card_sub" }, t("spend.empty")),
+					payload && payload.costByModel
+						? react.createElement("ul", { className: "dshqb_card_models", key: "models" },
+							Object.entries(payload.costByModel).map(([m, c]) =>
+								react.createElement("li", { key: m }, [
+									react.createElement("span", { key: "m" }, "• " + m),
+									react.createElement("span", { key: "c" }, formatMoney(c, payload.currency ?? "CNY"))
+								])
+							)
+						)
+						: null
+				])
+				: react.createElement("button", {
+					type: "button",
+					className: "dshqb_cap_pill",
+					key: "pill",
+					title: t("spend.open"),
+					onClick: () => { if (!lastMoved.current) setOpen(true); }
+				}, t("spend.pill", { range: rangeLabel, amount }));
+			return react.createElement("div", {
+				className: "dshqb_cap",
+				style: { right: pos.right + "px", bottom: pos.bottom + "px" },
+				onMouseDown: onDragStart,
+				key: "cap"
+			}, body);
+		});
+
 		const BalanceReadout = react.memo(function BalanceReadout({ useProjection, t }) {
 			const cost = useProjection("queryCreditsCost");
 			const balance = react.useSyncExternalStore(balanceStore.subscribe, balanceStore.getSnapshot, balanceStore.getSnapshot);
@@ -1565,7 +1805,9 @@ window.__ModuleLoader__.load({
 				children: react.createElement(IconGear14, null)
 			});
 
-			if (balNode === null && costNode === null && pricingNode === null) return null;
+			if (balNode === null && costNode === null && pricingNode === null) {
+				return react.createElement(SpendCapsule, { t, key: "cap" });
+			}
 
 			const popover = leftCol !== null ? react.createElement("div", {
 				className: "dshqb_popover",
@@ -1606,11 +1848,15 @@ window.__ModuleLoader__.load({
 				}));
 			}
 
-			return react.createElement("div", {
-				ref: rootRef,
-				className: "dshqb_root",
-				children: rootChildren
-			});
+			return react.createElement(react.Fragment, { key: "wrap" }, [
+				react.createElement("div", {
+					ref: rootRef,
+					className: "dshqb_root",
+					key: "bar",
+					children: rootChildren
+				}),
+				react.createElement(SpendCapsule, { t, key: "cap" })
+			]);
 		});
 		//#endregion
 
@@ -1634,7 +1880,10 @@ window.__ModuleLoader__.load({
 			// 页面回到前台时立即刷新一次, 并在隐藏期间跳过定时器。
 			ctx.effect(() => {
 				const onVisibility = () => {
-					if (!document.hidden) refresh().then(schedule, schedule);
+					if (!document.hidden) {
+						refresh().then(schedule, schedule);
+						refreshSpend().then(scheduleSpend, scheduleSpend);
+					}
 				};
 				document.addEventListener("visibilitychange", onVisibility);
 				return () => document.removeEventListener("visibilitychange", onVisibility);

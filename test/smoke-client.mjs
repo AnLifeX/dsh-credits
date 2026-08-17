@@ -26,6 +26,13 @@ globalThis.document = {
   head: { appendChild: () => {} },
 }
 
+const localStore = {}
+globalThis.localStorage = {
+  getItem(key) { return Object.prototype.hasOwnProperty.call(localStore, key) ? localStore[key] : null },
+  setItem(key, value) { localStore[key] = String(value) },
+  removeItem(key) { delete localStore[key] },
+}
+
 // 零依赖 React Mock
 const ReactMock = {
   Fragment: Symbol.for('react.fragment'),
@@ -130,30 +137,49 @@ if (reg.id !== 'dsh-credits' || reg.order !== 1 || reg.name !== 'conversation.co
 // 模拟 API 数据与国际化
 let mockBalanceTotal = 100.23
 let mockIsAvailable = true
-
-globalThis.fetch = async () => ({
+const mockSpend = {
   ok: true,
-  json: async () => ({
-    ok: true,
-    fetchedAt: Date.now(),
-    refreshIntervalMs: 300000,
-    clientPollIntervalMs: 30000,
-    currency: 'CNY',
-    thresholds: { warning: 10, danger: 5 },
-    isAvailable: mockIsAvailable,
-    balances: [
-      { currency: 'USD', total: 0, granted: 0, toppedUp: 0 },
-      { currency: 'CNY', total: mockBalanceTotal, granted: 0, toppedUp: mockBalanceTotal },
-    ],
-    prices: {
-      'deepseek-v4-flash': { cacheHit: 0.02, cacheMiss: 0.1, output: 0.2 },
-      'deepseek-v4-pro': { cacheHit: 0.025, cacheMiss: 3, output: 6 },
-      'deepseek-chat': { cacheHit: 0.2, cacheMiss: 2, output: 8 },
-      'deepseek-reasoner': { cacheHit: 0.5, cacheMiss: 4, output: 16 },
-    },
-    defaultPrices: { cacheHit: 0.2, cacheMiss: 2, output: 8 },
-  }),
-})
+  range: 'today',
+  from: Date.now() - 86400000,
+  to: Date.now(),
+  currency: 'CNY',
+  cost: 12.5,
+  costByModel: { 'deepseek-chat': 12.5 },
+  tokens: { uncachedInput: 100, cacheRead: 0, cacheWrite: 0, output: 50 },
+  calls: 3,
+  sessions: 2,
+}
+
+function installFetch(balancePayload) {
+  globalThis.fetch = async (url) => {
+    const href = String(url)
+    if (href.includes('/query-credits/spend')) {
+      return { ok: true, json: async () => ({ ...mockSpend }) }
+    }
+    return { ok: true, json: async () => balancePayload() }
+  }
+}
+
+installFetch(() => ({
+  ok: true,
+  fetchedAt: Date.now(),
+  refreshIntervalMs: 300000,
+  clientPollIntervalMs: 30000,
+  currency: 'CNY',
+  thresholds: { warning: 10, danger: 5 },
+  isAvailable: mockIsAvailable,
+  balances: [
+    { currency: 'USD', total: 0, granted: 0, toppedUp: 0 },
+    { currency: 'CNY', total: mockBalanceTotal, granted: 0, toppedUp: mockBalanceTotal },
+  ],
+  prices: {
+    'deepseek-v4-flash': { cacheHit: 0.02, cacheMiss: 0.1, output: 0.2 },
+    'deepseek-v4-pro': { cacheHit: 0.025, cacheMiss: 3, output: 6 },
+    'deepseek-chat': { cacheHit: 0.2, cacheMiss: 2, output: 8 },
+    'deepseek-reasoner': { cacheHit: 0.5, cacheMiss: 4, output: 16 },
+  },
+  defaultPrices: { cacheHit: 0.2, cacheMiss: 2, output: 8 },
+}))
 
 const Comp = reg.comp
 const props = {
@@ -193,6 +219,19 @@ const props = {
       'model.other': '其他模型',
       'unit.minutes': '{n} 分钟',
       'unit.seconds': '{n} 秒',
+      'spend.pill': '{range} {amount}',
+      'spend.title': '累计消耗',
+      'spend.today': '今天',
+      'spend.yesterday': '昨天',
+      'spend.week': '本周',
+      'spend.month': '本月',
+      'spend.custom': '自定义',
+      'spend.from': '开始时间',
+      'spend.to': '结束时间',
+      'spend.meta': '{calls} 次调用 · {sessions} 个会话',
+      'spend.empty': '该区间暂无消耗',
+      'spend.open': '打开累计消耗',
+      'spend.close': '收起',
     }
     let out = dict[key] ?? key
     for (const [k, v] of Object.entries(params ?? {})) out = out.replaceAll('{' + k + '}', String(v))
@@ -247,28 +286,28 @@ if (!htmlGreen.includes('USD 钱包')) throw new Error('USD wallet row missing')
 if (!htmlGreen.includes('$0.00')) throw new Error('zero USD wallet should still appear on card')
 if (!htmlGreen.includes('dshqb_wallets')) throw new Error('wallets container missing')
 if (!htmlGreen.includes('余额 ¥100.23')) throw new Error('CNY preferred readout should hide empty extra currencies')
+if (!htmlGreen.includes('dshqb_cap')) throw new Error('spend capsule missing')
+if (!htmlGreen.includes('dshqb_cap_pill')) throw new Error('spend pill missing')
+if (!htmlGreen.includes('今天 ¥12.50')) throw new Error('today spend pill amount missing')
 
 // ---------- OpenCode Go 场景 ----------
 // 重新执行 bundle, 获得一个全新的模块实例与单例 store。
-globalThis.fetch = async () => ({
+installFetch(() => ({
   ok: true,
-  json: async () => ({
-    ok: true,
-    provider: 'opencode-go',
-    fetchedAt: Date.now(),
-    refreshIntervalMs: 300000,
-    clientPollIntervalMs: 30000,
-    currency: 'USD',
-    thresholds: { warning: 10, danger: 5 },
-    usage: {
-      rolling: { status: 'ok', percent: 9, resetsAt: '2026-08-14T07:20:04.810Z' },
-      weekly: { status: 'ok', percent: 12, resetsAt: '2026-08-17T00:00:00.810Z' },
-      monthly: { status: 'ok', percent: 6, resetsAt: '2026-09-09T00:41:03.810Z' },
-    },
-    prices: {},
-    defaultPrices: {},
-  }),
-})
+  provider: 'opencode-go',
+  fetchedAt: Date.now(),
+  refreshIntervalMs: 300000,
+  clientPollIntervalMs: 30000,
+  currency: 'USD',
+  thresholds: { warning: 10, danger: 5 },
+  usage: {
+    rolling: { status: 'ok', percent: 9, resetsAt: '2026-08-14T07:20:04.810Z' },
+    weekly: { status: 'ok', percent: 12, resetsAt: '2026-08-17T00:00:00.810Z' },
+    monthly: { status: 'ok', percent: 6, resetsAt: '2026-09-09T00:41:03.810Z' },
+  },
+  prices: {},
+  defaultPrices: {},
+}))
 new Function('window', 'require', code)(globalThis.window, (id) => {
   if (id === 'react') return ReactMock
   if (id === '@deepseek-ai/dsh-client-ui-primitives') return stubPrimitives(ReactMock)
@@ -323,6 +362,9 @@ const quotaDict = {
   'unit.minutes': '{n} 分钟',
   'unit.seconds': '{n} 秒',
   'model.unknown': '未知模型',
+  'spend.pill': '{range} {amount}',
+  'spend.today': '今天',
+  'spend.open': '打开累计消耗',
 }
 const quotaT = (key, params) => {
   let out = quotaDict[key] ?? key
@@ -350,6 +392,7 @@ if (!htmlQuota.includes('剩余 88%')) throw new Error('opencode remaining badge
 if (!htmlQuota.includes('dshqb_quota_rows')) throw new Error('opencode quota rows missing')
 if (htmlQuota.includes('dshqb_pricing_wrap')) throw new Error('DeepSeek pricing must be hidden in opencode-go mode')
 if (!htmlQuota.includes('dshqb_quota_fill')) throw new Error('opencode quota progress fill missing')
+if (!htmlQuota.includes('dshqb_cap')) throw new Error('spend capsule missing in opencode-go mode')
 console.log('OPENCODE CLIENT SMOKE TEST PASSED')
 
 console.log('CLIENT SMOKE TEST PASSED (ZERO-DEPENDENCY)')

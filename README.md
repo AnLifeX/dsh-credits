@@ -1,11 +1,13 @@
 # dsh-credits
 
-DeepSeek Harness（`dsh web`）额度插件：在输入框下方统计条同一行，实时显示账户额度与本会话估算消耗。
+DeepSeek Harness（`dsh web`）额度插件：在输入框下方统计条同一行，实时显示账户额度与本会话估算消耗；右下角另有可拖动的累计消耗胶囊。
 
 - **账户额度 + 状态灯**  
   DeepSeek 模式如 `🟢 余额 ¥97.69`；OpenCode Go 模式如 `🟢 Go 额度 月 6% · 周 12% · 5h 9%`。点击圆点可立即强刷。
 - **本会话估算消耗**  
   按模型单价估算（单价可在设置面板修改）。DeepSeek V4 自 2026-08-17 起按北京时间自动套用峰谷价。
+- **累计消耗胶囊**  
+  右下角可拖动气泡，查看今天 / 昨天 / 本周 / 本月 / 自定义时间范围内的跨会话估算总额（按当前计价货币与单价现算）。
 - **可视化设置**  
   齿轮图标打开：数据源、阈值滑块、API 凭证、连通性测试、模型单价、YAML 导出。保存后立即生效。
 
@@ -111,19 +113,49 @@ Go 模式展示 5 小时 / 每周 / 每月三个窗口的用量百分比与重�
 
 ## 架构
 
-浏览器只读本地缓存（`/query-credits`），不直连上游。服务端按 `refreshIntervalMs` 拉取并缓存，失败时保留上次成功值。本会话花费由 `queryCreditsCost` 投影折叠，随 `session/projection` 推送，无额外请求。
+浏览器只读本地缓存，不直连上游：
+
+| 路径 | 作用 |
+| :--- | :--- |
+| `GET /query-credits` | 账户额度缓存（`?force=1` 强刷） |
+| `GET /query-credits/spend?range=today` | 跨会话累计消耗。`range` 可为 `today` / `yesterday` / `week` / `month` / `custom`；自定义时再带 `from`、`to`（`YYYY-MM-DD` 或 ISO） |
+| `GET /query-credits/config` | 读当前配置 |
+| `POST /query-credits/config` | 保存配置并立即生效 |
+| `POST /query-credits/test-connection` | 连通性测试 |
+
+本会话花费由 `queryCreditsCost` 投影折叠，随 `session/projection` 推送。累计消耗在服务端按会话事件折叠 token，查询时再按当前单价计价；有 `sessionQuery` 时会回放历史会话，没有则只统计插件启动后的 live 事件。
 
 密钥走 Harness `credentials`，默认不写进配置文件。
 
 ## 发布到 npm
 
-推送符合 `v*` 的 git tag（例如 `v0.1.0`）会触发 GitHub Actions，用仓库密钥 `NPM_TOKEN` 执行 `npm publish`。详见仓库 `.github/workflows/publish.yml`。
+**普通 `git push` 不会发包。** 只有推送符合 `v*` 的 tag（例如 `v0.1.0`）才会触发 `.github/workflows/publish.yml`。
+
+第一次发布前：
+
+1. 在 [npmjs.com](https://www.npmjs.com/signup) 注册账号（包名 `dsh-credits` 目前可用）。
+2. 生成 **Automation** 或 Granular Access Token，权限包含 publish。
+3. GitHub 仓库 → Settings → Secrets and variables → Actions → New repository secret，名称必须是 **`NPM_TOKEN`**，值贴刚才的 token。不要写进代码或 README。
+4. 仓库 Settings → Actions 允许 workflow 运行。
+5. `package.json` 的 `version` 与即将打的 tag 一致后：
+
+```sh
+git tag v0.1.0
+git push origin v0.1.0
+```
+
+之后 Actions 会执行 `npm publish --provenance --access public`。发布成功即可：
+
+```sh
+dsh plugin --profile web add dsh-credits
+```
 
 ## 验证
 
 ```sh
 npm test
 curl http://127.0.0.1:3080/query-credits
+curl http://127.0.0.1:3080/query-credits/spend?range=today
 curl http://127.0.0.1:3080/plugins/dsh-credits/client.js
 ```
 
