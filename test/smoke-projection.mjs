@@ -3,8 +3,15 @@
  * 同步骤替换语义、模型归属、花费计算与 schema 校验。
  * 运行: node test/smoke-projection.mjs
  */
-import { makeCostProjection } from '../src/index.js'
+import { makeCostProjection, resolveModelPrice } from '../src/index.js'
 import assert from 'node:assert/strict'
+
+const usdFlash = resolveModelPrice({
+  currency: 'USD',
+  prices: { 'deepseek-v4-flash': { cacheHit: 1, cacheMiss: 2, output: 3 } },
+  defaultPrices: { cacheHit: 0, cacheMiss: 0, output: 0 },
+}, 'deepseek-v4-flash')
+assert.equal(usdFlash.cacheMiss, 2, 'non-CNY currency must use configured prices, not CNY peak table')
 
 const config = {
   currency: 'CNY',
@@ -63,4 +70,16 @@ state = def.apply(state, { type: 'assistant/message', data: { turn: 0, step: 0, 
 view = def.view(state)
 def.schema.parse(view)
 assert.equal(view.costByModel['unknown'], 0.0002)
+
+let live = { ...config, currency: 'CNY', pricingEpoch: 0 }
+const liveDef = makeCostProjection(() => live)
+let liveState = liveDef.init()
+liveState = liveDef.apply(liveState, {
+  type: 'assistant/message',
+  data: { turn: 0, step: 0, message: {}, usage: { inputTokens: 1000, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 } },
+})
+assert.equal(liveDef.view(liveState).currency, 'CNY')
+live = { ...live, currency: 'USD', pricingEpoch: 1 }
+assert.equal(liveDef.view(liveState).currency, 'USD', 'view must pick up currency without new session events')
+assert.equal(liveDef.view(liveState).pricingEpoch, 1)
 console.log('PROJECTION TEST PASSED')

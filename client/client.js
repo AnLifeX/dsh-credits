@@ -63,6 +63,10 @@ window.__ModuleLoader__.load({
 				".dshqb_card_hint{font-size:10.5px;color:var(--dsw-alias-label-tertiary);margin-top:auto;padding-top:6px;border-top:1px dashed var(--dsw-alias-separator-primary,var(--dsw-alias-border-l3,rgba(128,128,128,0.15)));display:flex;flex-direction:column;gap:3px}",
 				".dshqb_card_tokens{display:flex;flex-direction:column;gap:2px;font-size:10.5px;color:var(--dsw-alias-label-secondary);line-height:1.35}",
 				".dshqb_card_hit{font-size:10px;color:var(--dsw-alias-label-tertiary);opacity:0.9}",
+				".dshqb_wallets{display:flex;flex-direction:column;gap:8px}",
+				".dshqb_wallet{border:1px solid var(--dsw-alias-border-l3,rgba(128,128,128,0.12));background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,0.04));border-radius:6px;padding:6px 10px;display:flex;flex-direction:column;gap:4px}",
+				".dshqb_wallet_head{display:flex;align-items:baseline;justify-content:space-between;font-size:11.5px}",
+				".dshqb_wallet_code{font-weight:600;color:var(--dsw-alias-label-secondary)}",
 				".dshqb_quota_rows{display:flex;flex-direction:column;gap:8px}",
 				".dshqb_quota_row{border:1px solid var(--dsw-alias-border-l3,rgba(128,128,128,0.12));background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,0.04));border-radius:6px;padding:6px 10px;display:flex;flex-direction:column;gap:4px}",
 				".dshqb_quota_head{display:flex;align-items:baseline;justify-content:space-between;font-size:11.5px}",
@@ -297,6 +301,7 @@ window.__ModuleLoader__.load({
 			"card.balanceTitle": "📊 账户余额",
 			"card.sessionTitle": "⚡ 本会话消耗",
 			"card.total": "总额: ",
+			"card.wallet": "{currency} 钱包",
 			"card.topup": "充值 {amount}",
 			"card.granted": "赠送 {amount}",
 			"card.updated": "更新于 {time} · 每 {interval} 刷新",
@@ -337,7 +342,7 @@ window.__ModuleLoader__.load({
 			"settings.tab.pricing": "⚡ 模型单价",
 			"settings.tab.export": "📋 YAML 导出",
 			"settings.currency": "计价货币",
-			"settings.currencyHint": "用于界面金额展示及模型花费折算。",
+			"settings.currencyHint": "用于本会话估算与状态灯判定。底部与卡片会同时列出账户里所有币种钱包，不会因为切换货币而隐藏其他余额。切换货币时会套用该币种的官方推荐单价。",
 			"settings.currencyHintQuota": "套餐模式下不影响额度百分比，仅用于右侧本会话消耗估算。",
 			"settings.warning": "预警阈值 (黄灯 🟡)",
 			"settings.warningHint": "当余额低于此值时显示黄色预警状态。",
@@ -394,6 +399,7 @@ window.__ModuleLoader__.load({
 			"card.balanceTitle": "📊 Account Balance",
 			"card.sessionTitle": "⚡ Session Cost",
 			"card.total": "Total: ",
+			"card.wallet": "{currency} wallet",
 			"card.topup": "Topped up {amount}",
 			"card.granted": "Granted {amount}",
 			"card.updated": "Updated {time} · Every {interval}",
@@ -434,7 +440,7 @@ window.__ModuleLoader__.load({
 			"settings.tab.pricing": "⚡ Model Pricing",
 			"settings.tab.export": "📋 YAML Export",
 			"settings.currency": "Currency",
-			"settings.currencyHint": "Used for display and session cost calculation.",
+			"settings.currencyHint": "Used for session cost estimates and the status light. All wallets still appear in the readout and card. Switching currency loads that currency's official model prices.",
 			"settings.currencyHintQuota": "In quota mode this does not affect usage percent; it only changes the session cost estimate.",
 			"settings.warning": "Warning Threshold (Yellow 🟡)",
 			"settings.warningHint": "Show yellow warning status when balance is below this value.",
@@ -480,10 +486,28 @@ window.__ModuleLoader__.load({
 		//#endregion
 
 		//#region settings modal component
-		const DEFAULT_PRICES = {
+		const DEFAULT_PRICES_CNY = {
 			"deepseek-v4-flash": { cacheHit: 0.02, cacheMiss: 1, output: 2 },
-			"deepseek-v4-pro": { cacheHit: 0.025, cacheMiss: 3, output: 6 }
+			"deepseek-v4-pro": { cacheHit: 0.025, cacheMiss: 3, output: 6 },
+			"deepseek-chat": { cacheHit: 0.1, cacheMiss: 1, output: 2 },
+			"deepseek-reasoner": { cacheHit: 1, cacheMiss: 4, output: 16 }
 		};
+		const DEFAULT_PRICES_USD = {
+			"deepseek-v4-flash": { cacheHit: 0.0028, cacheMiss: 0.14, output: 0.28 },
+			"deepseek-v4-pro": { cacheHit: 0.0035, cacheMiss: 0.42, output: 0.84 },
+			"deepseek-chat": { cacheHit: 0.014, cacheMiss: 0.14, output: 0.28 },
+			"deepseek-reasoner": { cacheHit: 0.14, cacheMiss: 0.55, output: 2.19 }
+		};
+		const DEFAULT_PRICES = { ...DEFAULT_PRICES_CNY };
+
+		function officialPricesFor(currency) {
+			return currency === "CNY" ? DEFAULT_PRICES_CNY : DEFAULT_PRICES_USD;
+		}
+		function officialDefaultPrices(currency) {
+			return currency === "CNY"
+				? { cacheHit: 0.1, cacheMiss: 1, output: 2 }
+				: { cacheHit: 0.014, cacheMiss: 0.14, output: 0.28 };
+		}
 
 		const DEFAULT_SETTINGS = {
 			provider: "deepseek",
@@ -498,7 +522,8 @@ window.__ModuleLoader__.load({
 			opencodeApiKeyRef: "OPENCODE_GO_API_KEY",
 			opencodeApiKey: "",
 			opencodeBaseUrl: "https://opencode.ai/zen/go/v1/usage",
-			prices: { ...DEFAULT_PRICES }
+			prices: { ...DEFAULT_PRICES },
+			defaultPrices: officialDefaultPrices("CNY")
 		};
 
 		function generateYaml(config) {
@@ -686,7 +711,8 @@ window.__ModuleLoader__.load({
 								opencodeApiKeyRef: c.opencodeApiKeyRef || "OPENCODE_GO_API_KEY",
 								opencodeApiKey: "",
 								opencodeBaseUrl: c.opencodeBaseUrl || "https://opencode.ai/zen/go/v1/usage",
-								prices: loadedPrices
+								prices: loadedPrices,
+								defaultPrices: c.defaultPrices ?? officialDefaultPrices(c.currency ?? "CNY")
 							});
 						}
 					})
@@ -853,7 +879,15 @@ window.__ModuleLoader__.load({
 								react.createElement("select", {
 									className: "dshqb_select",
 									value: form.currency,
-									onChange: (e) => setForm({ ...form, currency: e.target.value }),
+									onChange: (e) => {
+										const next = e.target.value;
+										setForm((prev) => {
+											const official = officialPricesFor(next);
+											const prices = { ...(prev.prices || {}) };
+											for (const [model, p] of Object.entries(official)) prices[model] = p;
+											return { ...prev, currency: next, prices, defaultPrices: officialDefaultPrices(next) };
+										});
+									},
 									key: "sel"
 								}, [
 									react.createElement("option", { value: "CNY", key: "cny" }, "CNY (人民币 ¥)"),
@@ -1198,6 +1232,22 @@ window.__ModuleLoader__.load({
 			return getStatusLevel(Math.max(0, Math.min(100, 100 - percent)), true, thresholds);
 		}
 
+		/** 多币种钱包: 底部列出选定货币 + 其他非零钱包; 卡片列出全部。 */
+		function selectWallets(balances, preferred) {
+			const list = Array.isArray(balances) ? balances.filter((b) => b && typeof b.currency === "string") : [];
+			const preferredEntry = list.find((b) => b.currency === preferred);
+			const others = list
+				.filter((b) => b.currency !== preferred)
+				.filter((b) => Number(b.total) > 0)
+				.sort((a, b) => Number(b.total) - Number(a.total));
+			const readout = preferredEntry ? [preferredEntry, ...others] : (others.length > 0 ? others : list);
+			const card = preferredEntry
+				? [preferredEntry, ...list.filter((b) => b.currency !== preferred)]
+				: list;
+			const statusWallet = preferredEntry ?? list.find((b) => Number(b.total) > 0) ?? list[0] ?? null;
+			return { readout, card, statusWallet };
+		}
+
 		/**
 		 * 余额读数: 与统计条同行的右对齐读数。
 		 * 包含余额指示灯、本会话消耗、悬停双栏卡片、V4 定价卡片与可视化设置弹窗。
@@ -1306,11 +1356,9 @@ window.__ModuleLoader__.load({
 						}, t("card.openSettings"))
 					]);
 				} else if (info.ok === true && Array.isArray(info.balances) && info.balances.length > 0) {
-					// 多币种账户: 优先匹配服务端下发的 currency; 无匹配时优先取非零余额, 避免盲取 USD 0。
-					const primary = info.balances.find((entry) => entry.currency === info.currency)
-						?? info.balances.find((entry) => Number(entry.total) > 0)
-						?? info.balances[0];
-					const amount = formatMoney(primary.total, primary.currency);
+					const wallets = selectWallets(info.balances, info.currency);
+					const primary = wallets.statusWallet ?? info.balances[0];
+					const amount = wallets.readout.map((w) => formatMoney(w.total, w.currency)).join(" · ");
 					const level = getStatusLevel(primary.total, info.isAvailable === true, info.thresholds);
 					const levelText = level === "success" ? t("status.sufficient") : level === "warning" ? t("status.warning") : t("status.danger");
 					const statusDot = react.createElement("button", {
@@ -1328,15 +1376,21 @@ window.__ModuleLoader__.load({
 							react.createElement("span", { key: "title" }, t("card.balanceTitle")),
 							react.createElement("span", { className: "dshqb_card_badge dshqb_card_badge_" + level, key: "badge" }, "● " + levelText)
 						]),
-						react.createElement("div", { className: "dshqb_card_row", key: "row" }, [
-							react.createElement("span", { key: "lbl" }, t("card.total")),
-							react.createElement("span", { className: "dshqb_card_val_main", key: "val" }, formatMoney(primary.total, primary.currency))
-						]),
-						react.createElement("div", { className: "dshqb_card_sub", key: "sub" }, [
-							react.createElement("span", { key: "top" }, t("card.topup", { amount: formatMoney(primary.toppedUp, primary.currency) })),
-							react.createElement("span", { key: "sep" }, "·"),
-							react.createElement("span", { key: "gra" }, t("card.granted", { amount: formatMoney(primary.granted, primary.currency) }))
-						]),
+						react.createElement("div", { className: "dshqb_wallets", key: "wallets" },
+							wallets.card.map((w) =>
+								react.createElement("div", { className: "dshqb_wallet", key: w.currency }, [
+									react.createElement("div", { className: "dshqb_wallet_head", key: "head" }, [
+										react.createElement("span", { className: "dshqb_wallet_code", key: "code" }, t("card.wallet", { currency: w.currency })),
+										react.createElement("span", { className: "dshqb_card_val_main", key: "val" }, formatMoney(w.total, w.currency))
+									]),
+									react.createElement("div", { className: "dshqb_card_sub", key: "sub" }, [
+										react.createElement("span", { key: "top" }, t("card.topup", { amount: formatMoney(w.toppedUp, w.currency) })),
+										react.createElement("span", { key: "sep" }, "·"),
+										react.createElement("span", { key: "gra" }, t("card.granted", { amount: formatMoney(w.granted, w.currency) }))
+									])
+								])
+							)
+						),
 						react.createElement("div", { className: "dshqb_card_hint", key: "hint" }, [
 							react.createElement("div", { key: "time" }, t("card.updated", { time: formatClock(info.fetchedAt), interval: formatInterval(info.refreshIntervalMs ?? DEFAULT_POLL_MS, t) })),
 							react.createElement("div", { key: "tip" }, t("card.refreshHint")),

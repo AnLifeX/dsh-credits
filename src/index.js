@@ -77,6 +77,11 @@ export const resolveModelPrice = (configOrGetter, model, timestamp = Date.now())
   const isV4Flash = model === 'deepseek-v4-flash'
   const isV4Pro = model === 'deepseek-v4-pro'
 
+  // 峰谷引擎内置的是人民币官方价; 非 CNY 时使用配置表(切换货币后金额才会跟着变)。
+  if ((config.currency || 'CNY') !== 'CNY') {
+    return config.prices?.[model] ?? config.defaultPrices
+  }
+
   if (!isV4Flash && !isV4Pro) {
     return config.prices?.[model] ?? config.defaultPrices
   }
@@ -179,6 +184,7 @@ export const makeCostProjection = (configOrGetter) => {
         output: z.number().int().nonnegative(),
       }).strict(),
       currency: z.string(),
+      pricingEpoch: z.number().int().nonnegative(),
     }).strict(),
     init: () => ({ currentModel: null, last: null, byModel: {}, modelOrder: [] }),
     apply: (state, event) => {
@@ -249,6 +255,7 @@ export const makeCostProjection = (configOrGetter) => {
         costByModel,
         tokens,
         currency: cfg.currency,
+        pricingEpoch: Number(cfg.pricingEpoch ?? 0),
       }
     },
     stateVersion: 1,
@@ -289,6 +296,7 @@ export function apply(ctx, config) {
     clientPollIntervalMs: config.clientPollIntervalMs ?? 30000,
     timeoutMs: config.timeoutMs ?? 8000,
     currency: config.currency ?? 'CNY',
+    pricingEpoch: 0,
     warningThreshold: config.warningThreshold ?? 10,
     dangerThreshold: config.dangerThreshold ?? 5,
     prices: { ...(config.prices ?? {}) },
@@ -296,6 +304,7 @@ export function apply(ctx, config) {
   }
 
   const getConfig = () => runtimeConfig
+  let remountCostProjection = () => {}
 
   /** 经 credentials seam / 环境变量解析一个密钥引用。 */
   const resolveCredential = async (ref) => {
@@ -575,6 +584,8 @@ export function apply(ctx, config) {
             if (body.defaultPrices && typeof body.defaultPrices === 'object') {
               runtimeConfig.defaultPrices = { ...runtimeConfig.defaultPrices, ...body.defaultPrices }
             }
+            runtimeConfig.pricingEpoch = Number(runtimeConfig.pricingEpoch ?? 0) + 1
+            remountCostProjection()
 
             // 配置变更后重设刷新循环并立即拉取一次最新数据
             resetLoop()
@@ -683,7 +694,24 @@ export function apply(ctx, config) {
 
   // 可选 sessionProjections: 会话花费投影 (使用动态 getter)
   ctx.inject(['sessionProjections'], (projectionCtx) => {
-    projectionCtx.sessionProjections.register(makeCostProjection(getConfig))
+    let dispose = null
+    let stateVersion = 1
+    const mount = () => {
+      if (typeof dispose === 'function') {
+        try { dispose() } catch { /* 旧单元卸载失败时仍注册新单元 */ }
+      }
+      const unit = makeCostProjection(getConfig)
+      unit.stateVersion = stateVersion
+      const ret = projectionCtx.sessionProjections.register(unit)
+      dispose = typeof ret === 'function'
+        ? ret
+        : (ret && typeof ret.dispose === 'function' ? () => ret.dispose() : null)
+    }
+    remountCostProjection = () => {
+      stateVersion += 1
+      mount()
+    }
+    mount()
   })
 }
 

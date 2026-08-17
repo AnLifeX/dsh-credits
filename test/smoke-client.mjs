@@ -167,6 +167,7 @@ const props = {
       'card.balanceTitle': '📊 账户余额',
       'card.sessionTitle': '⚡ 本会话消耗',
       'card.total': '总额: ',
+      'card.wallet': '{currency} 钱包',
       'card.topup': '充值 {amount}',
       'card.granted': '赠送 {amount}',
       'card.updated': '更新于 {time} · 每 {interval} 刷新',
@@ -241,6 +242,11 @@ if (htmlGreen.includes('• deepseek-chat</span><div class="dshqb_pricing_rates"
 if (!htmlGreen.includes('title="插件设置"')) throw new Error('settings button title missing')
 if (!htmlGreen.includes('aria-label="插件设置"')) throw new Error('settings button aria-label missing')
 if (!htmlGreen.includes('<svg')) throw new Error('gear svg icon missing')
+if (!htmlGreen.includes('CNY 钱包')) throw new Error('CNY wallet row missing')
+if (!htmlGreen.includes('USD 钱包')) throw new Error('USD wallet row missing')
+if (!htmlGreen.includes('$0.00')) throw new Error('zero USD wallet should still appear on card')
+if (!htmlGreen.includes('dshqb_wallets')) throw new Error('wallets container missing')
+if (!htmlGreen.includes('余额 ¥100.23')) throw new Error('CNY preferred readout should hide empty extra currencies')
 
 // ---------- OpenCode Go 场景 ----------
 // 重新执行 bundle, 获得一个全新的模块实例与单例 store。
