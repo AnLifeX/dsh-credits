@@ -28,11 +28,24 @@ export const name = 'dsh-credits'
 
 /** 支持的额度数据源。 */
 export const PROVIDERS = ['deepseek', 'opencode-go']
+export const QUOTA_MODES = ['follow', 'custom']
+export const DOCK_LAYOUTS = ['own', 'shared']
 export const OPENCODE_GO_DEFAULT_BASE_URL = 'https://opencode.ai/zen/go/v1/usage'
+
+/** own=额度单独一行; shared=与官方统计/TPS 同一行靠后。 */
+export const normalizeDockLayout = (value) =>
+  String(value ?? 'own').trim().toLowerCase() === 'shared' ? 'shared' : 'own'
 
 /** 对话模型供应商 → 额度展示。仅 OpenCode Go 走订阅用量, 其余一律官方余额。 */
 export const quotaSourceFromProvider = (provider) =>
   String(provider ?? '').trim().toLowerCase() === 'opencode-go' ? 'opencode-go' : 'deepseek'
+
+/** follow: 跟当前模型; custom: 固定用 config.provider, 忽略当前模型。 */
+export const resolveQuotaSource = (modelProvider, config = {}) => {
+  const selected = quotaSourceFromProvider(config.provider)
+  if (String(config.quotaMode ?? 'follow').trim().toLowerCase() === 'custom') return selected
+  return quotaSourceFromProvider(modelProvider ?? config.provider)
+}
 
 /** 每个模型每 100 万 token 的价格(以 `currency` 计价)。 */
 const ModelPrice = Schema.object({
@@ -45,7 +58,17 @@ const ModelPrice = Schema.object({
 })
 
 export const Config = Schema.object({
-  /** 无法识别当前对话模型时的默认数据源; 选了 OpenCode Go / 其他模型时读数会自动跟随 */
+  /** follow=跟随当前对话模型; custom=固定使用 provider */
+  quotaMode: Schema.union(QUOTA_MODES).default('follow'),
+  /** 底部统计条是否展示额度读数 */
+  showDock: Schema.boolean().default(true),
+  /** own=独立换行; shared=与官方统计/TPS 共用一行 */
+  dockLayout: Schema.union(DOCK_LAYOUTS).default('own'),
+  /** 右下角累计消耗胶囊 */
+  showCapsule: Schema.boolean().default(true),
+  /** 悬停额度/花费详情气泡 */
+  showPopover: Schema.boolean().default(true),
+  /** 自定义模式的数据源; 跟随模式下仅在无法识别当前模型时作为回退 */
   provider: Schema.union(PROVIDERS).default('deepseek'),
   /** 显式 DeepSeek API 密钥; 留空则走 apiKeyRef(credentials / 环境变量) */
   apiKey: Schema.string().default(''),
@@ -271,6 +294,11 @@ const readJsonBody = (req) => new Promise((resolve, reject) => {
 export function apply(ctx, config) {
   // 运行时可变配置（优先使用用户在设置面板中动态修改的值）
   let runtimeConfig = {
+    quotaMode: config.quotaMode === 'custom' ? 'custom' : 'follow',
+    showDock: config.showDock !== false,
+    dockLayout: normalizeDockLayout(config.dockLayout),
+    showCapsule: config.showCapsule !== false,
+    showPopover: config.showPopover !== false,
     provider: config.provider ?? 'deepseek',
     apiKey: config.apiKey ?? '',
     apiKeyRef: config.apiKeyRef ?? 'DEEPSEEK_API_KEY',
@@ -537,6 +565,11 @@ export function apply(ctx, config) {
 
   const getSanitizedConfig = () => {
     return {
+      quotaMode: runtimeConfig.quotaMode === 'custom' ? 'custom' : 'follow',
+      showDock: runtimeConfig.showDock !== false,
+      dockLayout: normalizeDockLayout(runtimeConfig.dockLayout),
+      showCapsule: runtimeConfig.showCapsule !== false,
+      showPopover: runtimeConfig.showPopover !== false,
       provider: runtimeConfig.provider,
       hasCustomKey: Boolean(runtimeConfig.apiKey),
       apiKeyMasked: maskKey(runtimeConfig.apiKey),
@@ -595,6 +628,11 @@ export function apply(ctx, config) {
         ok: view.ok,
         provider: picked,
         defaultProvider: quotaSourceFromProvider(runtimeConfig.provider),
+        quotaMode: runtimeConfig.quotaMode === 'custom' ? 'custom' : 'follow',
+        showDock: runtimeConfig.showDock !== false,
+        dockLayout: normalizeDockLayout(runtimeConfig.dockLayout),
+        showCapsule: runtimeConfig.showCapsule !== false,
+        showPopover: runtimeConfig.showPopover !== false,
         fetchedAt: view.fetchedAt,
         refreshIntervalMs: runtimeConfig.refreshIntervalMs,
         clientPollIntervalMs: runtimeConfig.clientPollIntervalMs,
@@ -680,6 +718,11 @@ export function apply(ctx, config) {
           try {
             const body = await readJsonBody(req)
             // 局部合并与类型校验
+            if (typeof body.quotaMode === 'string' && QUOTA_MODES.includes(body.quotaMode)) runtimeConfig.quotaMode = body.quotaMode
+            if (typeof body.showDock === 'boolean') runtimeConfig.showDock = body.showDock
+            if (typeof body.dockLayout === 'string' && DOCK_LAYOUTS.includes(body.dockLayout)) runtimeConfig.dockLayout = body.dockLayout
+            if (typeof body.showCapsule === 'boolean') runtimeConfig.showCapsule = body.showCapsule
+            if (typeof body.showPopover === 'boolean') runtimeConfig.showPopover = body.showPopover
             if (typeof body.provider === 'string' && PROVIDERS.includes(body.provider)) runtimeConfig.provider = body.provider
             if (typeof body.apiKey === 'string') runtimeConfig.apiKey = body.apiKey.trim()
             if (typeof body.apiKeyRef === 'string' && body.apiKeyRef.trim()) runtimeConfig.apiKeyRef = body.apiKeyRef.trim()

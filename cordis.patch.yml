@@ -1,14 +1,19 @@
 # dsh-credits bundle 层。
 # 安装: dsh plugin --profile web add <本目录>
 #
-# 默认使用 OpenCode Go 订阅额度。切回 DeepSeek 官方余额:
-#   provider: deepseek
-#   baseUrl: https://api.deepseek.com
-#   apiKeyRef: DEEPSEEK_API_KEY
+# 额度模式:
+#   quotaMode: follow   # 跟随当前对话模型 (Go → 套餐额度, 其他 → 官方余额)
+#   quotaMode: custom   # 固定使用下方 provider
+# 展示开关: showDock / dockLayout(own 独立换行 | shared 共用一行) / showCapsule / showPopover
 - insert:
     - id: dsh-credits
       name: dsh-credits
       config:
+        quotaMode: follow
+        showDock: true
+        dockLayout: own
+        showCapsule: true
+        showPopover: true
         provider: opencode-go
         opencodeApiKeyRef: OPENCODE_GO_API_KEY
         opencodeBaseUrl: https://opencode.ai/zen/go/v1/usage

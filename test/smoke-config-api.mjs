@@ -5,7 +5,7 @@
  */
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
-import { apply, quotaSourceFromProvider } from '../src/index.js'
+import { apply, quotaSourceFromProvider, resolveQuotaSource } from '../src/index.js'
 
 // 模拟 webServer 上下文与注册表
 const routes = new Map()
@@ -156,6 +156,11 @@ async function runTests() {
   assert.equal(resGetConfig.data.config.dangerThreshold, 5)
   assert.equal(resGetConfig.data.config.currency, 'CNY')
   assert.equal(resGetConfig.data.config.provider, 'deepseek')
+  assert.equal(resGetConfig.data.config.quotaMode, 'follow')
+  assert.equal(resGetConfig.data.config.showDock, true)
+  assert.equal(resGetConfig.data.config.dockLayout, 'own')
+  assert.equal(resGetConfig.data.config.showCapsule, true)
+  assert.equal(resGetConfig.data.config.showPopover, true)
   assert.equal(resGetConfig.data.config.opencodeBaseUrl, 'https://opencode.ai/zen/go/v1/usage')
   console.log('GET /query-credits/config passed')
 
@@ -213,7 +218,30 @@ async function runTests() {
   assert.equal(quotaSourceFromProvider('anthropic'), 'deepseek')
   assert.equal(quotaSourceFromProvider('openai'), 'deepseek')
   assert.equal(quotaSourceFromProvider('opencode'), 'deepseek')
-  console.log('quotaSourceFromProvider mapping passed')
+  assert.equal(resolveQuotaSource('opencode-go', { quotaMode: 'follow', provider: 'deepseek' }), 'opencode-go')
+  assert.equal(resolveQuotaSource('anthropic', { quotaMode: 'follow', provider: 'opencode-go' }), 'deepseek')
+  assert.equal(resolveQuotaSource('anthropic', { quotaMode: 'custom', provider: 'opencode-go' }), 'opencode-go')
+  assert.equal(resolveQuotaSource('opencode-go', { quotaMode: 'custom', provider: 'deepseek' }), 'deepseek')
+  console.log('quotaSourceFromProvider / resolveQuotaSource mapping passed')
+
+  const resQuotaMode = await invokeRoute('/query-credits/config', 'POST', {
+    quotaMode: 'custom',
+    showDock: false,
+    dockLayout: 'shared',
+    showCapsule: true,
+    showPopover: false,
+  })
+  assert.equal(resQuotaMode.data.config.quotaMode, 'custom')
+  assert.equal(resQuotaMode.data.config.showDock, false)
+  assert.equal(resQuotaMode.data.config.dockLayout, 'shared')
+  assert.equal(resQuotaMode.data.config.showCapsule, true)
+  assert.equal(resQuotaMode.data.config.showPopover, false)
+  const resQuotaPayload = await invokeRoute('/query-credits', 'GET')
+  assert.equal(resQuotaPayload.data.quotaMode, 'custom')
+  assert.equal(resQuotaPayload.data.showDock, false)
+  assert.equal(resQuotaPayload.data.dockLayout, 'shared')
+  assert.equal(resQuotaPayload.data.showPopover, false)
+  console.log('quotaMode / display flags config passed')
 
   const resOpenCodeConn = await invokeRoute('/query-credits/test-connection', 'POST', {
     provider: 'opencode-go',
