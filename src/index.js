@@ -32,7 +32,7 @@ export const QUOTA_MODES = ['follow', 'custom']
 export const DOCK_LAYOUTS = ['own', 'shared']
 export const OPENCODE_GO_DEFAULT_BASE_URL = 'https://opencode.ai/zen/go/v1/usage'
 
-/** own=额度单独一行; shared=与官方统计/TPS 同一行靠后。 */
+/** own=额度单独一行; shared=与底部已有统计同一行靠后。 */
 export const normalizeDockLayout = (value) =>
   String(value ?? 'own').trim().toLowerCase() === 'shared' ? 'shared' : 'own'
 
@@ -62,7 +62,7 @@ export const Config = Schema.object({
   quotaMode: Schema.union(QUOTA_MODES).default('follow'),
   /** 底部统计条是否展示额度读数 */
   showDock: Schema.boolean().default(true),
-  /** own=独立换行; shared=与官方统计/TPS 共用一行 */
+  /** own=独立换行; shared=与底部已有统计共用一行 */
   dockLayout: Schema.union(DOCK_LAYOUTS).default('own'),
   /** 右下角累计消耗胶囊 */
   showCapsule: Schema.boolean().default(true),
