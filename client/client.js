@@ -48,13 +48,16 @@ window.__ModuleLoader__.load({
 				".dshqb_dot_success{background-color:var(--dsw-alias-state-success-primary,#10b981);box-shadow:0 0 0 2px rgba(16,185,129,0.2)}",
 				".dshqb_dot_warning{background-color:var(--dsw-alias-state-warn-primary,var(--dsw-alias-state-warning-primary,#f59e0b));box-shadow:0 0 0 2px rgba(245,158,11,0.2)}",
 				".dshqb_dot_danger{background-color:var(--dsw-alias-state-error-primary,#ef4444);box-shadow:0 0 0 2px rgba(239,68,68,0.2)}",
-				".dshqb_popover{position:absolute;bottom:calc(100% + 8px);left:50%;right:auto;z-index:9999;min-width:440px;max-width:92vw;background:var(--dsw-alias-bg-layer-1,var(--dsw-hovercard-bg,var(--dsw-alias-surface-elevated,#ffffff)));border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-secondary,rgba(128,128,128,0.2)));border-radius:10px;box-shadow:var(--dsw-shadow-lv3,0 12px 32px rgba(0,0,0,0.18));padding:14px 16px;display:flex;flex-direction:row;gap:16px;box-sizing:border-box;white-space:normal;overflow-wrap:anywhere;text-align:left;color:var(--dsw-alias-label-primary);font-size:12px;line-height:1.5;backdrop-filter:blur(16px);opacity:0;pointer-events:none;transform:translateX(-50%) translateY(6px);transition:opacity .18s cubic-bezier(0.16,1,0.3,1),transform .18s cubic-bezier(0.16,1,0.3,1)}",
+				".dshqb_popover{position:absolute;bottom:calc(100% + 8px);left:50%;right:auto;z-index:9999;width:min(440px,calc(100vw - 24px));min-width:0;max-width:calc(100vw - 24px);background:var(--dsw-alias-bg-layer-1,var(--dsw-hovercard-bg,var(--dsw-alias-surface-elevated,#ffffff)));border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-secondary,rgba(128,128,128,0.2)));border-radius:10px;box-shadow:var(--dsw-shadow-lv3,0 12px 32px rgba(0,0,0,0.18));padding:clamp(10px,3cqi,14px) clamp(10px,3.4cqi,16px);display:flex;flex-direction:row;flex-wrap:wrap;align-items:stretch;gap:12px 16px;box-sizing:border-box;white-space:normal;text-align:left;color:var(--dsw-alias-label-primary);font-size:12px;font-size:clamp(11px,2.8cqi,12px);line-height:1.5;backdrop-filter:blur(16px);opacity:0;pointer-events:none;transform:translateX(-50%) translateY(6px);transition:opacity .18s cubic-bezier(0.16,1,0.3,1),transform .18s cubic-bezier(0.16,1,0.3,1);container-type:inline-size;container-name:dshqb-pop}",
 				".dshqb_popover::after{content:'';position:absolute;top:100%;left:0;right:0;height:12px;background:transparent}",
 				".dshqb_trigger:hover .dshqb_popover, .dshqb_popover:hover{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0)}",
 				".dshqb_col{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}",
-				".dshqb_vsep{width:1px;background:var(--dsw-alias-separator-primary,var(--dsw-alias-border-l3,rgba(128,128,128,0.15)));align-self:stretch;margin:0 2px}",
-				".dshqb_card_header{display:flex;align-items:center;justify-content:space-between;font-weight:600;font-size:12px;color:var(--dsw-alias-label-secondary)}",
-				".dshqb_card_badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:500;line-height:14px}",
+				".dshqb_popover .dshqb_col{flex:1 1 188px}",
+				".dshqb_vsep{width:1px;background:var(--dsw-alias-separator-primary,var(--dsw-alias-border-l3,rgba(128,128,128,0.15)));align-self:stretch;margin:0 2px;flex:0 0 1px}",
+				"@container dshqb-pop (max-width:400px){.dshqb_vsep{display:none}.dshqb_popover .dshqb_col{flex:1 1 100%}}",
+				".dshqb_card_header{display:flex;align-items:center;justify-content:space-between;gap:8px;min-width:0;font-weight:600;font-size:12px;font-size:clamp(11px,2.8cqi,12px);color:var(--dsw-alias-label-secondary)}",
+				".dshqb_card_title{min-width:0;flex:1 1 auto;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+				".dshqb_card_badge{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:11px;font-size:clamp(10px,2.4cqi,11px);font-weight:500;line-height:14px;flex-shrink:0;white-space:nowrap}",
 				".dshqb_card_badge_btn{cursor:pointer;border:none;font:inherit;font-size:11px;font-weight:500;line-height:14px}",
 				".dshqb_card_badge_btn:hover{filter:brightness(1.12)}",
 				".dshqb_card_badge_btn:disabled{cursor:wait;opacity:.7}",
@@ -63,7 +66,7 @@ window.__ModuleLoader__.load({
 				".dshqb_card_badge_danger{background:rgba(239,68,68,0.12);color:var(--dsw-alias-state-error-primary,#ef4444)}",
 				".dshqb_card_badge_info{background:rgba(59,130,246,0.12);color:var(--dsw-alias-brand-primary,#3b82f6)}",
 				".dshqb_card_row{display:flex;align-items:baseline;justify-content:space-between;font-size:12px}",
-				".dshqb_card_val_main{font-size:16px;font-weight:600;color:var(--dsw-alias-label-primary);font-variant-numeric:tabular-nums}",
+				".dshqb_card_val_main{font-size:16px;font-size:clamp(13px,3.8cqi,16px);font-weight:600;color:var(--dsw-alias-label-primary);font-variant-numeric:tabular-nums;flex-shrink:0;white-space:nowrap}",
 				".dshqb_card_sub{font-size:11px;color:var(--dsw-alias-label-tertiary);display:flex;gap:8px}",
 				".dshqb_card_models{margin:4px 0 0;padding:0;list-style:none;font-size:11px;color:var(--dsw-alias-label-secondary);display:flex;flex-direction:column;gap:2px}",
 				".dshqb_card_models li{display:flex;justify-content:space-between;font-variant-numeric:tabular-nums}",
@@ -103,7 +106,7 @@ window.__ModuleLoader__.load({
 				".dshqb_btn_icon svg{display:block}",
 				".dshqb_btn_icon:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover,rgba(128,128,128,0.1));transform:scale(1.1)}",
 				".dshqb_btn_icon:active{transform:scale(0.95)}",
-				".dshqb_pricing_popover{position:absolute;bottom:calc(100% + 8px);left:50%;right:auto;z-index:9999;min-width:320px;max-width:92vw;background:var(--dsw-alias-bg-layer-1,var(--dsw-hovercard-bg,var(--dsw-alias-surface-elevated,#ffffff)));border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-secondary,rgba(128,128,128,0.2)));border-radius:10px;box-shadow:var(--dsw-shadow-lv3,0 12px 32px rgba(0,0,0,0.18));padding:12px 14px;display:flex;flex-direction:column;gap:8px;box-sizing:border-box;white-space:normal;overflow-wrap:anywhere;text-align:left;color:var(--dsw-alias-label-primary);font-size:12px;line-height:1.5;backdrop-filter:blur(16px);opacity:0;pointer-events:none;transform:translateX(-50%) translateY(6px);transition:opacity .18s cubic-bezier(0.16,1,0.3,1),transform .18s cubic-bezier(0.16,1,0.3,1)}",
+				".dshqb_pricing_popover{position:absolute;bottom:calc(100% + 8px);left:50%;right:auto;z-index:9999;width:min(320px,calc(100vw - 24px));min-width:0;max-width:calc(100vw - 24px);background:var(--dsw-alias-bg-layer-1,var(--dsw-hovercard-bg,var(--dsw-alias-surface-elevated,#ffffff)));border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-secondary,rgba(128,128,128,0.2)));border-radius:10px;box-shadow:var(--dsw-shadow-lv3,0 12px 32px rgba(0,0,0,0.18));padding:12px 14px;display:flex;flex-direction:column;gap:8px;box-sizing:border-box;white-space:normal;text-align:left;color:var(--dsw-alias-label-primary);font-size:12px;font-size:clamp(11px,3.4cqi,12px);line-height:1.5;backdrop-filter:blur(16px);opacity:0;pointer-events:none;transform:translateX(-50%) translateY(6px);transition:opacity .18s cubic-bezier(0.16,1,0.3,1),transform .18s cubic-bezier(0.16,1,0.3,1);container-type:inline-size}",
 				".dshqb_pricing_popover::after{content:'';position:absolute;top:100%;left:0;right:0;height:12px;background:transparent}",
 				".dshqb_pricing_wrap:hover .dshqb_pricing_popover, .dshqb_pricing_popover:hover{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0)}",
 				".dshqb_pricing_models{display:flex;flex-direction:column;gap:6px}",
@@ -1804,7 +1807,7 @@ window.__ModuleLoader__.load({
 					}));
 					leftCol = react.createElement("div", { className: "dshqb_col", key: "left" }, [
 						react.createElement("div", { className: "dshqb_card_header", key: "head" }, [
-							react.createElement("span", { key: "title" }, t("quota.cardTitle")),
+							react.createElement("span", { className: "dshqb_card_title", key: "title" }, t("quota.cardTitle")),
 							react.createElement("button", {
 								type: "button",
 								className: "dshqb_card_badge dshqb_card_badge_btn dshqb_card_badge_" + level,
@@ -1861,7 +1864,7 @@ window.__ModuleLoader__.load({
 					});
 					balNode = react.createElement("span", { className: "dshqb_error", key: "bal" }, statusDot, message);
 					leftCol = react.createElement("div", { className: "dshqb_col", key: "left" }, [
-						react.createElement("div", { className: "dshqb_card_header", key: "head" }, t("quota.cardTitle")),
+						react.createElement("div", { className: "dshqb_card_header", key: "head" }, react.createElement("span", { className: "dshqb_card_title" }, t("quota.cardTitle"))),
 						react.createElement("div", { className: "dshqb_card_sub", key: "err" }, t("quota.error", { error: typeof info.error === "string" ? info.error : message }))
 					]);
 				} else if (info.ok === true && Array.isArray(info.balances) && info.balances.length > 0) {
@@ -1882,7 +1885,7 @@ window.__ModuleLoader__.load({
 
 					leftCol = react.createElement("div", { className: "dshqb_col", key: "left" }, [
 						react.createElement("div", { className: "dshqb_card_header", key: "head" }, [
-							react.createElement("span", { key: "title" }, t("card.balanceTitle")),
+							react.createElement("span", { className: "dshqb_card_title", key: "title" }, t("card.balanceTitle")),
 							react.createElement("button", {
 								type: "button",
 								className: "dshqb_card_badge dshqb_card_badge_btn dshqb_card_badge_" + level,
@@ -1924,7 +1927,7 @@ window.__ModuleLoader__.load({
 					});
 					balNode = react.createElement("span", { className: "dshqb_error", key: "bal" }, statusDot, message);
 					leftCol = react.createElement("div", { className: "dshqb_col", key: "left" }, [
-						react.createElement("div", { className: "dshqb_card_header", key: "head" }, t("card.balanceTitle")),
+						react.createElement("div", { className: "dshqb_card_header", key: "head" }, react.createElement("span", { className: "dshqb_card_title" }, t("card.balanceTitle"))),
 						react.createElement("div", { className: "dshqb_card_sub", key: "err" }, t("card.error", { error: typeof info.error === "string" ? info.error : message }))
 					]);
 				}
@@ -1939,7 +1942,7 @@ window.__ModuleLoader__.load({
 				});
 				balNode = react.createElement("span", { className: "dshqb_error", key: "bal" }, statusDot, t("balanceError"));
 				leftCol = react.createElement("div", { className: "dshqb_col", key: "left" }, [
-					react.createElement("div", { className: "dshqb_card_header", key: "head" }, t("card.balanceTitle")),
+					react.createElement("div", { className: "dshqb_card_header", key: "head" }, react.createElement("span", { className: "dshqb_card_title" }, t("card.balanceTitle"))),
 					react.createElement("div", { className: "dshqb_card_sub", key: "err" }, t("card.error", { error: balance.message }))
 				]);
 			}
@@ -1954,7 +1957,7 @@ window.__ModuleLoader__.load({
 
 			const rightCol = react.createElement("div", { className: "dshqb_col", key: "right" }, [
 				react.createElement("div", { className: "dshqb_card_header", key: "head" }, [
-					react.createElement("span", { key: "title" }, t("card.sessionTitle")),
+					react.createElement("span", { className: "dshqb_card_title", key: "title" }, t("card.sessionTitle")),
 					react.createElement("span", { className: "dshqb_card_val_main", key: "val" }, hasCost ? formatMoney(cost.cost, cost.currency ?? "CNY") : formatMoney(0, cost?.currency ?? "CNY"))
 				]),
 				hasCost
@@ -2008,7 +2011,7 @@ window.__ModuleLoader__.load({
 					key: "pricing_popover"
 				}, [
 					react.createElement("div", { className: "dshqb_card_header", key: "head" }, [
-						react.createElement("span", { key: "title" }, t("pricing.title")),
+						react.createElement("span", { className: "dshqb_card_title", key: "title" }, t("pricing.title")),
 						react.createElement("span", { className: "dshqb_card_badge dshqb_card_badge_info", key: "badge" }, t("pricing.rateBadge", { currency }))
 					]),
 					react.createElement("div", { className: "dshqb_pricing_models", key: "models" },
