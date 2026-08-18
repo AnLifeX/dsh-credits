@@ -110,32 +110,47 @@ const factoryResult = captured.factory((id) => {
 })
 const api = factoryResult ?? {}
 console.log('exports:', Object.keys(api))
+function makeSlotCtx(regs, injectFn) {
+  const ctx = {
+    effect(fn) { fn() },
+    inject: injectFn ?? (() => {}),
+    locale: { register() {}, bind: () => (key) => key },
+    slots: {
+      inject(_name, factory) { factory() },
+      register(opts, comp) {
+        regs.push({ id: opts.id, order: opts.order, name: opts.name, locale: opts.locale, label: opts.label, comp })
+        return () => {}
+      },
+    },
+  }
+  return ctx
+}
+
+function slotOf(regs, name) {
+  return regs.find((r) => r.name === name)
+}
+
 if (typeof api.apply !== 'function') throw new Error('no apply')
 if (JSON.stringify(api.inject) !== JSON.stringify(['slots', 'locale'])) throw new Error('bad inject')
+if (/\bconfirm\s*\(\s*['"`]/.test(code)) throw new Error('native confirm() dialog should be removed')
+if (!code.includes('dshqb_confirm')) throw new Error('in-page reset confirm missing')
+if (!code.includes("data-dshqb-nav")) throw new Error('settings nav icon painter missing')
+if (code.includes("ellipse cx='8' cy='5.1'")) throw new Error('stacked-coin icon should be replaced with currency coin')
+if (!code.includes("[data-dshqb-nav='credits']")) throw new Error('credits nav icon missing')
+if (!code.includes('data-dshqb-dock')) throw new Error('dock merge marker missing')
+if (!code.includes("data-dshqb-layout")) throw new Error('dock layout marker missing')
+if (!code.includes("[data-dshqb-layout='own']")) throw new Error('independent dock layout CSS missing')
+if (!code.includes("[data-dshqb-layout='shared']")) throw new Error('shared dock layout CSS missing')
+if (/\.dshqb_root\{[^}]*width:100%/.test(code)) throw new Error('shared dock root must not take full width by default')
 
-// 验证 apply 与 slot 注册
 const capturedRegister = []
-const ctx = {
-  effect(fn) { this._cleanup = fn() },
-  inject() {},
-  locale: { register() {} },
-  slots: {
-    inject(name, factory) {
-      const wrapped = {
-        register(opts, comp) {
-          capturedRegister.push({ id: opts.id, order: opts.order, name: opts.name, locale: opts.locale, comp })
-          return () => {}
-        },
-      }
-      ctx.slots = wrapped
-      factory()
-    },
-  },
-}
-api.apply(ctx)
-const reg = capturedRegister[0]
-console.log('slot:', JSON.stringify({ id: reg.id, order: reg.order, name: reg.name, locale: reg.locale }))
-if (reg.id !== 'dsh-credits' || reg.order !== 1 || reg.name !== 'conversation.composer.dock') throw new Error('bad slot registration')
+api.apply(makeSlotCtx(capturedRegister))
+const dockReg = slotOf(capturedRegister, 'conversation.composer.dock')
+const settingsReg = slotOf(capturedRegister, 'settings.section')
+console.log('slots:', capturedRegister.map((r) => ({ id: r.id, order: r.order, name: r.name, locale: r.locale })))
+if (!dockReg || dockReg.id !== 'dsh-credits' || dockReg.order !== 1000) throw new Error('bad dock slot registration')
+if (!settingsReg || settingsReg.id !== 'dsh-credits' || settingsReg.order !== 1000) throw new Error('bad settings.section registration')
+if (typeof settingsReg.label !== 'function') throw new Error('settings.section should expose a nav label')
 
 // 模拟 API 数据与国际化
 let mockBalanceTotal = 100.23
@@ -184,7 +199,7 @@ installFetch(() => ({
   defaultPrices: { cacheHit: 0.2, cacheMiss: 2, output: 8 },
 }))
 
-const Comp = reg.comp
+const Comp = dockReg.comp
 const props = {
   t: (key, params) => {
     const dict = {
@@ -212,9 +227,6 @@ const props = {
       'pricing.output': '输出 {price}',
       'pricing.link': '查看官方完整定价页 ›',
       'pricing.aria': '查看 DeepSeek 定价策略',
-      'btn.settings': '插件设置',
-      'card.openSettings': '⚙️ 打开偏好设置',
-      'settings.title': '⚙️ 余额插件设置',
       'tip.statusAvailable': '可用',
       'tip.statusUnavailable': '不足',
       'tip.error': '获取失败: {error}',
@@ -235,7 +247,6 @@ const props = {
       'spend.empty': '该区间暂无消耗',
       'spend.open': '打开累计消耗',
       'spend.close': '收起',
-      'spend.settings': '打开设置',
     }
     let out = dict[key] ?? key
     for (const [k, v] of Object.entries(params ?? {})) out = out.replaceAll('{' + k + '}', String(v))
@@ -267,8 +278,10 @@ if (!htmlGreen.includes('dshqb_col')) throw new Error('dual column missing')
 if (!htmlGreen.includes('dshqb_vsep')) throw new Error('vertical separator missing')
 if (!htmlGreen.includes('📊 账户余额')) throw new Error('balance title missing')
 if (!htmlGreen.includes('⚡ 本会话消耗')) throw new Error('session title missing')
-if (!htmlGreen.includes('dshqb_card_settings_link')) throw new Error('settings link in card missing')
-if (!htmlGreen.includes('⚙️ 打开偏好设置')) throw new Error('settings link text missing')
+if (htmlGreen.includes('dshqb_card_settings_link')) throw new Error('settings link should not appear in hover card')
+if (htmlGreen.includes('打开偏好设置')) throw new Error('settings entry should not appear in hover card')
+if (htmlGreen.includes('title="插件设置"')) throw new Error('in-session settings gear should be removed')
+if (htmlGreen.includes('<svg')) throw new Error('gear svg should be removed from session bar')
 if (!htmlGreen.includes('dshqb_card_tokens')) throw new Error('tokens container class missing')
 if (!htmlGreen.includes('dshqb_card_hit')) throw new Error('hit container class missing')
 if (!htmlGreen.includes('命中: 60')) throw new Error('hit token count missing')
@@ -282,11 +295,6 @@ if (!htmlGreen.includes('未命中 ¥0.1')) throw new Error('v4 miss rate missin
 if (!htmlGreen.includes('输出 ¥0.2')) throw new Error('v4 output rate missing')
 // 验证非 V4 模型被成功过滤不展示在定价气泡中
 if (htmlGreen.includes('• deepseek-chat</span><div class="dshqb_pricing_rates"')) throw new Error('non-v4 model should be filtered out')
-
-// 验证设置按钮存在
-if (!htmlGreen.includes('title="插件设置"')) throw new Error('settings button title missing')
-if (!htmlGreen.includes('aria-label="插件设置"')) throw new Error('settings button aria-label missing')
-if (!htmlGreen.includes('<svg')) throw new Error('gear svg icon missing')
 if (!htmlGreen.includes('CNY 钱包')) throw new Error('CNY wallet row missing')
 if (!htmlGreen.includes('USD 钱包')) throw new Error('USD wallet row missing')
 if (!htmlGreen.includes('$0.00')) throw new Error('zero USD wallet should still appear on card')
@@ -295,6 +303,65 @@ if (!htmlGreen.includes('余额 ¥100.23')) throw new Error('CNY preferred reado
 if (!htmlGreen.includes('dshqb_cap')) throw new Error('spend capsule missing')
 if (!htmlGreen.includes('dshqb_cap_pill')) throw new Error('spend pill missing')
 if (!htmlGreen.includes('今天 ¥12.50')) throw new Error('today spend pill amount missing')
+if (!htmlGreen.includes('data-dshqb-layout="own"')) throw new Error('default dock layout should be own line')
+
+const settingsT = (key, params) => {
+  const dict = {
+    'settings.title': '额度与消耗',
+    'settings.tab.general': '🎯 常规与阈值',
+    'settings.tab.pricing': '⚡ 模型单价',
+    'settings.tab.export': '📋 YAML 导出',
+    'settings.showDock': '底部统计条',
+    'settings.showDockHint': 'dock hint',
+    'settings.dockLayout': '底部条布局',
+    'settings.dockLayout.own': '独立换行',
+    'settings.dockLayout.shared': '共用一行',
+    'settings.dockLayoutHint': 'layout hint',
+    'settings.showCapsule': '累计消耗胶囊',
+    'settings.showCapsuleHint': 'capsule hint',
+    'settings.showPopover': '悬停详情气泡',
+    'settings.showPopoverHint': 'popover hint',
+    'settings.quotaMode': '额度查询模式',
+    'settings.quotaMode.follow': '跟随当前模型供应商',
+    'settings.quotaMode.custom': '自定义固定展示',
+    'settings.quotaModeHint': 'quota mode hint',
+    'settings.provider': '额度数据源',
+    'settings.provider.deepseek': 'DeepSeek 官方余额',
+    'settings.provider.opencode': 'OpenCode Go 订阅用量',
+    'settings.providerHintFollow': 'follow hint',
+    'settings.providerHintCustom': 'custom hint',
+    'settings.currency': '计价货币',
+    'settings.currencyHint': 'currency hint',
+    'settings.sliderHint': 'slider hint',
+    'settings.danger': '告急阈值',
+    'settings.warning': '预警阈值',
+    'settings.dangerHint': 'danger hint',
+    'settings.warningHint': 'warning hint',
+    'settings.serverInterval': '服务端查询间隔',
+    'settings.serverIntervalHint': 'server hint',
+    'settings.clientInterval': '前端读取缓存间隔',
+    'settings.clientIntervalHint': 'client hint',
+    'settings.btnResetAll': '恢复默认设置',
+    'settings.btnSave': '保存并生效',
+  }
+  let out = dict[key] ?? key
+  for (const [k, v] of Object.entries(params ?? {})) out = out.replaceAll('{' + k + '}', String(v))
+  return out
+}
+const htmlSettings = renderToStaticMarkup(ReactMock.createElement(settingsReg.comp, { t: settingsT }))
+if (!htmlSettings.includes('dshqb_settings_page')) throw new Error('settings page wrapper missing')
+if (!htmlSettings.includes('额度与消耗')) throw new Error('settings page title missing')
+if (!htmlSettings.includes('底部统计条')) throw new Error('showDock toggle missing')
+if (!htmlSettings.includes('独立换行')) throw new Error('dockLayout own option missing')
+if (!htmlSettings.includes('共用一行')) throw new Error('dockLayout shared option missing')
+if (!htmlSettings.includes('累计消耗胶囊')) throw new Error('showCapsule toggle missing')
+if (!htmlSettings.includes('悬停详情气泡')) throw new Error('showPopover toggle missing')
+if (!htmlSettings.includes('跟随当前模型供应商')) throw new Error('quotaMode follow option missing')
+if (!htmlSettings.includes('自定义固定展示')) throw new Error('quotaMode custom option missing')
+if (!htmlSettings.includes('dshqb_check')) throw new Error('display checkboxes missing')
+if (htmlSettings.includes('settings.btnCancel')) throw new Error('settings cancel button should be removed')
+if (htmlSettings.includes('dshqb_confirm')) throw new Error('reset confirm should stay closed until clicked')
+console.log('SETTINGS SECTION SMOKE TEST PASSED')
 
 // ---------- OpenCode Go 场景 ----------
 // 重新执行 bundle, 获得一个全新的模块实例与单例 store。
@@ -326,24 +393,7 @@ const opencodeApi = captured.factory((id) => {
   throw new Error('unexpected require: ' + id)
 })
 const opencodeRegs = []
-const opencodeCtx = {
-  effect(fn) { this._cleanup = fn() },
-  inject() {},
-  locale: { register() {} },
-  slots: {
-    inject(name, factory) {
-      const wrapped = {
-        register(opts, comp) {
-          opencodeRegs.push({ opts, comp })
-          return () => {}
-        },
-      }
-      opencodeCtx.slots = wrapped
-      factory()
-    },
-  },
-}
-opencodeApi.apply(opencodeCtx)
+opencodeApi.apply(makeSlotCtx(opencodeRegs))
 const quotaDict = {
   'quota.readout': 'Go 额度 月 {monthly} · 周 {weekly} · 5h {rolling}',
   'quota.cardTitle': '🧾 OpenCode Go 额度',
@@ -360,26 +410,23 @@ const quotaDict = {
   'status.danger': '告急',
   'card.updated': '更新于 {time} · 每 {interval} 刷新',
   'card.refreshHint': '💡 点击状态灯或卡片上的状态/百分比可立即刷新',
-  'card.openSettings': '⚙️ 打开偏好设置',
   'sessionCost': '本会话约 {amount}',
   'card.sessionTitle': '⚡ 本会话消耗',
   'card.noCost': '本会话暂未产生消耗',
   'card.sessionHintQuota': '💡 本会话按设置单价估算，实际扣减以 Go 套餐窗口为准。',
-  'btn.settings': '插件设置',
   'unit.minutes': '{n} 分钟',
   'unit.seconds': '{n} 秒',
   'model.unknown': '未知模型',
   'spend.pill': '{range} {amount}',
   'spend.today': '今天',
   'spend.open': '打开累计消耗',
-  'spend.settings': '打开设置',
 }
 const quotaT = (key, params) => {
   let out = quotaDict[key] ?? key
   for (const [k, v] of Object.entries(params ?? {})) out = out.replaceAll('{' + k + '}', String(v))
   return out
 }
-const QuotaComp = opencodeRegs[0].comp
+const QuotaComp = slotOf(opencodeRegs, 'conversation.composer.dock').comp
 const quotaProps = {
   t: quotaT,
   useProjection: () => ({
@@ -396,6 +443,8 @@ renderToStaticMarkup(ReactMock.createElement(QuotaComp, quotaProps))
 await new Promise((r) => setTimeout(r, 400))
 const htmlQuota = renderToStaticMarkup(ReactMock.createElement(QuotaComp, quotaProps))
 console.log('rendered (opencode-go):', htmlQuota)
+if (!htmlQuota.includes('data-dshqb-dock')) throw new Error('dock merge marker missing on readout')
+if (!htmlQuota.includes('data-dshqb-layout="own"')) throw new Error('default dock layout should be own line')
 if (!htmlQuota.includes('Go 额度 月 6% · 周 12% · 5h 9%')) throw new Error('opencode quota readout missing')
 if (!htmlQuota.includes('🧾 OpenCode Go 额度')) throw new Error('opencode quota card missing')
 if (!htmlQuota.includes('剩余 88%')) throw new Error('opencode remaining badge missing')
@@ -472,39 +521,22 @@ const followApi = captured.factory((id) => {
   throw new Error('unexpected require: ' + id)
 })
 const followRegs = []
-const followCtx = {
-  effect(fn) { fn() },
-  inject(keys, fn) {
-    if (keys.includes('modelDirectories')) {
-      fn({
-        modelDirectories: {
-          directoryFor() { return mockDirectory },
-        },
-      })
-    }
-  },
-  locale: { register() {} },
-  slots: {
-    inject(name, factory) {
-      const wrapped = {
-        register(opts, comp) {
-          followRegs.push(comp)
-          return () => {}
-        },
-      }
-      followCtx.slots = wrapped
-      factory()
-    },
-  },
-}
-followApi.apply(followCtx)
+followApi.apply(makeSlotCtx(followRegs, (keys, fn) => {
+  if (keys.includes('modelDirectories')) {
+    fn({
+      modelDirectories: {
+        directoryFor() { return mockDirectory },
+      },
+    })
+  }
+}))
 const followT = (key, params) => {
   const dict = { ...quotaDict, 'balance': '余额 {amount}', 'card.balanceTitle': '📊 账户余额' }
   let out = dict[key] ?? key
   for (const [k, v] of Object.entries(params ?? {})) out = out.replaceAll('{' + k + '}', String(v))
   return out
 }
-const FollowComp = followRegs[0]
+const FollowComp = slotOf(followRegs, 'conversation.composer.dock').comp
 const followProps = {
   t: followT,
   sessionId: 'sess-follow',
@@ -530,6 +562,114 @@ const htmlFollowOther = renderToStaticMarkup(ReactMock.createElement(FollowComp,
 if (!htmlFollowOther.includes('余额 ¥100.23')) throw new Error('other providers should fall back to DeepSeek balance')
 if (htmlFollowOther.includes('Go 额度')) throw new Error('other providers should not show Go quota')
 console.log('MODEL FOLLOW CLIENT SMOKE TEST PASSED')
+
+// ---------- 自定义额度模式：忽略当前模型 ----------
+dirSnap.current = { provider: 'anthropic', model: 'claude-sonnet-4' }
+installFetch(() => ({
+  ok: true,
+  quotaMode: 'custom',
+  provider: 'opencode-go',
+  defaultProvider: 'opencode-go',
+  fetchedAt: Date.now(),
+  refreshIntervalMs: 300000,
+  clientPollIntervalMs: 30000,
+  currency: 'CNY',
+  thresholds: { warning: 10, danger: 5 },
+  isAvailable: true,
+  balances: [
+    { currency: 'CNY', total: 100.23, granted: 0, toppedUp: 100.23 },
+  ],
+  views: {
+    deepseek: {
+      ok: true,
+      provider: 'deepseek',
+      isAvailable: true,
+      fetchedAt: Date.now(),
+      balances: [
+        { currency: 'CNY', total: 100.23, granted: 0, toppedUp: 100.23 },
+      ],
+    },
+    'opencode-go': {
+      ok: true,
+      provider: 'opencode-go',
+      fetchedAt: Date.now(),
+      usage: {
+        rolling: { status: 'ok', percent: 9, resetsAt: '2026-08-14T07:20:04.810Z' },
+        weekly: { status: 'ok', percent: 12, resetsAt: '2026-08-17T00:00:00.810Z' },
+        monthly: { status: 'ok', percent: 6, resetsAt: '2026-09-09T00:41:03.810Z' },
+      },
+    },
+  },
+  prices: {},
+  defaultPrices: {},
+}))
+new Function('window', 'require', code)(globalThis.window, (id) => {
+  if (id === 'react') return ReactMock
+  if (id === '@deepseek-ai/dsh-client-ui-primitives') return stubPrimitives(ReactMock)
+  throw new Error('unexpected require: ' + id)
+})
+const customApi = captured.factory((id) => {
+  if (id === 'react') return ReactMock
+  if (id === '@deepseek-ai/dsh-client-ui-primitives') return stubPrimitives(ReactMock)
+  throw new Error('unexpected require: ' + id)
+})
+const customRegs = []
+customApi.apply(makeSlotCtx(customRegs, (keys, fn) => {
+  if (keys.includes('modelDirectories')) {
+    fn({
+      modelDirectories: {
+        directoryFor() { return mockDirectory },
+      },
+    })
+  }
+}))
+const CustomComp = slotOf(customRegs, 'conversation.composer.dock').comp
+renderToStaticMarkup(ReactMock.createElement(CustomComp, followProps))
+await new Promise((r) => setTimeout(r, 400))
+const htmlCustom = renderToStaticMarkup(ReactMock.createElement(CustomComp, followProps))
+if (!htmlCustom.includes('Go 额度 月 6% · 周 12% · 5h 9%')) throw new Error('custom mode should keep Go quota even on anthropic model')
+if (htmlCustom.includes('余额 ¥100.23')) throw new Error('custom Go source should not show DeepSeek balance')
+console.log('CUSTOM QUOTA MODE CLIENT SMOKE TEST PASSED')
+
+// ---------- 展示开关 ----------
+installFetch(() => ({
+  ok: true,
+  showDock: false,
+  showCapsule: true,
+  showPopover: false,
+  fetchedAt: Date.now(),
+  refreshIntervalMs: 300000,
+  clientPollIntervalMs: 30000,
+  currency: 'CNY',
+  thresholds: { warning: 10, danger: 5 },
+  isAvailable: true,
+  balances: [
+    { currency: 'CNY', total: 100.23, granted: 0, toppedUp: 100.23 },
+  ],
+  prices: {},
+  defaultPrices: {},
+}))
+new Function('window', 'require', code)(globalThis.window, (id) => {
+  if (id === 'react') return ReactMock
+  if (id === '@deepseek-ai/dsh-client-ui-primitives') return stubPrimitives(ReactMock)
+  throw new Error('unexpected require: ' + id)
+})
+const flagsApi = captured.factory((id) => {
+  if (id === 'react') return ReactMock
+  if (id === '@deepseek-ai/dsh-client-ui-primitives') return stubPrimitives(ReactMock)
+  throw new Error('unexpected require: ' + id)
+})
+const flagsRegs = []
+flagsApi.apply(makeSlotCtx(flagsRegs))
+const FlagsComp = slotOf(flagsRegs, 'conversation.composer.dock').comp
+renderToStaticMarkup(ReactMock.createElement(FlagsComp, followProps))
+await new Promise((r) => setTimeout(r, 400))
+const htmlFlags = renderToStaticMarkup(ReactMock.createElement(FlagsComp, followProps))
+if (htmlFlags.includes('dshqb_root')) throw new Error('showDock=false should hide the bottom bar')
+if (htmlFlags.includes('dshqb_popover')) throw new Error('hidden dock should not render hover card')
+if (!htmlFlags.includes('dshqb_cap')) throw new Error('showCapsule=true should keep spend capsule')
+if (!htmlFlags.includes('dshqb_host')) throw new Error('capsule should use zero-size host when dock is hidden')
+console.log('DISPLAY FLAGS CLIENT SMOKE TEST PASSED')
 
 console.log('CLIENT SMOKE TEST PASSED (ZERO-DEPENDENCY)')
 process.exit(0)

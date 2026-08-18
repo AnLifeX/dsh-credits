@@ -1,15 +1,13 @@
 /**
  * dsh-credits — browser half (lazy-CJS 客户端 bundle)。
  *
- * 在 `conversation.composer.dock`(输入框下方、命中率/输入输出 token 统计条所在行)
- * 注册一枚余额读数:
+ * 在 `conversation.composer.dock`(输入框下方统计条所在行) 注册余额读数:
  *   - 余额: 单例轮询器按服务器下发的 `clientPollIntervalMs` 读取 `/query-credits`
  *     (只读缓存, 不直接访问 DeepSeek); 页面隐藏时暂停轮询。
  *   - 本会话消耗: 读取宿主推送的 `queryCreditsCost` 投影(按模型计价)。
- *   - 设置面板: 支持可视化配置阈值、拖拽三色指示条、刷新间隔、模型单价与导出 YAML。
+ *   - 设置: 注册一级 `settings.section` 卡片(展示开关、额度模式、阈值、单价、YAML)。
  *
- * 布局: dock 条目的 DOM 是统计条块的下一个兄弟; 组件测量前一个兄弟(统计条)的高度,
- * 用负 margin 把自己拉回同一行并右对齐 —— 与统计条同一行显示。
+ * 额度模式: follow 跟随当前对话模型供应商; custom 固定官方余额或 Go 套餐额度。
  */
 window.__ModuleLoader__.load({
 	id: "dsh-credits",
@@ -30,8 +28,14 @@ window.__ModuleLoader__.load({
 				"@keyframes dshqb-pulse{0%,100%{transform:scale(1);opacity:.85}50%{transform:scale(1.4);opacity:1}}",
 				"@keyframes dshqb-fadein{from{opacity:0;transform:scale(0.96)}to{opacity:1;transform:scale(1)}}",
 				"@keyframes dshqb-toast-in{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:translateY(0)}}",
-				".dshqb_root{display:flex;align-items:center;justify-content:center;max-width:var(--dsh-chat-content-width);box-sizing:border-box;width:100%;padding:4px calc(var(--dsh-composer-side-clearance) + 16px) 0;color:var(--dsw-alias-label-tertiary);white-space:nowrap;margin:0 auto;font-size:12px;line-height:20px;overflow:visible}",
-				".dshqb_joined{margin-top:0;justify-content:flex-end}",
+				".dshqb_root{display:inline-flex;align-items:center;justify-content:center;box-sizing:border-box;width:auto;max-width:none;padding:4px 0 0;margin:0;color:var(--dsw-alias-label-tertiary);white-space:nowrap;font-size:12px;line-height:20px;overflow:visible;flex:0 0 auto;order:1}",
+				"[data-dshqb-dock][data-dshqb-layout='own']{display:flex;flex:0 0 100%;width:100%;max-width:100%;justify-content:center}",
+				"div[data-slot='conversation.composer.dock']:has([data-dshqb-dock][data-dshqb-layout='own']){display:flex !important;flex-direction:row;flex-wrap:wrap !important;align-items:center;justify-content:center;width:100%;box-sizing:border-box}",
+				"div[data-slot='conversation.composer.dock']:has([data-dshqb-dock][data-dshqb-layout='shared']){display:flex !important;flex-direction:row;flex-wrap:nowrap;align-items:center;justify-content:center;width:100%;box-sizing:border-box}",
+				"div[data-slot='conversation.composer.dock'] > *:not([role='tooltip']):not([data-dshqb-dock]):not([data-dsh-live-tps]):has(+ [data-dshqb-dock][data-dshqb-layout='shared'], + [role='tooltip'] + [data-dshqb-dock][data-dshqb-layout='shared']){width:auto;max-width:620px;min-width:0;margin:0;padding:4px 0 0;flex:0 1 auto}",
+				"div[data-slot='conversation.composer.dock'] > *:has(> [data-dshqb-dock][data-dshqb-layout='own']){flex:0 0 100%;width:100%;max-width:100%}",
+				"div[data-slot='conversation.composer.dock'] > *:has(> [data-dshqb-dock][data-dshqb-layout='shared']){flex:0 0 auto;width:auto}",
+				"div[data-slot='conversation.composer.dock'] > * + [data-dshqb-dock][data-dshqb-layout='shared']::before{content:'·';color:var(--dsw-alias-separator-primary,var(--dsw-alias-border-l3,rgba(128,128,128,0.25)));margin:0 10px}",
 				".dshqb_sep{display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-separator-primary,var(--dsw-alias-border-l3,rgba(128,128,128,0.25)));margin:0 10px;user-select:none}",
 				".dshqb_trigger{position:relative;display:inline-flex;align-items:center;cursor:default}",
 				".dshqb_amount{color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums;display:inline-flex;align-items:center}",
@@ -92,8 +96,8 @@ window.__ModuleLoader__.load({
 				".dshqb_cap_chip_on{background:#007AFF;border-color:#007AFF;color:#fff}",
 				".dshqb_cap_custom{display:flex;flex-direction:column;gap:6px}",
 				".dshqb_cap_custom label{display:flex;flex-direction:column;gap:3px;font-size:11px;color:var(--dsw-alias-label-tertiary)}",
-				".dshqb_card_settings_link{color:var(--dsw-alias-brand-primary,var(--dsw-alias-accent-primary,#3b82f6));text-decoration:none;font-size:11px;display:inline-flex;align-items:center;margin-top:4px;cursor:pointer;background:none;border:none;padding:0;font-family:inherit}",
-				".dshqb_card_settings_link:hover{text-decoration:underline}",
+				".dshqb_host{position:fixed;width:0;height:0;overflow:visible;pointer-events:none;z-index:10050}",
+				".dshqb_host .dshqb_cap{pointer-events:auto}",
 				".dshqb_pricing_wrap{position:relative;display:inline-flex;align-items:center}",
 				".dshqb_btn_icon{color:var(--dsw-alias-label-tertiary);display:inline-flex;align-items:center;justify-content:center;padding:2px 4px;border-radius:4px;text-decoration:none;line-height:1;background:transparent;border:none;cursor:pointer;transition:color .15s ease,background-color .15s ease,transform .15s ease}",
 				".dshqb_btn_icon svg{display:block}",
@@ -163,7 +167,26 @@ window.__ModuleLoader__.load({
 				".dshqb_btn_outline:hover{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-border-l1,rgba(128,128,128,0.45));background:var(--dsw-alias-interactive-bg-hover,rgba(128,128,128,0.06))}",
 				".dshqb_modal_footer{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-top:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-secondary,rgba(128,128,128,0.12)));background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,0.03))}",
 				".dshqb_modal_footer_right{display:flex;gap:10px}",
-				".dshqb_toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--dsw-alias-state-success-primary,#10b981);color:#ffffff;padding:8px 18px;border-radius:999px;box-shadow:var(--dsw-shadow-lv3,0 8px 24px rgba(0,0,0,0.3));font-size:12.5px;font-weight:500;z-index:100000;animation:dshqb-toast-in .2s ease-out;display:flex;align-items:center;gap:6px}"
+				".dshqb_toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--dsw-alias-state-success-primary,#10b981);color:#ffffff;padding:8px 18px;border-radius:999px;box-shadow:var(--dsw-shadow-lv3,0 8px 24px rgba(0,0,0,0.3));font-size:12.5px;font-weight:500;z-index:100000;animation:dshqb-toast-in .2s ease-out;display:flex;align-items:center;gap:6px}",
+				".dshqb_settings_page{position:relative;display:flex;flex-direction:column;min-width:0;width:100%;max-width:760px;box-sizing:border-box;white-space:normal;border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.16));border-radius:12px;overflow:hidden;background:var(--dsw-alias-bg-layer-1,var(--dsw-alias-bg-base,#ffffff))}",
+				".dshqb_settings_page .dshqb_modal_header{background:transparent;border-bottom:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.12))}",
+				".dshqb_toggle_list{display:flex;flex-direction:column;gap:0;border:1px solid var(--dsw-alias-border-l3,rgba(128,128,128,0.12));border-radius:8px;padding:2px 14px;background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,0.04))}",
+				".dshqb_toggle_row{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:11px 0;cursor:pointer}",
+				".dshqb_toggle_row+.dshqb_toggle_row{border-top:1px solid var(--dsw-alias-border-l3,rgba(128,128,128,0.08))}",
+				".dshqb_toggle_copy{display:flex;flex-direction:column;gap:3px;min-width:0}",
+				".dshqb_check{width:16px;height:16px;margin-top:2px;flex-shrink:0;accent-color:var(--dsw-alias-brand-primary,#3b82f6);cursor:pointer}",
+				".dshqb_confirm_mask{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;background:var(--dsw-alias-bg-mask-1,rgba(0,0,0,0.45));backdrop-filter:blur(6px)}",
+				".dshqb_confirm{width:min(380px,100%);background:var(--dsw-alias-bg-layer-1,var(--dsw-alias-bg-base,#fff));border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.18));border-radius:12px;box-shadow:var(--dsw-shadow-lv3,0 16px 40px rgba(0,0,0,0.22));padding:18px 18px 16px;display:flex;flex-direction:column;gap:8px;box-sizing:border-box}",
+				".dshqb_confirm_title{font-size:15px;font-weight:600;color:var(--dsw-alias-label-primary)}",
+				".dshqb_confirm_body{font-size:13px;line-height:1.55;color:var(--dsw-alias-label-secondary);white-space:normal}",
+				".dshqb_confirm_actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}",
+				"[data-dshqb-nav]>[class*='_navIcon']{display:none}",
+				"[data-dshqb-nav]:before{content:'';background:currentColor;flex:none;width:16px;height:16px}",
+				"[data-dshqb-nav='credits']:before{-webkit-mask:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M8 15a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM5.4 3.9h1.15L8 6.2 9.45 3.9H10.6L8.85 7.15H10.25v1.05H8.85v.5H10.25v1.05H8.85V12.15H7.15V9.75H5.75V8.7H7.15v-.5H5.75V7.15H7.15L5.4 3.9z'/%3E%3C/svg%3E\") 50%/contain no-repeat;mask:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M8 15a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM5.4 3.9h1.15L8 6.2 9.45 3.9H10.6L8.85 7.15H10.25v1.05H8.85v.5H10.25v1.05H8.85V12.15H7.15V9.75H5.75V8.7H7.15v-.5H5.75V7.15H7.15L5.4 3.9z'/%3E%3C/svg%3E\") 50%/contain no-repeat}",
+				"[data-dshqb-nav='webui']:before{-webkit-mask:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2 2h5v5H2zM9 2h5v5H9zM2 9h5v5H2zM9 9h5v5H9z'/%3E%3C/svg%3E\") 50%/contain no-repeat;mask:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M2 2h5v5H2zM9 2h5v5H9zM2 9h5v5H2zM9 9h5v5H9z'/%3E%3C/svg%3E\") 50%/contain no-repeat}",
+				"[data-dshqb-nav='skin']:before{-webkit-mask:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M8 14a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0-4a2 2 0 1 0 0-4 2 2 0 0 0 0 4z'/%3E%3C/svg%3E\") 50%/contain no-repeat;mask:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill-rule='evenodd' d='M8 14a6 6 0 1 0 0-12 6 6 0 0 0 0 12zm0-4a2 2 0 1 0 0-4 2 2 0 0 0 0 4z'/%3E%3C/svg%3E\") 50%/contain no-repeat}",
+				"[data-dshqb-nav='pet']:before{-webkit-mask:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cellipse cx='8' cy='11' rx='4.2' ry='2.8'/%3E%3Ccircle cx='2.8' cy='6.2' r='1.9'/%3E%3Ccircle cx='8' cy='4.6' r='1.9'/%3E%3Ccircle cx='13.2' cy='6.2' r='1.9'/%3E%3C/svg%3E\") 50%/contain no-repeat;mask:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cellipse cx='8' cy='11' rx='4.2' ry='2.8'/%3E%3Ccircle cx='2.8' cy='6.2' r='1.9'/%3E%3Ccircle cx='8' cy='4.6' r='1.9'/%3E%3Ccircle cx='13.2' cy='6.2' r='1.9'/%3E%3C/svg%3E\") 50%/contain no-repeat}",
+				"[data-dshqb-nav='community']:before{-webkit-mask:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='5.5' cy='5.5' r='3'/%3E%3Ccircle cx='11' cy='5.5' r='3'/%3E%3Cpath d='M2.5 13.5c0-3 2-4.2 3-4.2H11c1.5 0 3 1.2 3 4.2z'/%3E%3C/svg%3E\") 50%/contain no-repeat;mask:url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Ccircle cx='5.5' cy='5.5' r='3'/%3E%3Ccircle cx='11' cy='5.5' r='3'/%3E%3Cpath d='M2.5 13.5c0-3 2-4.2 3-4.2H11c1.5 0 3 1.2 3 4.2z'/%3E%3C/svg%3E\") 50%/contain no-repeat}"
 			].join("\n");
 			document.head.appendChild(tag);
 		}
@@ -209,6 +232,15 @@ window.__ModuleLoader__.load({
 		/** 仅 OpenCode Go 走订阅用量, 其余供应商(含 DeepSeek 官方)显示官方余额。 */
 		function quotaSourceFromProvider(provider) {
 			return String(provider ?? "").trim().toLowerCase() === "opencode-go" ? "opencode-go" : "deepseek";
+		}
+		/** follow: 跟当前模型; custom: 固定用 config.provider, 忽略当前模型。 */
+		function resolveQuotaSource(modelProvider, config) {
+			const selected = quotaSourceFromProvider(config?.provider);
+			if (String(config?.quotaMode ?? "follow").trim().toLowerCase() === "custom") return selected;
+			return quotaSourceFromProvider(modelProvider ?? config?.provider);
+		}
+		function normalizeDockLayout(value) {
+			return String(value ?? "own").trim().toLowerCase() === "shared" ? "shared" : "own";
 		}
 		function mergeQuotaView(payload, source) {
 			if (!payload || typeof payload !== "object") return payload;
@@ -499,7 +531,6 @@ window.__ModuleLoader__.load({
 			"status.danger": "告急",
 			"btn.refresh": "点击立即刷新余额",
 			"btn.refreshing": "正在刷新余额...",
-			"btn.settings": "插件设置",
 			"sessionCost": "本会话约 {amount}",
 			"card.balanceTitle": "📊 账户余额",
 			"card.sessionTitle": "⚡ 本会话消耗",
@@ -509,7 +540,6 @@ window.__ModuleLoader__.load({
 			"card.granted": "赠送 {amount}",
 			"card.updated": "更新于 {time} · 每 {interval} 刷新",
 			"card.refreshHint": "💡 点击状态灯或卡片上的状态/百分比可立即刷新",
-			"card.openSettings": "⚙️ 打开偏好设置",
 			"card.tokens": "Token: 输入 {input} · 输出 {output}",
 			"card.tokensHit": "命中: {hit} ({hitRate}%)",
 			"card.noCost": "本会话暂未产生消耗",
@@ -540,10 +570,25 @@ window.__ModuleLoader__.load({
 			"unit.minutes": "{n} 分钟",
 			"unit.seconds": "{n} 秒",
 			/* Settings translations */
-			"settings.title": "⚙️ 余额插件设置",
+			"settings.nav": "额度",
+			"settings.title": "额度与消耗",
 			"settings.tab.general": "🎯 常规与阈值",
 			"settings.tab.pricing": "⚡ 模型单价",
 			"settings.tab.export": "📋 YAML 导出",
+			"settings.showDock": "底部统计条",
+			"settings.showDockHint": "在输入框下方展示额度读数与本会话消耗。关掉后只保留 Web UI 自己的统计。",
+			"settings.dockLayout": "底部条布局",
+			"settings.dockLayout.own": "独立换行",
+			"settings.dockLayout.shared": "共用一行",
+			"settings.dockLayoutHint": "独立换行：额度单独占底下一行。共用一行：跟官方统计、TPS 排在同一行最后面。",
+			"settings.showCapsule": "累计消耗胶囊",
+			"settings.showCapsuleHint": "右下角可拖拽的今天/本周/本月累计消耗。",
+			"settings.showPopover": "悬停详情气泡",
+			"settings.showPopoverHint": "鼠标悬停底部读数时弹出余额/额度与本会话明细。",
+			"settings.quotaMode": "额度查询模式",
+			"settings.quotaMode.follow": "跟随当前模型供应商",
+			"settings.quotaMode.custom": "自定义固定展示",
+			"settings.quotaModeHint": "跟随：Go 模型显示套餐额度，其他供应商显示官方余额。自定义：始终按下方数据源展示，不随模型切换。",
 			"settings.currency": "计价货币",
 			"settings.currencyHint": "影响本会话估算与状态灯。所有钱包都会列出；切换后套用该币种官方单价。",
 			"settings.currencyHintQuota": "不影响额度百分比，只改右侧本会话估算。",
@@ -556,7 +601,8 @@ window.__ModuleLoader__.load({
 			"settings.provider": "额度数据源",
 			"settings.provider.deepseek": "DeepSeek 官方余额",
 			"settings.provider.opencode": "OpenCode Go 订阅用量",
-			"settings.providerHint": "跟随当前对话模型：Go 显示订阅用量，其他供应商显示官方余额。无法识别模型时才用此项。",
+			"settings.providerHintFollow": "无法识别当前对话模型时，用此项作为回退。",
+			"settings.providerHintCustom": "自定义模式下始终展示此项，忽略当前对话模型。",
 			"settings.opencodeApiKeyRef": "OpenCode Go 凭证引用名",
 			"settings.opencodeApiKeyRefHint": "优先从 credentials / 环境变量读取此名称。",
 			"settings.opencodeApiKey": "OpenCode Go API Key",
@@ -583,7 +629,10 @@ window.__ModuleLoader__.load({
 			"settings.btnCopy": "📋 复制 YAML 配置",
 			"settings.copied": "✓ 已复制到剪贴板！",
 			"settings.btnResetAll": "恢复默认设置",
-			"settings.btnCancel": "取消",
+			"settings.resetConfirmTitle": "恢复默认设置？",
+			"settings.resetConfirmBody": "表单会回到插件默认值，不会立刻写入。确认后请再点「保存并生效」。",
+			"settings.resetConfirmOk": "恢复默认",
+			"settings.resetConfirmCancel": "取消",
 			"settings.btnSave": "保存并生效",
 			"settings.saving": "正在保存...",
 			"settings.savedToast": "✓ 设置已成功保存并立即生效",
@@ -599,8 +648,7 @@ window.__ModuleLoader__.load({
 			"spend.meta": "{calls} 次调用 · {sessions} 个会话",
 			"spend.empty": "该区间暂无消耗",
 			"spend.open": "打开累计消耗",
-			"spend.close": "收起",
-			"spend.settings": "打开设置"
+			"spend.close": "收起"
 		};
 		const en = {
 			"balance": "Balance {amount}",
@@ -611,7 +659,6 @@ window.__ModuleLoader__.load({
 			"status.danger": "Critical",
 			"btn.refresh": "Click to refresh balance",
 			"btn.refreshing": "Refreshing balance...",
-			"btn.settings": "Plugin Settings",
 			"sessionCost": "~{amount} this session",
 			"card.balanceTitle": "📊 Account Balance",
 			"card.sessionTitle": "⚡ Session Cost",
@@ -621,7 +668,6 @@ window.__ModuleLoader__.load({
 			"card.granted": "Granted {amount}",
 			"card.updated": "Updated {time} · Every {interval}",
 			"card.refreshHint": "💡 Click the status light or card status/percent to refresh",
-			"card.openSettings": "⚙️ Open Settings",
 			"card.tokens": "Tokens: In {input} · Out {output}",
 			"card.tokensHit": "Cache hit: {hit} ({hitRate}%)",
 			"card.noCost": "No cost in this session yet",
@@ -652,10 +698,25 @@ window.__ModuleLoader__.load({
 			"unit.minutes": "{n} min",
 			"unit.seconds": "{n} s",
 			/* Settings translations */
-			"settings.title": "⚙️ Balance Plugin Settings",
+			"settings.nav": "Credits",
+			"settings.title": "Credits & spend",
 			"settings.tab.general": "🎯 General & Thresholds",
 			"settings.tab.pricing": "⚡ Model Pricing",
 			"settings.tab.export": "📋 YAML Export",
+			"settings.showDock": "Bottom status bar",
+			"settings.showDockHint": "Show quota and session cost under the composer. Turn off to keep only the Web UI stats.",
+			"settings.dockLayout": "Status bar layout",
+			"settings.dockLayout.own": "Own line",
+			"settings.dockLayout.shared": "Share one line",
+			"settings.dockLayoutHint": "Own line: credits sit on a row below the official stats. Share one line: append after official stats and TPS.",
+			"settings.showCapsule": "Spend capsule",
+			"settings.showCapsuleHint": "Draggable today / week / month spend tracker in the corner.",
+			"settings.showPopover": "Hover details",
+			"settings.showPopoverHint": "Show the balance / quota and session breakdown when hovering the bottom readout.",
+			"settings.quotaMode": "Quota query mode",
+			"settings.quotaMode.follow": "Follow current model provider",
+			"settings.quotaMode.custom": "Custom fixed display",
+			"settings.quotaModeHint": "Follow: Go models show subscription usage; other providers show the official balance. Custom: always use the source below, ignoring the current model.",
 			"settings.currency": "Currency",
 			"settings.currencyHint": "Used for session estimates and the status light. All wallets stay visible; switching loads that currency's official prices.",
 			"settings.currencyHintQuota": "Does not change quota percent; only the session cost estimate.",
@@ -668,7 +729,8 @@ window.__ModuleLoader__.load({
 			"settings.provider": "Quota Source",
 			"settings.provider.deepseek": "DeepSeek official balance",
 			"settings.provider.opencode": "OpenCode Go subscription usage",
-			"settings.providerHint": "Follows the current chat model: Go shows subscription usage; every other provider shows the official balance. This is only the fallback when the model is unknown.",
+			"settings.providerHintFollow": "Used only when the current chat model cannot be identified.",
+			"settings.providerHintCustom": "In custom mode this source is always shown, ignoring the current chat model.",
 			"settings.opencodeApiKeyRef": "OpenCode Go Credential Ref",
 			"settings.opencodeApiKeyRefHint": "Resolved from the credentials seam / environment by this name.",
 			"settings.opencodeApiKey": "OpenCode Go API Key",
@@ -695,7 +757,10 @@ window.__ModuleLoader__.load({
 			"settings.btnCopy": "📋 Copy YAML",
 			"settings.copied": "✓ Copied to clipboard!",
 			"settings.btnResetAll": "Reset All to Default",
-			"settings.btnCancel": "Cancel",
+			"settings.resetConfirmTitle": "Reset to defaults?",
+			"settings.resetConfirmBody": "The form will return to plugin defaults and will not be written until you save.",
+			"settings.resetConfirmOk": "Reset",
+			"settings.resetConfirmCancel": "Cancel",
 			"settings.btnSave": "Save Changes",
 			"settings.saving": "Saving...",
 			"settings.savedToast": "✓ Settings saved and applied successfully",
@@ -711,8 +776,7 @@ window.__ModuleLoader__.load({
 			"spend.meta": "{calls} calls · {sessions} sessions",
 			"spend.empty": "No spend in this range",
 			"spend.open": "Open spend tracker",
-			"spend.close": "Collapse",
-			"spend.settings": "Open settings"
+			"spend.close": "Collapse"
 		};
 		//#endregion
 
@@ -741,6 +805,11 @@ window.__ModuleLoader__.load({
 		}
 
 		const DEFAULT_SETTINGS = {
+			quotaMode: "follow",
+			showDock: true,
+			dockLayout: "own",
+			showCapsule: true,
+			showPopover: true,
 			provider: "deepseek",
 			currency: "CNY",
 			warningThreshold: 10,
@@ -762,6 +831,11 @@ window.__ModuleLoader__.load({
 			const lines = [
 				"- id: dsh-credits",
 				"  config:",
+				`    quotaMode: ${config.quotaMode === "custom" ? "custom" : "follow"}`,
+				`    showDock: ${config.showDock !== false}`,
+				`    dockLayout: ${normalizeDockLayout(config.dockLayout)}`,
+				`    showCapsule: ${config.showCapsule !== false}`,
+				`    showPopover: ${config.showPopover !== false}`,
 				`    provider: ${config.provider}`,
 				`    dangerThreshold: ${config.dangerThreshold}`,
 				`    warningThreshold: ${config.warningThreshold}`,
@@ -904,14 +978,14 @@ window.__ModuleLoader__.load({
 			]);
 		}
 
-		function SettingsModal({ isOpen, onClose, t }) {
+		function SettingsPanel({ t }) {
 			// Tab 顺序: 常规与阈值 -> 模型单价 -> YAML导出
 			const [activeTab, setActiveTab] = react.useState("general");
 			const [form, setForm] = react.useState(DEFAULT_SETTINGS);
-			const [loading, setLoading] = react.useState(false);
 			const [saving, setSaving] = react.useState(false);
 			const [toast, setToast] = react.useState(null);
 			const [copied, setCopied] = react.useState(false);
+			const [resetOpen, setResetOpen] = react.useState(false);
 
 			// 自定义新增模型表单字段
 			const [newModelName, setNewModelName] = react.useState("");
@@ -919,10 +993,7 @@ window.__ModuleLoader__.load({
 			const [newModelMiss, setNewModelMiss] = react.useState(1.0);
 			const [newModelOut, setNewModelOut] = react.useState(2.0);
 
-			// 打开弹窗时拉取最新配置
 			react.useEffect(() => {
-				if (!isOpen) return;
-				setLoading(true);
 				fetch("/query-credits/config", { cache: "no-store" })
 					.then((r) => r.json())
 					.then((data) => {
@@ -930,6 +1001,11 @@ window.__ModuleLoader__.load({
 							const c = data.config;
 							const loadedPrices = (c.prices && Object.keys(c.prices).length > 0) ? { ...c.prices } : { ...DEFAULT_PRICES };
 							setForm({
+								quotaMode: c.quotaMode === "custom" ? "custom" : "follow",
+								showDock: c.showDock !== false,
+								dockLayout: normalizeDockLayout(c.dockLayout),
+								showCapsule: c.showCapsule !== false,
+								showPopover: c.showPopover !== false,
 								provider: c.provider === "opencode-go" ? "opencode-go" : "deepseek",
 								currency: c.currency ?? "CNY",
 								warningThreshold: c.warningThreshold ?? 10,
@@ -947,21 +1023,8 @@ window.__ModuleLoader__.load({
 							});
 						}
 					})
-					.catch(() => {})
-					.finally(() => setLoading(false));
-			}, [isOpen]);
-
-			// ESC 键退出
-			react.useEffect(() => {
-				if (!isOpen) return;
-				const handleKeyDown = (e) => {
-					if (e.key === "Escape") onClose();
-				};
-				window.addEventListener("keydown", handleKeyDown);
-				return () => window.removeEventListener("keydown", handleKeyDown);
-			}, [isOpen, onClose]);
-
-			if (!isOpen) return null;
+					.catch(() => {});
+			}, []);
 
 			const showToast = (msg) => {
 				setToast(msg);
@@ -973,6 +1036,11 @@ window.__ModuleLoader__.load({
 				try {
 					const payload = {
 						...form,
+						quotaMode: form.quotaMode === "custom" ? "custom" : "follow",
+						showDock: form.showDock !== false,
+						dockLayout: normalizeDockLayout(form.dockLayout),
+						showCapsule: form.showCapsule !== false,
+						showPopover: form.showPopover !== false,
 						provider: form.provider === "opencode-go" ? "opencode-go" : "deepseek",
 						warningThreshold: Number(form.warningThreshold),
 						dangerThreshold: Number(form.dangerThreshold),
@@ -997,7 +1065,6 @@ window.__ModuleLoader__.load({
 						showToast(t("settings.savedToast"));
 						void balanceStore.forceRefresh();
 						void spendStore.refresh();
-						setTimeout(onClose, 400);
 					} else {
 						alert("Save failed: " + (data.error || "unknown error"));
 					}
@@ -1019,10 +1086,10 @@ window.__ModuleLoader__.load({
 				}
 			};
 
-			const handleResetAll = () => {
-				if (confirm("确定要恢复默认设置吗？ / Are you sure to reset all settings?")) {
-					setForm({ ...DEFAULT_SETTINGS });
-				}
+			const handleResetAll = () => setResetOpen(true);
+			const confirmResetAll = () => {
+				setForm({ ...DEFAULT_SETTINGS, prices: { ...DEFAULT_PRICES } });
+				setResetOpen(false);
 			};
 
 			const handleResetPricing = () => {
@@ -1055,21 +1122,10 @@ window.__ModuleLoader__.load({
 			};
 
 			return react.createElement("div", {
-				className: "dshqb_modal_backdrop",
-				onClick: (e) => {
-					if (e.target === e.currentTarget) onClose();
-				}
+				className: "dshqb_settings_page"
 			}, [
-				react.createElement("div", { className: "dshqb_modal", key: "modal" }, [
-					// 1. Header
 					react.createElement("div", { className: "dshqb_modal_header", key: "hdr" }, [
-						react.createElement("span", { key: "title" }, t("settings.title")),
-						react.createElement("button", {
-							className: "dshqb_modal_close",
-							onClick: onClose,
-							key: "close",
-							"aria-label": "Close"
-						}, "✕")
+						react.createElement("span", { key: "title" }, t("settings.title"))
 					]),
 					// 2. Tabs (常规与阈值 -> 模型单价 -> YAML导出)
 					react.createElement("div", { className: "dshqb_modal_tabs", key: "tabs" }, [
@@ -1093,6 +1149,52 @@ window.__ModuleLoader__.load({
 					react.createElement("div", { className: "dshqb_modal_body", key: "body" }, [
 						// Tab 1: 常规与阈值 (告急阈值在前，预警阈值在后，支持拖拽设置)
 						activeTab === "general" ? react.createElement("div", { className: "dshqb_col", key: "general_content" }, [
+							react.createElement("div", { className: "dshqb_toggle_list", key: "display" }, [
+								["showDock", "settings.showDock", "settings.showDockHint"],
+								["showCapsule", "settings.showCapsule", "settings.showCapsuleHint"],
+								["showPopover", "settings.showPopover", "settings.showPopoverHint"]
+							].map(([field, labelKey, hintKey]) =>
+								react.createElement("label", { className: "dshqb_toggle_row", key: field }, [
+									react.createElement("span", { className: "dshqb_toggle_copy", key: "txt" }, [
+										react.createElement("span", { className: "dshqb_form_label", key: "l" }, t(labelKey)),
+										react.createElement("span", { className: "dshqb_form_hint", key: "h" }, t(hintKey))
+									]),
+									react.createElement("input", {
+										type: "checkbox",
+										className: "dshqb_check",
+										checked: form[field] !== false,
+										onChange: (e) => setForm({ ...form, [field]: e.target.checked }),
+										key: "chk"
+									})
+								])
+							)),
+							react.createElement("div", { className: "dshqb_form_group", key: "dockLayout" }, [
+								react.createElement("label", { className: "dshqb_form_label", key: "lbl" }, t("settings.dockLayout")),
+								react.createElement("select", {
+									className: "dshqb_select",
+									value: normalizeDockLayout(form.dockLayout),
+									disabled: form.showDock === false,
+									onChange: (e) => setForm({ ...form, dockLayout: normalizeDockLayout(e.target.value) }),
+									key: "sel"
+								}, [
+									react.createElement("option", { value: "own", key: "own" }, t("settings.dockLayout.own")),
+									react.createElement("option", { value: "shared", key: "shared" }, t("settings.dockLayout.shared"))
+								]),
+								react.createElement("span", { className: "dshqb_form_hint", key: "hint" }, t("settings.dockLayoutHint"))
+							]),
+							react.createElement("div", { className: "dshqb_form_group", key: "quotaMode" }, [
+								react.createElement("label", { className: "dshqb_form_label", key: "lbl" }, t("settings.quotaMode")),
+								react.createElement("select", {
+									className: "dshqb_select",
+									value: form.quotaMode === "custom" ? "custom" : "follow",
+									onChange: (e) => setForm({ ...form, quotaMode: e.target.value === "custom" ? "custom" : "follow" }),
+									key: "sel"
+								}, [
+									react.createElement("option", { value: "follow", key: "follow" }, t("settings.quotaMode.follow")),
+									react.createElement("option", { value: "custom", key: "custom" }, t("settings.quotaMode.custom"))
+								]),
+								react.createElement("span", { className: "dshqb_form_hint", key: "hint" }, t("settings.quotaModeHint"))
+							]),
 							react.createElement("div", { className: "dshqb_form_group", key: "provider" }, [
 								react.createElement("label", { className: "dshqb_form_label", key: "lbl" }, t("settings.provider")),
 								react.createElement("select", {
@@ -1104,7 +1206,7 @@ window.__ModuleLoader__.load({
 									react.createElement("option", { value: "deepseek", key: "ds" }, t("settings.provider.deepseek")),
 									react.createElement("option", { value: "opencode-go", key: "oc" }, t("settings.provider.opencode"))
 								]),
-								react.createElement("span", { className: "dshqb_form_hint", key: "hint" }, t("settings.providerHint"))
+								react.createElement("span", { className: "dshqb_form_hint", key: "hint" }, t(form.quotaMode === "custom" ? "settings.providerHintCustom" : "settings.providerHintFollow"))
 							]),
 							react.createElement("div", { className: "dshqb_form_group", key: "cur" }, [
 								react.createElement("label", { className: "dshqb_form_label", key: "lbl" }, t("settings.currency")),
@@ -1129,7 +1231,7 @@ window.__ModuleLoader__.load({
 								react.createElement("span", { className: "dshqb_form_hint", key: "hint" }, t(form.provider === "opencode-go" ? "settings.currencyHintQuota" : "settings.currencyHint"))
 							]),
 							// OpenCode Go 专属配置
-							form.provider === "opencode-go" ? react.createElement("div", { className: "dshqb_col", key: "opencode_fields" }, [
+							form.quotaMode === "follow" || form.provider === "opencode-go" ? react.createElement("div", { className: "dshqb_col", key: "opencode_fields" }, [
 								react.createElement("div", { className: "dshqb_form_group", key: "oc_base" }, [
 									react.createElement("label", { className: "dshqb_form_label", key: "lbl" }, t("settings.opencodeBaseUrl")),
 									react.createElement("input", {
@@ -1397,25 +1499,49 @@ window.__ModuleLoader__.load({
 							onClick: handleResetAll,
 							key: "btn_reset"
 						}, t("settings.btnResetAll")),
-						react.createElement("div", { className: "dshqb_modal_footer_right", key: "right_btns" }, [
-							react.createElement("button", {
-								type: "button",
-								className: "dshqb_btn dshqb_btn_secondary",
-								onClick: onClose,
-								key: "btn_cancel"
-							}, t("settings.btnCancel")),
-							react.createElement("button", {
-								type: "button",
-								className: "dshqb_btn dshqb_btn_primary",
-								onClick: handleSave,
-								disabled: saving,
-								key: "btn_save"
-							}, saving ? t("settings.saving") : t("settings.btnSave"))
-						])
+						react.createElement("button", {
+							type: "button",
+							className: "dshqb_btn dshqb_btn_primary",
+							onClick: handleSave,
+							disabled: saving,
+							key: "btn_save"
+						}, saving ? t("settings.saving") : t("settings.btnSave"))
+					]),
+				resetOpen ? react.createElement("div", {
+					className: "dshqb_confirm_mask",
+					key: "reset_mask",
+					onClick: (e) => {
+						if (e.target === e.currentTarget) setResetOpen(false);
+					}
+				}, react.createElement("div", {
+					className: "dshqb_confirm",
+					role: "dialog",
+					"aria-modal": "true",
+					"aria-labelledby": "dshqb-reset-title"
+				}, [
+					react.createElement("div", { className: "dshqb_confirm_title", id: "dshqb-reset-title", key: "t" }, t("settings.resetConfirmTitle")),
+					react.createElement("div", { className: "dshqb_confirm_body", key: "b" }, t("settings.resetConfirmBody")),
+					react.createElement("div", { className: "dshqb_confirm_actions", key: "a" }, [
+						react.createElement("button", {
+							type: "button",
+							className: "dshqb_btn dshqb_btn_secondary",
+							onClick: () => setResetOpen(false),
+							key: "cancel"
+						}, t("settings.resetConfirmCancel")),
+						react.createElement("button", {
+							type: "button",
+							className: "dshqb_btn dshqb_btn_primary",
+							onClick: confirmResetAll,
+							key: "ok"
+						}, t("settings.resetConfirmOk"))
 					])
-				]),
+				])) : null,
 				toast ? react.createElement("div", { className: "dshqb_toast", key: "toast" }, toast) : null
 			]);
+		}
+
+		function SettingsSection({ t }) {
+			return react.createElement(SettingsPanel, { t });
 		}
 		//#endregion
 
@@ -1423,26 +1549,6 @@ window.__ModuleLoader__.load({
 		function formatInterval(ms, t) {
 			const minutes = Math.round(ms / 60000);
 			return minutes >= 1 ? t("unit.minutes", { n: minutes }) : t("unit.seconds", { n: Math.round(ms / 1000) });
-		}
-
-		/** 精致齿轮图标 SVG */
-		function IconGear14() {
-			return react.createElement("svg", {
-				width: 14,
-				height: 14,
-				viewBox: "0 0 24 24",
-				fill: "none",
-				stroke: "currentColor",
-				strokeWidth: 2,
-				strokeLinecap: "round",
-				strokeLinejoin: "round"
-			}, [
-				react.createElement("circle", { cx: 12, cy: 12, r: 3, key: "c" }),
-				react.createElement("path", {
-					d: "M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z",
-					key: "p"
-				})
-			]);
 		}
 
 		const OPENCODE_WINDOW_KEYS = ["rolling", "weekly", "monthly"];
@@ -1482,7 +1588,8 @@ window.__ModuleLoader__.load({
 
 		/**
 		 * 余额读数: 与统计条同行的右对齐读数。
-		 * 包含余额指示灯、本会话消耗、悬停双栏卡片、V4 定价卡片与可视化设置弹窗。
+		 * 包含余额指示灯、本会话消耗、可选悬停双栏卡片与 V4 定价卡片。
+		 * 设置入口在官方设置页的「额度」卡片。
 		 */
 		function toLocalInput(ms) {
 			const d = new Date(ms);
@@ -1491,7 +1598,7 @@ window.__ModuleLoader__.load({
 			return d.getFullYear() + "-" + p(d.getMonth() + 1) + "-" + p(d.getDate()) + "T" + p(d.getHours()) + ":" + p(d.getMinutes());
 		}
 
-		const SpendCapsule = react.memo(function SpendCapsule({ t, onOpenSettings }) {
+		const SpendCapsule = react.memo(function SpendCapsule({ t }) {
 			const snap = react.useSyncExternalStore(spendStore.subscribe, spendStore.getSnapshot, spendStore.getSnapshot);
 			const [open, setOpen] = react.useState(false);
 			const [pos, setPos] = react.useState(() => {
@@ -1540,25 +1647,13 @@ window.__ModuleLoader__.load({
 				? react.createElement("div", { className: "dshqb_cap_panel", key: "panel" }, [
 					react.createElement("div", { className: "dshqb_cap_head", key: "head" }, [
 						react.createElement("span", { key: "t" }, t("spend.title")),
-						react.createElement("span", { key: "acts", style: { display: "inline-flex", alignItems: "center", gap: "4px" } }, [
-							typeof onOpenSettings === "function"
-								? react.createElement("button", {
-									type: "button",
-									className: "dshqb_btn_icon",
-									key: "set",
-									onClick: (e) => { e.stopPropagation(); onOpenSettings(e); },
-									title: t("spend.settings"),
-									"aria-label": t("spend.settings")
-								}, react.createElement(IconGear14, null))
-								: null,
-							react.createElement("button", {
-								type: "button",
-								className: "dshqb_btn_icon",
-								key: "close",
-								onClick: () => setOpen(false),
-								title: t("spend.close")
-							}, "×")
-						])
+						react.createElement("button", {
+							type: "button",
+							className: "dshqb_btn_icon",
+							key: "close",
+							onClick: () => setOpen(false),
+							title: t("spend.close")
+						}, "×")
 					]),
 					react.createElement("div", { className: "dshqb_card_val_main", key: "amt" }, amount),
 					react.createElement("div", { className: "dshqb_cap_chips", key: "chips" },
@@ -1662,9 +1757,16 @@ window.__ModuleLoader__.load({
 			const fallbackProvider = balance.status === "ok"
 				? (balance.payload?.defaultProvider ?? balance.payload?.provider)
 				: null;
-			const quotaSource = quotaSourceFromProvider(modelProvider ?? fallbackProvider);
-			const cost = priceSession(rawCost, balance.status === "ok" ? balance.payload : null);
-			const [isSettingsOpen, setSettingsOpen] = react.useState(false);
+			const payload = balance.status === "ok" ? balance.payload : null;
+			const quotaSource = resolveQuotaSource(modelProvider, {
+				quotaMode: payload?.quotaMode,
+				provider: fallbackProvider
+			});
+			const showDock = payload?.showDock !== false;
+			const dockLayout = normalizeDockLayout(payload?.dockLayout);
+			const showCapsule = payload?.showCapsule !== false;
+			const showPopover = payload?.showPopover !== false;
+			const cost = priceSession(rawCost, payload);
 			const rootRef = react.useRef(null);
 
 			const isRefreshing = balance.isRefreshing === true;
@@ -1674,12 +1776,6 @@ window.__ModuleLoader__.load({
 					e.preventDefault();
 				}
 				void balanceStore.forceRefresh(quotaSource);
-			};
-
-			const handleOpenSettings = (e) => {
-				e.stopPropagation();
-				e.preventDefault();
-				setSettingsOpen(true);
 			};
 
 			let balNode = null;
@@ -1750,13 +1846,7 @@ window.__ModuleLoader__.load({
 						),
 						react.createElement("div", { className: "dshqb_card_hint", key: "hint" }, [
 							react.createElement("div", { key: "time" }, t("card.updated", { time: formatClock(info.fetchedAt), interval: formatInterval(info.refreshIntervalMs ?? DEFAULT_POLL_MS, t) })),
-							react.createElement("div", { key: "tip" }, t("card.refreshHint")),
-							react.createElement("button", {
-								type: "button",
-								className: "dshqb_card_settings_link",
-								onClick: handleOpenSettings,
-								key: "set_link"
-							}, t("card.openSettings"))
+							react.createElement("div", { key: "tip" }, t("card.refreshHint"))
 						])
 					]);
 				} else if (info.provider === "opencode-go") {
@@ -1772,13 +1862,7 @@ window.__ModuleLoader__.load({
 					balNode = react.createElement("span", { className: "dshqb_error", key: "bal" }, statusDot, message);
 					leftCol = react.createElement("div", { className: "dshqb_col", key: "left" }, [
 						react.createElement("div", { className: "dshqb_card_header", key: "head" }, t("quota.cardTitle")),
-						react.createElement("div", { className: "dshqb_card_sub", key: "err" }, t("quota.error", { error: typeof info.error === "string" ? info.error : message })),
-						react.createElement("button", {
-							type: "button",
-							className: "dshqb_card_settings_link",
-							onClick: handleOpenSettings,
-							key: "set_link"
-						}, t("card.openSettings"))
+						react.createElement("div", { className: "dshqb_card_sub", key: "err" }, t("quota.error", { error: typeof info.error === "string" ? info.error : message }))
 					]);
 				} else if (info.ok === true && Array.isArray(info.balances) && info.balances.length > 0) {
 					const wallets = selectWallets(info.balances, info.currency);
@@ -1825,13 +1909,7 @@ window.__ModuleLoader__.load({
 						),
 						react.createElement("div", { className: "dshqb_card_hint", key: "hint" }, [
 							react.createElement("div", { key: "time" }, t("card.updated", { time: formatClock(info.fetchedAt), interval: formatInterval(info.refreshIntervalMs ?? DEFAULT_POLL_MS, t) })),
-							react.createElement("div", { key: "tip" }, t("card.refreshHint")),
-							react.createElement("button", {
-								type: "button",
-								className: "dshqb_card_settings_link",
-								onClick: handleOpenSettings,
-								key: "set_link"
-							}, t("card.openSettings"))
+							react.createElement("div", { key: "tip" }, t("card.refreshHint"))
 						])
 					]);
 				} else {
@@ -1847,13 +1925,7 @@ window.__ModuleLoader__.load({
 					balNode = react.createElement("span", { className: "dshqb_error", key: "bal" }, statusDot, message);
 					leftCol = react.createElement("div", { className: "dshqb_col", key: "left" }, [
 						react.createElement("div", { className: "dshqb_card_header", key: "head" }, t("card.balanceTitle")),
-						react.createElement("div", { className: "dshqb_card_sub", key: "err" }, t("card.error", { error: typeof info.error === "string" ? info.error : message })),
-						react.createElement("button", {
-							type: "button",
-							className: "dshqb_card_settings_link",
-							onClick: handleOpenSettings,
-							key: "set_link"
-						}, t("card.openSettings"))
+						react.createElement("div", { className: "dshqb_card_sub", key: "err" }, t("card.error", { error: typeof info.error === "string" ? info.error : message }))
 					]);
 				}
 			} else if (balance.status === "error") {
@@ -1868,13 +1940,7 @@ window.__ModuleLoader__.load({
 				balNode = react.createElement("span", { className: "dshqb_error", key: "bal" }, statusDot, t("balanceError"));
 				leftCol = react.createElement("div", { className: "dshqb_col", key: "left" }, [
 					react.createElement("div", { className: "dshqb_card_header", key: "head" }, t("card.balanceTitle")),
-					react.createElement("div", { className: "dshqb_card_sub", key: "err" }, t("card.error", { error: balance.message })),
-					react.createElement("button", {
-						type: "button",
-						className: "dshqb_card_settings_link",
-						onClick: handleOpenSettings,
-						key: "set_link"
-					}, t("card.openSettings"))
+					react.createElement("div", { className: "dshqb_card_sub", key: "err" }, t("card.error", { error: balance.message }))
 				]);
 			}
 
@@ -1986,32 +2052,17 @@ window.__ModuleLoader__.load({
 				]);
 			}
 
-			// 4. 设置按钮
-			const settingsNode = react.createElement("button", {
-				type: "button",
-				className: "dshqb_btn_icon",
-				key: "settings_btn",
-				onClick: handleOpenSettings,
-				"aria-label": t("btn.settings"),
-				title: t("btn.settings"),
-				children: react.createElement(IconGear14, null)
-			});
+			const capsuleNode = showCapsule
+				? (showDock
+					? react.createElement(SpendCapsule, { t, key: "cap" })
+					: react.createElement("div", { className: "dshqb_host", key: "cap_host" }, react.createElement(SpendCapsule, { t })))
+				: null;
 
-			if (balNode === null && costNode === null && pricingNode === null) {
-				return react.createElement(react.Fragment, { key: "cap-only" }, [
-					react.createElement(SpendCapsule, { t, onOpenSettings: handleOpenSettings, key: "cap" }),
-					isSettingsOpen
-						? react.createElement(SettingsModal, {
-							isOpen: true,
-							onClose: () => setSettingsOpen(false),
-							t,
-							key: "settings_modal"
-						})
-						: null
-				]);
+			if (!showDock) {
+				return capsuleNode;
 			}
 
-			const popover = leftCol !== null ? react.createElement("div", {
+			const popover = showPopover && leftCol !== null ? react.createElement("div", {
 				className: "dshqb_popover",
 				key: "popover"
 			}, [
@@ -2023,10 +2074,14 @@ window.__ModuleLoader__.load({
 			const triggerChildren = [];
 			if (balNode !== null) triggerChildren.push(balNode);
 			if (costNode !== null) {
-				triggerChildren.push(react.createElement("span", { className: "dshqb_sep", "aria-hidden": true, key: "sep_cost" }, "|"));
+				if (triggerChildren.length > 0) triggerChildren.push(react.createElement("span", { className: "dshqb_sep", "aria-hidden": true, key: "sep_cost" }, "|"));
 				triggerChildren.push(costNode);
 			}
 			if (popover !== null) triggerChildren.push(popover);
+
+			if (triggerChildren.length === 0 && pricingNode === null) {
+				return capsuleNode;
+			}
 
 			const triggerWrapper = react.createElement("span", {
 				className: "dshqb_trigger",
@@ -2038,31 +2093,56 @@ window.__ModuleLoader__.load({
 				rootChildren.push(react.createElement("span", { className: "dshqb_sep", "aria-hidden": true, key: "sep_pricing" }, "|"));
 				rootChildren.push(pricingNode);
 			}
-			rootChildren.push(react.createElement("span", { className: "dshqb_sep", "aria-hidden": true, key: "sep_settings" }, "|"));
-			rootChildren.push(settingsNode);
 
-			return react.createElement(react.Fragment, { key: "wrap" }, [
-				react.createElement("div", {
-					ref: rootRef,
-					className: "dshqb_root",
-					key: "bar",
-					children: rootChildren
-				}),
-				react.createElement(SpendCapsule, { t, onOpenSettings: handleOpenSettings, key: "cap" }),
-				isSettingsOpen
-					? react.createElement(SettingsModal, {
-						isOpen: true,
-						onClose: () => setSettingsOpen(false),
-						t,
-						key: "settings_modal"
-					})
-					: null
-			]);
+			if (capsuleNode !== null) rootChildren.push(capsuleNode);
+			return react.createElement("div", {
+				ref: rootRef,
+				className: "dshqb_root",
+				"data-dshqb-dock": "",
+				"data-dshqb-layout": dockLayout,
+				key: "bar",
+				children: rootChildren
+			});
 		});
 		//#endregion
 
 		//#region plugin
 		const inject = ["slots", "locale"];
+
+		function settingsNavKind(label) {
+			const text = String(label ?? "").replace(/\s+/g, " ").trim();
+			if (text === "额度" || text === "Credits") return "credits";
+			if (text === "Web UI 插件" || text === "Web UI Plugins") return "webui";
+			if (text === "皮肤中心" || text === "Skin Center") return "skin";
+			if (text === "宠物" || text === "Pet") return "pet";
+			if (text === "社区插件" || text === "Community Plugins") return "community";
+			return "";
+		}
+		function syncSettingsNavIcons() {
+			if (typeof document === "undefined" || typeof document.querySelectorAll !== "function") return;
+			const lists = document.querySelectorAll("[class*='_navList']");
+			for (const list of lists) {
+				const cells = list.querySelectorAll(":scope > [class*='_navCell']");
+				for (const cell of cells) {
+					const kind = settingsNavKind(cell.textContent);
+					if (kind) cell.setAttribute("data-dshqb-nav", kind);
+					else cell.removeAttribute("data-dshqb-nav");
+				}
+			}
+		}
+		function startSettingsNavIconSync() {
+			if (typeof document === "undefined" || typeof document.querySelectorAll !== "function") return () => {};
+			const run = () => {
+				try { syncSettingsNavIcons(); } catch { /* 设置页未挂载时忽略 */ }
+			};
+			run();
+			if (typeof MutationObserver !== "function") return () => {};
+			const root = document.body || document.documentElement;
+			if (!root) return () => {};
+			const obs = new MutationObserver(run);
+			obs.observe(root, { childList: true, subtree: true, characterData: true });
+			return () => obs.disconnect();
+		}
 
 		function apply(ctx) {
 			ctx.effect(() => ctx.locale.register(NS, { zh, en }), "dsh-credits: dictionaries");
@@ -2077,9 +2157,21 @@ window.__ModuleLoader__.load({
 				const dispose = ctx.slots.register({
 					name: "conversation.composer.dock",
 					id: "dsh-credits",
-					order: 1,
+					order: 1000,
 					locale: NS
 				}, BalanceReadout);
+				return () => {
+					dispose();
+				};
+			});
+			ctx.slots.inject("settings.section", () => {
+				const dispose = ctx.slots.register({
+					name: "settings.section",
+					id: "dsh-credits",
+					order: 1000,
+					label: () => ctx.locale.bind(NS)("settings.nav"),
+					locale: NS
+				}, SettingsSection);
 				return () => {
 					dispose();
 				};
@@ -2095,6 +2187,7 @@ window.__ModuleLoader__.load({
 				document.addEventListener("visibilitychange", onVisibility);
 				return () => document.removeEventListener("visibilitychange", onVisibility);
 			}, "dsh-credits: visibility resume");
+			ctx.effect(() => startSettingsNavIconSync(), "dsh-credits: settings nav icons");
 		}
 
 		exports.apply = apply;
