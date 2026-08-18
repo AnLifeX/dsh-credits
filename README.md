@@ -1,27 +1,27 @@
 # dsh-credits
 
-DeepSeek Harness（`dsh web`）额度插件：在输入框下方显示账户额度与本会话估算消耗；右下角另有可拖动的累计消耗胶囊。设置收进官方设置页的「额度」卡片。
+DeepSeek Harness（`dsh web`）额度插件：在输入框下方显示账户额度与本会话估算消耗；右下角另有可拖动的累计消耗胶囊。设置在侧栏「额度」（最后一项，货币硬币图标），分成多张可折叠卡片。
 
 - **账户额度 + 状态灯**  
   DeepSeek 模式如 `🟢 余额 ¥97.69`；OpenCode Go 模式如 `🟢 Go 额度 月 6% · 周 12% · 5h 9%`。点击圆点可立即强刷。
 - **跟随当前对话模型**  
   底部读数跟输入框选中的模型供应商走：只有 `opencode-go` 显示订阅用量，DeepSeek 官方以及其他供应商都显示官方余额。也可改成「自定义固定展示」，不随模型切换。
 - **底部条布局**  
-  默认独立换行，单独占官方统计下面一行；也可改成与官方统计、Web UI TPS 共用一行并排在最后。底部条、累计胶囊、悬停卡片都可以关掉。
+  默认独立换行，额度单独占底下一行；也可改成跟底部已有统计共用一行、排在最后。底部条、累计胶囊、悬停卡片都可以关掉。
 - **本会话估算消耗**  
   按模型单价估算（单价可在设置里改）。DeepSeek V4 自 2026-08-17 起按北京时间自动套用峰谷价。
 - **累计消耗胶囊**  
   右下角可拖动气泡，查看今天 / 昨天 / 本周 / 本月 / 自定义时间范围内的跨会话估算总额（按当前计价货币与单价现算）。
-- **官方设置卡片**  
-  设置 → 额度（侧栏最后一项，货币硬币图标）：展示开关、布局、额度模式、阈值滑块、API 凭证、连通性测试、模型单价、YAML 导出。保存后立即生效。「恢复默认设置」用页内确认，不会弹出浏览器原生对话框。
+- **设置卡片**  
+  展示、额度查询、阈值与刷新、模型单价、YAML 导出各一张卡。每张独立「放弃修改 / 保存」，改过的字段可「恢复默认」。关掉再打开，未保存的草稿还在。
 
 ## 界面预览
 
-悬停底部读数，会展开双栏卡片：左侧是账户额度（DeepSeek 列出全部币种钱包，Go 列出三个用量窗口），右侧是本会话估算。
+悬停底部读数会展开详情：DeepSeek 列出全部币种钱包，Go 列出三个用量窗口，下面是本会话估算。
 
 ![DeepSeek 官方余额悬停卡片](./assets/preview.png)
 
-底部额度默认独立占一行；若设置成「共用一行」，会跟官方统计、TPS 并排：
+底部额度默认独立占一行：
 
 ![DeepSeek 余额条](./assets/bar-deepseek.png)
 
@@ -34,6 +34,16 @@ OpenCode Go 模式下，卡片改成三个窗口的用量百分比与重置时�
 右下角可拖动的累计消耗胶囊，按今天 / 昨天 / 本周 / 本月 / 自定义区间汇总跨会话估算：
 
 ![累计消耗胶囊](./assets/capsule.png)
+
+设置 → 额度：多张可折叠卡片，同一功能区两列排布，每张卡单独保存。
+
+![设置卡片列表](./assets/settings-cards.png)
+
+![展示卡片](./assets/settings-display.png)
+
+![额度查询卡片](./assets/settings-quota.png)
+
+![阈值与刷新卡片](./assets/settings-thresholds.png)
 
 ## 数据源
 
@@ -50,7 +60,7 @@ OpenCode Go 模式下，卡片改成三个窗口的用量百分比与重置时�
 | `deepseek` | DeepSeek 官方余额 |
 | 其他（Anthropic、OpenAI、OpenCode Zen 等） | DeepSeek 官方余额（默认） |
 
-配置项 `provider`（以及设置面板里的「额度数据源」）只在还认不出当前模型时作为回退，**不会覆盖**已经识别到的模型供应商。本仓库默认回退值是 `opencode-go`。
+配置项 `provider`（以及设置里的「额度数据源」）只在还认不出当前模型时作为回退，**不会覆盖**已经识别到的模型供应商。默认回退是 `deepseek`。
 
 OpenCode Go 密钥解析顺序：`opencodeApiKey` → `OPENCODE_GO_API_KEY`（credentials / 环境变量）→ `~/.local/share/opencode/auth.json`。
 
@@ -92,7 +102,7 @@ dsh plugin --profile web remove dsh-balance
 
 ## 配置
 
-覆盖文件：`$DSH_HOME/profiles/web/cordis.patch.yml`。也可在 Web 设置 → 额度 改完点「保存并生效」。
+覆盖文件：`$DSH_HOME/profiles/web/cordis.patch.yml`。也可在设置 → 额度 改完后按卡片点「保存」。
 
 常用展示项：
 
@@ -100,11 +110,11 @@ dsh plugin --profile web remove dsh-balance
 | :--- | :--- | :--- |
 | `quotaMode` | `follow` | `follow` 跟随当前对话模型；`custom` 固定用下面的 `provider` |
 | `showDock` | `true` | 是否显示底部额度读数 |
-| `dockLayout` | `own` | `own` 独立换行；`shared` 与官方统计 / TPS 共用一行 |
+| `dockLayout` | `own` | `own` 独立换行；`shared` 与底部已有统计共用一行 |
 | `showCapsule` | `true` | 右下角累计消耗胶囊 |
 | `showPopover` | `true` | 悬停底部读数时的双栏详情 |
 
-### OpenCode Go（默认）
+### OpenCode Go 回退
 
 ```yaml
 - id: dsh-credits
@@ -184,6 +194,14 @@ dsh plugin --profile web remove dsh-balance
 
 ## 更新记录
 
+### 0.2.2
+
+设置页改成多张可折叠卡片，截图同步换成当前界面。
+
+- 展示 / 额度查询 / 阈值与刷新 / 模型单价 / YAML 导出各一张卡，每张独立草稿和保存
+- 同一功能区两列排布，勾选框与标题同行
+- 提示文案缩短；底部条「共用一行」不再绑定第三方统计插件
+
 ### 0.2.1
 
 悬停双栏卡片改成响应式：字号随卡片宽度缩放，窄窗口时两列改上下叠，主标题不再被挤换行。
@@ -192,15 +210,14 @@ dsh plugin --profile web remove dsh-balance
 
 适配官方设置页，不再用输入框旁边的齿轮。
 
-- 设置收进一级「额度」卡片，排在侧栏最后；图标改为带 `¥` 的硬币
+- 设置收进一级「额度」入口，排在侧栏最后；图标改为带 `¥` 的硬币
 - 可开关底部条、累计胶囊、悬停卡片
-- 底部条默认独立换行，可选与官方统计 / TPS 共用一行
+- 底部条默认独立换行，可选与底部已有统计共用一行
 - 额度查询支持「跟随当前模型」或「自定义固定展示」
-- 「恢复默认设置」改为页内确认，不再使用浏览器原生弹窗
 
 ## 发布到 npm
 
-**普通 `git push` 不会发包。** 只有推送符合 `v*` 的 tag（例如 `v0.2.1`）才会触发 `.github/workflows/publish.yml`。
+**普通 `git push` 不会发包。** 只有推送符合 `v*` 的 tag（例如 `v0.2.2`）才会触发 `.github/workflows/publish.yml`。
 
 第一次发布前：
 
@@ -211,8 +228,8 @@ dsh plugin --profile web remove dsh-balance
 5. `package.json` 的 `version` 与即将打的 tag 一致后：
 
 ```sh
-git tag v0.2.1
-git push origin v0.2.1
+git tag v0.2.2
+git push origin v0.2.2
 ```
 
 之后 Actions 会执行 `npm publish --provenance --access public`。发布成功即可：
