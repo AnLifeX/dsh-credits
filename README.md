@@ -167,7 +167,7 @@ dsh plugin --profile web remove dsh-balance
 
 ## 发布到 npm
 
-**普通 `git push` 不会发包。** 只有推送符合 `v*` 的 tag（例如 `v0.1.0`）才会触发 `.github/workflows/publish.yml`。
+**普通 `git push` 不会发包。** 只有推送符合 `v*` 的 tag（例如 `v0.2.0`）才会触发 `.github/workflows/publish.yml`。
 
 第一次发布前：
 
@@ -178,8 +178,8 @@ dsh plugin --profile web remove dsh-balance
 5. `package.json` 的 `version` 与即将打的 tag 一致后：
 
 ```sh
-git tag v0.1.0
-git push origin v0.1.0
+git tag v0.2.0
+git push origin v0.2.0
 ```
 
 之后 Actions 会执行 `npm publish --provenance --access public`。发布成功即可：
