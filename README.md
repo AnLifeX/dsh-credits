@@ -1,17 +1,19 @@
 # dsh-credits
 
-DeepSeek Harness（`dsh web`）额度插件：在输入框下方统计条同一行，实时显示账户额度与本会话估算消耗；右下角另有可拖动的累计消耗胶囊。
+DeepSeek Harness（`dsh web`）额度插件：在输入框下方显示账户额度与本会话估算消耗；右下角另有可拖动的累计消耗胶囊。设置收进官方设置页的「额度」卡片。
 
 - **账户额度 + 状态灯**  
   DeepSeek 模式如 `🟢 余额 ¥97.69`；OpenCode Go 模式如 `🟢 Go 额度 月 6% · 周 12% · 5h 9%`。点击圆点可立即强刷。
 - **跟随当前对话模型**  
-  底部读数跟输入框选中的模型供应商走：只有 `opencode-go` 显示订阅用量，DeepSeek 官方以及其他供应商都显示官方余额。设置里的「额度数据源」只在还认不出模型时作为默认。
+  底部读数跟输入框选中的模型供应商走：只有 `opencode-go` 显示订阅用量，DeepSeek 官方以及其他供应商都显示官方余额。也可改成「自定义固定展示」，不随模型切换。
+- **底部条布局**  
+  默认独立换行，单独占官方统计下面一行；也可改成与官方统计、Web UI TPS 共用一行并排在最后。底部条、累计胶囊、悬停卡片都可以关掉。
 - **本会话估算消耗**  
-  按模型单价估算（单价可在设置面板修改）。DeepSeek V4 自 2026-08-17 起按北京时间自动套用峰谷价。
+  按模型单价估算（单价可在设置里改）。DeepSeek V4 自 2026-08-17 起按北京时间自动套用峰谷价。
 - **累计消耗胶囊**  
   右下角可拖动气泡，查看今天 / 昨天 / 本周 / 本月 / 自定义时间范围内的跨会话估算总额（按当前计价货币与单价现算）。
-- **可视化设置**  
-  齿轮图标打开：默认数据源、阈值滑块、API 凭证、连通性测试、模型单价、YAML 导出。保存后立即生效。
+- **官方设置卡片**  
+  设置 → 额度（侧栏最后一项，货币硬币图标）：展示开关、布局、额度模式、阈值滑块、API 凭证、连通性测试、模型单价、YAML 导出。保存后立即生效。「恢复默认设置」用页内确认，不会弹出浏览器原生对话框。
 
 ## 界面预览
 
@@ -19,7 +21,7 @@ DeepSeek Harness（`dsh web`）额度插件：在输入框下方统计条同一�
 
 ![DeepSeek 官方余额悬停卡片](./assets/preview.png)
 
-底部统计条会跟输入框那一行并排：
+底部额度默认独立占一行；若设置成「共用一行」，会跟官方统计、TPS 并排：
 
 ![DeepSeek 余额条](./assets/bar-deepseek.png)
 
@@ -90,13 +92,28 @@ dsh plugin --profile web remove dsh-balance
 
 ## 配置
 
-覆盖文件：`$DSH_HOME/profiles/web/cordis.patch.yml`。也可在 Web 设置面板改完点「保存并生效」。
+覆盖文件：`$DSH_HOME/profiles/web/cordis.patch.yml`。也可在 Web 设置 → 额度 改完点「保存并生效」。
+
+常用展示项：
+
+| 配置 | 默认 | 说明 |
+| :--- | :--- | :--- |
+| `quotaMode` | `follow` | `follow` 跟随当前对话模型；`custom` 固定用下面的 `provider` |
+| `showDock` | `true` | 是否显示底部额度读数 |
+| `dockLayout` | `own` | `own` 独立换行；`shared` 与官方统计 / TPS 共用一行 |
+| `showCapsule` | `true` | 右下角累计消耗胶囊 |
+| `showPopover` | `true` | 悬停底部读数时的双栏详情 |
 
 ### OpenCode Go（默认）
 
 ```yaml
 - id: dsh-credits
   config:
+    quotaMode: follow
+    showDock: true
+    dockLayout: own
+    showCapsule: true
+    showPopover: true
     provider: opencode-go
     opencodeApiKeyRef: OPENCODE_GO_API_KEY
     opencodeBaseUrl: https://opencode.ai/zen/go/v1/usage
@@ -165,9 +182,25 @@ dsh plugin --profile web remove dsh-balance
 
 密钥走 Harness `credentials`，默认不写进配置文件。
 
+## 更新记录
+
+### 0.2.1
+
+悬停双栏卡片改成响应式：字号随卡片宽度缩放，窄窗口时两列改上下叠，主标题不再被挤换行。
+
+### 0.2.0
+
+适配官方设置页，不再用输入框旁边的齿轮。
+
+- 设置收进一级「额度」卡片，排在侧栏最后；图标改为带 `¥` 的硬币
+- 可开关底部条、累计胶囊、悬停卡片
+- 底部条默认独立换行，可选与官方统计 / TPS 共用一行
+- 额度查询支持「跟随当前模型」或「自定义固定展示」
+- 「恢复默认设置」改为页内确认，不再使用浏览器原生弹窗
+
 ## 发布到 npm
 
-**普通 `git push` 不会发包。** 只有推送符合 `v*` 的 tag（例如 `v0.2.0`）才会触发 `.github/workflows/publish.yml`。
+**普通 `git push` 不会发包。** 只有推送符合 `v*` 的 tag（例如 `v0.2.1`）才会触发 `.github/workflows/publish.yml`。
 
 第一次发布前：
 
@@ -178,8 +211,8 @@ dsh plugin --profile web remove dsh-balance
 5. `package.json` 的 `version` 与即将打的 tag 一致后：
 
 ```sh
-git tag v0.2.0
-git push origin v0.2.0
+git tag v0.2.1
+git push origin v0.2.1
 ```
 
 之后 Actions 会执行 `npm publish --provenance --access public`。发布成功即可：
