@@ -32,6 +32,12 @@ globalThis.localStorage = {
   setItem(key, value) { localStore[key] = String(value) },
   removeItem(key) { delete localStore[key] },
 }
+const sessionStore = {}
+globalThis.sessionStorage = {
+  getItem(key) { return Object.prototype.hasOwnProperty.call(sessionStore, key) ? sessionStore[key] : null },
+  setItem(key, value) { sessionStore[key] = String(value) },
+  removeItem(key) { delete sessionStore[key] },
+}
 
 // 零依赖 React Mock
 const ReactMock = {
@@ -133,7 +139,6 @@ function slotOf(regs, name) {
 if (typeof api.apply !== 'function') throw new Error('no apply')
 if (JSON.stringify(api.inject) !== JSON.stringify(['slots', 'locale'])) throw new Error('bad inject')
 if (/\bconfirm\s*\(\s*['"`]/.test(code)) throw new Error('native confirm() dialog should be removed')
-if (!code.includes('dshqb_confirm')) throw new Error('in-page reset confirm missing')
 if (!code.includes("data-dshqb-nav")) throw new Error('settings nav icon painter missing')
 if (code.includes("ellipse cx='8' cy='5.1'")) throw new Error('stacked-coin icon should be replaced with currency coin')
 if (!code.includes("[data-dshqb-nav='credits']")) throw new Error('credits nav icon missing')
@@ -141,6 +146,13 @@ if (!code.includes('data-dshqb-dock')) throw new Error('dock merge marker missin
 if (!code.includes("data-dshqb-layout")) throw new Error('dock layout marker missing')
 if (!code.includes("[data-dshqb-layout='own']")) throw new Error('independent dock layout CSS missing')
 if (!code.includes("[data-dshqb-layout='shared']")) throw new Error('shared dock layout CSS missing')
+if (!code.includes('dsh-credits.settingsDraft.')) throw new Error('settings draft store missing')
+if (!code.includes('settings.unsaved')) throw new Error('unsaved badge i18n missing')
+if (!code.includes('settings.overridden')) throw new Error('overridden badge i18n missing')
+if (!code.includes('settings.resetField')) throw new Error('per-field reset i18n missing')
+if (!code.includes('settings.btnDiscard')) throw new Error('discard action missing')
+if (!code.includes('dshqb_pcard')) throw new Error('plugin card shell missing')
+if (!code.includes('settings.card.display')) throw new Error('display card i18n missing')
 if (/\.dshqb_root\{[^}]*width:100%/.test(code)) throw new Error('shared dock root must not take full width by default')
 
 const capturedRegister = []
@@ -312,9 +324,22 @@ if (!htmlGreen.includes('data-dshqb-layout="own"')) throw new Error('default doc
 const settingsT = (key, params) => {
   const dict = {
     'settings.title': '额度与消耗',
-    'settings.tab.general': '🎯 常规与阈值',
-    'settings.tab.pricing': '⚡ 模型单价',
-    'settings.tab.export': '📋 YAML 导出',
+    'settings.desc': '底部额度、累计消耗与模型单价。',
+    'settings.unsaved': '未保存',
+    'settings.overridden': '已覆盖',
+    'settings.resetField': '恢复默认',
+    'settings.expand': '展开设置',
+    'settings.collapse': '收起设置',
+    'settings.card.display': '展示',
+    'settings.card.displayDesc': '底部条、累计胶囊与悬停卡片。',
+    'settings.card.quota': '额度查询',
+    'settings.card.quotaDesc': '数据源、货币与凭证。',
+    'settings.card.thresholds': '阈值与刷新',
+    'settings.card.thresholdsDesc': '状态灯阈值与后台查询频率。',
+    'settings.card.pricing': '模型单价',
+    'settings.card.pricingDesc': '各模型每 1M Token 的命中 / 未命中 / 输出价。',
+    'settings.card.export': 'YAML 导出',
+    'settings.card.exportDesc': '复制到 cordis.patch.yml 做持久覆盖。',
     'settings.showDock': '底部统计条',
     'settings.showDockHint': 'dock hint',
     'settings.dockLayout': '底部条布局',
@@ -332,21 +357,9 @@ const settingsT = (key, params) => {
     'settings.provider': '额度数据源',
     'settings.provider.deepseek': 'DeepSeek 官方余额',
     'settings.provider.opencode': 'OpenCode Go 订阅用量',
-    'settings.providerHintFollow': 'follow hint',
-    'settings.providerHintCustom': 'custom hint',
     'settings.currency': '计价货币',
-    'settings.currencyHint': 'currency hint',
-    'settings.sliderHint': 'slider hint',
-    'settings.danger': '告急阈值',
-    'settings.warning': '预警阈值',
-    'settings.dangerHint': 'danger hint',
-    'settings.warningHint': 'warning hint',
-    'settings.serverInterval': '服务端查询间隔',
-    'settings.serverIntervalHint': 'server hint',
-    'settings.clientInterval': '前端读取缓存间隔',
-    'settings.clientIntervalHint': 'client hint',
-    'settings.btnResetAll': '恢复默认设置',
-    'settings.btnSave': '保存并生效',
+    'settings.btnDiscard': '放弃修改',
+    'settings.btnSave': '保存',
   }
   let out = dict[key] ?? key
   for (const [k, v] of Object.entries(params ?? {})) out = out.replaceAll('{' + k + '}', String(v))
@@ -355,17 +368,97 @@ const settingsT = (key, params) => {
 const htmlSettings = renderToStaticMarkup(ReactMock.createElement(settingsReg.comp, { t: settingsT }))
 if (!htmlSettings.includes('dshqb_settings_page')) throw new Error('settings page wrapper missing')
 if (!htmlSettings.includes('额度与消耗')) throw new Error('settings page title missing')
-if (!htmlSettings.includes('底部统计条')) throw new Error('showDock toggle missing')
-if (!htmlSettings.includes('独立换行')) throw new Error('dockLayout own option missing')
-if (!htmlSettings.includes('共用一行')) throw new Error('dockLayout shared option missing')
-if (!htmlSettings.includes('累计消耗胶囊')) throw new Error('showCapsule toggle missing')
-if (!htmlSettings.includes('悬停详情气泡')) throw new Error('showPopover toggle missing')
-if (!htmlSettings.includes('跟随当前模型供应商')) throw new Error('quotaMode follow option missing')
-if (!htmlSettings.includes('自定义固定展示')) throw new Error('quotaMode custom option missing')
-if (!htmlSettings.includes('dshqb_check')) throw new Error('display checkboxes missing')
+if (!htmlSettings.includes('底部额度、累计消耗与模型单价。')) throw new Error('settings page description missing')
+if (!htmlSettings.includes('dshqb_pcard')) throw new Error('settings cards missing')
+if (!htmlSettings.includes('展示')) throw new Error('display card title missing')
+if (!htmlSettings.includes('额度查询')) throw new Error('quota card title missing')
+if (!htmlSettings.includes('阈值与刷新')) throw new Error('thresholds card title missing')
+if (!htmlSettings.includes('模型单价')) throw new Error('pricing card title missing')
+if (!htmlSettings.includes('YAML 导出')) throw new Error('export card title missing')
+if (htmlSettings.includes('未保存')) throw new Error('unsaved badge should stay hidden until dirty')
+if (htmlSettings.includes('放弃修改')) throw new Error('discard should stay hidden until a dirty card is open')
+if (htmlSettings.includes('🎯 常规与阈值')) throw new Error('tabbed settings should be replaced by cards')
 if (htmlSettings.includes('settings.btnCancel')) throw new Error('settings cancel button should be removed')
-if (htmlSettings.includes('dshqb_confirm')) throw new Error('reset confirm should stay closed until clicked')
+if (!code.includes('dshqb_field_grid')) throw new Error('settings two-column field grid missing')
+if (!code.includes('white-space:pre-line')) throw new Error('settings hints should keep explicit line breaks')
+if (code.includes('关掉后只保留 Web UI') || code.includes('keep only the Web UI stats')) throw new Error('showDockHint should not mention Web UI')
+if (code.includes('TPS 排在同一行') || code.includes('official stats and TPS')) throw new Error('dockLayoutHint should not mention TPS')
+if (code.includes('官方接口见 https://opencode.ai') || code.includes('Official endpoint: https://opencode.ai')) throw new Error('opencode URL hint should be removed')
+if (code.includes('"settings.exportDesc"')) throw new Error('duplicate YAML exportDesc should be removed')
+if (code.includes('"settings.opencodeBaseUrlHint"')) throw new Error('opencodeBaseUrlHint should be removed')
+if (code.includes('"settings.pricingDesc"')) throw new Error('pricing body hint should be removed')
+if (!code.includes('dshqb_field_full')) throw new Error('full-width field span missing for long inputs')
+if (!code.includes('display_bar') || !code.includes('quota_fields')) throw new Error('display/quota fields should use two-column grids')
 console.log('SETTINGS SECTION SMOKE TEST PASSED')
+
+function loadClientFactory() {
+  let next = null
+  globalThis.window.__ModuleLoader__.load = (entry) => { next = entry }
+  new Function('window', 'require', code)(globalThis.window, (id) => {
+    if (id === 'react') return ReactMock
+    if (id === '@deepseek-ai/dsh-client-ui-primitives') return stubPrimitives(ReactMock)
+    throw new Error('unexpected require: ' + id)
+  })
+  if (next === null) throw new Error('loader.load was not called')
+  return next.factory((id) => {
+    if (id === 'react') return ReactMock
+    if (id === '@deepseek-ai/dsh-client-ui-primitives') return stubPrimitives(ReactMock)
+    throw new Error('unexpected require: ' + id)
+  })
+}
+
+{
+  const prevSession = globalThis.sessionStorage
+  const draftStore = {}
+  globalThis.sessionStorage = {
+    getItem(key) { return Object.prototype.hasOwnProperty.call(draftStore, key) ? draftStore[key] : null },
+    setItem(key, value) { draftStore[key] = String(value) },
+    removeItem(key) { delete draftStore[key] },
+  }
+  const saved = {
+    quotaMode: 'follow',
+    showDock: true,
+    dockLayout: 'own',
+    showCapsule: true,
+    showPopover: true,
+    provider: 'deepseek',
+    currency: 'CNY',
+    warningThreshold: 10,
+    dangerThreshold: 5,
+    refreshIntervalMs: 300000,
+    clientPollIntervalMs: 30000,
+    timeoutMs: 8000,
+    baseUrl: 'https://api.deepseek.com',
+    apiKey: '',
+    opencodeApiKeyRef: 'OPENCODE_GO_API_KEY',
+    opencodeApiKey: '',
+    opencodeBaseUrl: 'https://opencode.ai/zen/go/v1/usage',
+    prices: { 'deepseek-v4-flash': { cacheHit: 0.02, cacheMiss: 1, output: 2 } },
+    defaultPrices: { cacheHit: 0.1, cacheMiss: 1, output: 2 },
+  }
+  draftStore['dsh-credits.settingsDraft.state'] = JSON.stringify({
+    baseline: saved,
+    drafts: { display: { dockLayout: 'shared' } },
+    open: { display: true, quota: true, thresholds: true, export: true },
+  })
+  const draftApi = loadClientFactory()
+  const draftRegs = []
+  draftApi.apply(makeSlotCtx(draftRegs))
+  const draftSettings = slotOf(draftRegs, 'settings.section')
+  const htmlDraft = renderToStaticMarkup(ReactMock.createElement(draftSettings.comp, { t: settingsT }))
+  if (!htmlDraft.includes('未保存')) throw new Error('dirty draft should show unsaved badge')
+  if (!htmlDraft.includes('放弃修改')) throw new Error('dirty draft should show discard')
+  if (!htmlDraft.includes('已覆盖')) throw new Error('overridden field should show badge')
+  if (!htmlDraft.includes('恢复默认')) throw new Error('overridden field should show restore default')
+  if (!htmlDraft.includes('class="dshqb_select" value="shared"')) throw new Error('dirty draft should restore unsaved dockLayout')
+  if (!/class="dshqb_field_head"[\s\S]*?class="dshqb_check"/.test(htmlDraft)) throw new Error('checkbox should sit on the field title row')
+  if (!htmlDraft.includes('dshqb_field_grid')) throw new Error('threshold fields should use two-column grid')
+  if (!htmlDraft.includes('dshqb_field_full')) throw new Error('long quota URL should span both columns')
+  if (htmlDraft.includes('settings.exportDesc') || htmlDraft.includes('复制下方片段')) throw new Error('YAML body should not repeat the card description')
+  globalThis.sessionStorage = prevSession
+  globalThis.window.__ModuleLoader__.load = (entry) => { captured = entry }
+  console.log('SETTINGS DRAFT RESTORE SMOKE TEST PASSED')
+}
 
 // ---------- OpenCode Go 场景 ----------
 // 重新执行 bundle, 获得一个全新的模块实例与单例 store。

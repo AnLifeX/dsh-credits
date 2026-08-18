@@ -5,7 +5,8 @@
  *   - 余额: 单例轮询器按服务器下发的 `clientPollIntervalMs` 读取 `/query-credits`
  *     (只读缓存, 不直接访问 DeepSeek); 页面隐藏时暂停轮询。
  *   - 本会话消耗: 读取宿主推送的 `queryCreditsCost` 投影(按模型计价)。
- *   - 设置: 注册一级 `settings.section` 卡片(展示开关、额度模式、阈值、单价、YAML)。
+ *   - 设置: 注册一级 `settings.section`(展示 / 额度查询 / 阈值 / 单价 / YAML 多张可折叠卡片)。
+ *     每张独立「未保存 / 放弃修改 / 保存」，字段有「已覆盖 / 恢复默认」；关掉再回来草稿仍在。
  *
  * 额度模式: follow 跟随当前对话模型供应商; custom 固定官方余额或 Go 套餐额度。
  */
@@ -119,7 +120,7 @@ window.__ModuleLoader__.load({
 				/* Modal & Settings Styles */
 				".dshqb_modal_backdrop{position:fixed;inset:0;background:var(--dsw-alias-bg-mask-1,rgba(0,0,0,0.5));backdrop-filter:blur(8px);z-index:99999;display:flex;align-items:center;justify-content:center;padding:16px;box-sizing:border-box;animation:dshqb-fadein .18s ease-out}",
 				".dshqb_modal{background:var(--dsw-alias-bg-base,var(--dsw-alias-bg-layer-1,#ffffff));border:1px solid var(--dsw-alias-border-l1,var(--dsw-alias-border-primary,rgba(128,128,128,0.2)));border-radius:14px;box-shadow:var(--dsw-shadow-lv3,0 24px 64px rgba(0,0,0,0.25));width:580px;max-width:96vw;max-height:88vh;display:flex;flex-direction:column;overflow:hidden;color:var(--dsw-alias-label-primary);font-size:13px;line-height:1.5;box-sizing:border-box;animation:dshqb-fadein .18s ease-out;white-space:normal}",
-				".dshqb_modal_header{display:flex;align-items:center;justify-content:space-between;padding:16px 20px;background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,0.03));border-bottom:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-secondary,rgba(128,128,128,0.12)));font-size:15px;font-weight:600}",
+				".dshqb_modal_header{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;padding:16px 20px;background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,0.03));border-bottom:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-secondary,rgba(128,128,128,0.12)));font-size:15px;font-weight:600}",
 				".dshqb_modal_close{background:transparent;border:none;color:var(--dsw-alias-label-tertiary);cursor:pointer;font-size:18px;line-height:1;padding:4px 8px;border-radius:6px;transition:all .15s ease}",
 				".dshqb_modal_close:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover,rgba(128,128,128,0.1))}",
 				".dshqb_modal_tabs{display:flex;background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,0.04));padding:4px 12px 0;border-bottom:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-secondary,rgba(128,128,128,0.12)));gap:4px;overflow-x:auto}",
@@ -130,13 +131,14 @@ window.__ModuleLoader__.load({
 				".dshqb_form_group{display:flex;flex-direction:column;gap:6px;min-width:0}",
 				".dshqb_form_label_row{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}",
 				".dshqb_form_label{font-size:12.5px;font-weight:600;color:var(--dsw-alias-label-primary);white-space:normal;overflow-wrap:anywhere}",
-				".dshqb_form_hint{display:block;font-size:11.5px;color:var(--dsw-alias-label-tertiary);line-height:1.45;white-space:normal;overflow-wrap:anywhere}",
+				".dshqb_form_hint{display:block;font-size:11.5px;color:var(--dsw-alias-label-tertiary);line-height:1.45;white-space:pre-line;overflow-wrap:anywhere}",
 				".dshqb_input{background:var(--dsw-specific-input-major,var(--dsw-alias-bg-layer-2,rgba(128,128,128,0.08)));border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-secondary,rgba(128,128,128,0.2)));border-radius:6px;padding:8px 12px;color:var(--dsw-alias-label-primary);font-size:13px;font-family:inherit;width:100%;box-sizing:border-box;transition:border-color .15s ease,box-shadow .15s ease;outline:none}",
 				".dshqb_input:focus{border-color:var(--dsw-alias-brand-primary,var(--dsw-alias-accent-primary,#3b82f6));box-shadow:0 0 0 2px rgba(59,130,246,0.2)}",
 				".dshqb_select{background:var(--dsw-specific-input-major,var(--dsw-alias-bg-layer-2,rgba(128,128,128,0.08)));border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-secondary,rgba(128,128,128,0.2)));border-radius:6px;padding:8px 12px;color:var(--dsw-alias-label-primary);font-size:13px;font-family:inherit;width:100%;box-sizing:border-box;outline:none;cursor:pointer}",
 				".dshqb_select option{background:var(--dsw-alias-bg-layer-1,#ffffff);color:var(--dsw-alias-label-primary)}",
 				".dshqb_grid_2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:14px;min-width:0}",
 				".dshqb_grid_2>*{min-width:0}",
+				"@media (max-width:560px){.dshqb_grid_2,.dshqb_field_grid{grid-template-columns:1fr}.dshqb_field_grid>.dshqb_field+.dshqb_field{border-top:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.12))}}",
 				/* Interactive Slider */
 				".dshqb_slider_box{display:flex;flex-direction:column;gap:8px;background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,0.04));padding:14px 16px 12px;border-radius:8px;border:1px solid var(--dsw-alias-border-l3,rgba(128,128,128,0.12));margin-bottom:4px}",
 				".dshqb_slider_track_wrap{position:relative;height:20px;margin-top:26px;margin-bottom:8px;display:flex;align-items:center;cursor:pointer;user-select:none;touch-action:none}",
@@ -168,16 +170,52 @@ window.__ModuleLoader__.load({
 				".dshqb_btn_secondary:hover{background:var(--dsw-alias-button-tool-bar-hover,var(--dsw-alias-interactive-bg-active,rgba(128,128,128,0.16)))}",
 				".dshqb_btn_outline{background:transparent;border-color:var(--dsw-alias-border-l2,var(--dsw-alias-border-secondary,rgba(128,128,128,0.25)));color:var(--dsw-alias-label-secondary)}",
 				".dshqb_btn_outline:hover{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-border-l1,rgba(128,128,128,0.45));background:var(--dsw-alias-interactive-bg-hover,rgba(128,128,128,0.06))}",
+				".dshqb_btn:disabled{opacity:.5;cursor:not-allowed;filter:none}",
 				".dshqb_modal_footer{display:flex;align-items:center;justify-content:space-between;padding:14px 20px;border-top:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-secondary,rgba(128,128,128,0.12)));background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,0.03))}",
 				".dshqb_modal_footer_right{display:flex;gap:10px}",
+				".dshqb_settings_head_copy{display:flex;flex-direction:column;gap:4px;min-width:0}",
+				".dshqb_settings_desc{font-size:12.5px;font-weight:400;color:var(--dsw-alias-label-tertiary);line-height:1.45;white-space:normal}",
+				".dshqb_unsaved{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:500;line-height:16px;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,0.1));border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.16));flex-shrink:0;white-space:nowrap}",
 				".dshqb_toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--dsw-alias-state-success-primary,#10b981);color:#ffffff;padding:8px 18px;border-radius:999px;box-shadow:var(--dsw-shadow-lv3,0 8px 24px rgba(0,0,0,0.3));font-size:12.5px;font-weight:500;z-index:100000;animation:dshqb-toast-in .2s ease-out;display:flex;align-items:center;gap:6px}",
-				".dshqb_settings_page{position:relative;display:flex;flex-direction:column;min-width:0;width:100%;max-width:760px;box-sizing:border-box;white-space:normal;border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.16));border-radius:12px;overflow:hidden;background:var(--dsw-alias-bg-layer-1,var(--dsw-alias-bg-base,#ffffff))}",
-				".dshqb_settings_page .dshqb_modal_header{background:transparent;border-bottom:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.12))}",
+				".dshqb_settings_page{position:relative;display:flex;flex-direction:column;gap:12px;min-width:0;width:100%;max-width:760px;box-sizing:border-box;white-space:normal}",
+				".dshqb_settings_intro{display:flex;flex-direction:column;gap:4px;padding:0 2px}",
+				".dshqb_settings_intro_title{font-size:15px;font-weight:600;color:var(--dsw-alias-label-primary)}",
+				".dshqb_pcard_list{display:flex;flex-direction:column;gap:12px;margin:0;padding:0;list-style:none}",
+				".dshqb_pcard{border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.16));background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-1,#fff));border-radius:12px;list-style:none;overflow:hidden;transition:border-color .16s,background .16s}",
+				".dshqb_pcard:hover{border-color:var(--dsw-alias-label-dimmed,rgba(128,128,128,0.45))}",
+				".dshqb_pcard_open{background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,0.04));border-color:var(--dsw-alias-label-dimmed,rgba(128,128,128,0.45))}",
+				".dshqb_pcard_header{appearance:none;width:100%;font:inherit;color:inherit;text-align:left;cursor:pointer;background:transparent;border:0;border-radius:12px;align-items:center;gap:12px;padding:14px 16px;display:flex}",
+				".dshqb_pcard_header:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,#3b82f6);outline-offset:-2px}",
+				".dshqb_pcard_head_text{flex-direction:column;flex:1;gap:4px;min-width:0;display:flex}",
+				".dshqb_pcard_name{color:var(--dsw-alias-label-primary);font-size:15px;font-weight:600;line-height:1.4}",
+				".dshqb_pcard_desc{color:var(--dsw-alias-label-tertiary);font-size:13px;line-height:1.5;font-weight:400}",
+				".dshqb_pcard_chevron{color:var(--dsw-alias-label-tertiary);flex:none;width:14px;height:14px;transition:transform .16s;display:inline-flex;align-items:center;justify-content:center}",
+				".dshqb_pcard_chevron_open{transform:rotate(180deg)}",
+				".dshqb_pcard_body{border-top:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.12));margin:0 16px;padding:4px 0 12px;display:flex;flex-direction:column;gap:0}",
+				".dshqb_pcard_footer{border-top:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.12));justify-content:flex-end;align-items:center;gap:8px;padding:12px 0 4px;display:flex}",
+				".dshqb_pcard_failed{min-width:0;color:var(--dsw-alias-state-error-primary,#ef4444);flex:1;margin:0;font-size:12px;line-height:1.5}",
+				".dshqb_field{flex-direction:column;gap:6px;padding:12px 0;display:flex}",
+				".dshqb_field+.dshqb_field{border-top:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.12))}",
+				".dshqb_field_grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);column-gap:16px;align-items:start;min-width:0}",
+				".dshqb_field_grid>.dshqb_field{min-width:0;padding:10px 0}",
+				".dshqb_field_grid>.dshqb_field+.dshqb_field{border-top:none}",
+				".dshqb_field_grid>.dshqb_field:nth-child(n+3){border-top:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.12))}",
+				".dshqb_field_full{grid-column:1/-1}",
+				".dshqb_slider_box+.dshqb_field_grid,.dshqb_field+.dshqb_field_grid,.dshqb_field_grid+.dshqb_field_grid,.dshqb_field_grid+.dshqb_field{border-top:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.12))}",
+				".dshqb_field_head{align-items:center;gap:8px;display:flex;flex-wrap:nowrap}",
+				".dshqb_field_label{min-width:0;color:var(--dsw-alias-label-primary);flex:1;font-size:13px;font-weight:500;line-height:1.5}",
+				".dshqb_field_badges{align-items:center;gap:8px;display:inline-flex;flex-shrink:0}",
+				".dshqb_field_badge{white-space:nowrap;background:var(--dsw-alias-bg-module-platform,rgba(128,128,128,0.1));color:var(--dsw-alias-label-secondary);border-radius:999px;padding:1px 8px;font-size:11px;font-weight:500;line-height:17px}",
+				".dshqb_field_reset{font:inherit;color:var(--dsw-alias-label-secondary);cursor:pointer;background:transparent;border:none;padding:0;font-size:12px;line-height:1.5}",
+				".dshqb_field_reset:hover:not(:disabled){color:var(--dsw-alias-label-primary)}",
+				".dshqb_field_reset:disabled{cursor:default;opacity:.5}",
+				".dshqb_model_reset{font:inherit;color:var(--dsw-alias-label-secondary);cursor:pointer;background:transparent;border:none;padding:0;font-size:11px;white-space:nowrap}",
+				".dshqb_model_reset:hover{color:var(--dsw-alias-label-primary)}",
 				".dshqb_toggle_list{display:flex;flex-direction:column;gap:0;border:1px solid var(--dsw-alias-border-l3,rgba(128,128,128,0.12));border-radius:8px;padding:2px 14px;background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,0.04))}",
 				".dshqb_toggle_row{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:11px 0;cursor:pointer}",
 				".dshqb_toggle_row+.dshqb_toggle_row{border-top:1px solid var(--dsw-alias-border-l3,rgba(128,128,128,0.08))}",
 				".dshqb_toggle_copy{display:flex;flex-direction:column;gap:3px;min-width:0}",
-				".dshqb_check{width:16px;height:16px;margin-top:2px;flex-shrink:0;accent-color:var(--dsw-alias-brand-primary,#3b82f6);cursor:pointer}",
+				".dshqb_check{width:16px;height:16px;margin:0;flex-shrink:0;accent-color:var(--dsw-alias-brand-primary,#3b82f6);cursor:pointer}",
 				".dshqb_confirm_mask{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;background:var(--dsw-alias-bg-mask-1,rgba(0,0,0,0.45));backdrop-filter:blur(6px)}",
 				".dshqb_confirm{width:min(380px,100%);background:var(--dsw-alias-bg-layer-1,var(--dsw-alias-bg-base,#fff));border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.18));border-radius:12px;box-shadow:var(--dsw-shadow-lv3,0 16px 40px rgba(0,0,0,0.22));padding:18px 18px 16px;display:flex;flex-direction:column;gap:8px;box-sizing:border-box}",
 				".dshqb_confirm_title{font-size:15px;font-weight:600;color:var(--dsw-alias-label-primary)}",
@@ -575,52 +613,65 @@ window.__ModuleLoader__.load({
 			/* Settings translations */
 			"settings.nav": "额度",
 			"settings.title": "额度与消耗",
-			"settings.tab.general": "🎯 常规与阈值",
-			"settings.tab.pricing": "⚡ 模型单价",
-			"settings.tab.export": "📋 YAML 导出",
+			"settings.desc": "底部额度、累计消耗与模型单价。",
+			"settings.unsaved": "未保存",
+			"settings.overridden": "已覆盖",
+			"settings.resetField": "恢复默认",
+			"settings.expand": "展开设置",
+			"settings.collapse": "收起设置",
+			"settings.card.display": "展示",
+			"settings.card.displayDesc": "底部条、累计胶囊与悬停卡片。",
+			"settings.card.quota": "额度查询",
+			"settings.card.quotaDesc": "数据源、货币与凭证。",
+			"settings.card.thresholds": "阈值与刷新",
+			"settings.card.thresholdsDesc": "状态灯阈值与后台查询频率。",
+			"settings.card.pricing": "模型单价",
+			"settings.card.pricingDesc": "各模型每 1M Token 的命中 / 未命中 / 输出价。",
+			"settings.card.export": "YAML 导出",
+			"settings.card.exportDesc": "复制到 cordis.patch.yml 做持久覆盖。",
 			"settings.showDock": "底部统计条",
-			"settings.showDockHint": "在输入框下方展示额度读数与本会话消耗。关掉后只保留 Web UI 自己的统计。",
+			"settings.showDockHint": "输入框下方的额度与本会话消耗。",
 			"settings.dockLayout": "底部条布局",
 			"settings.dockLayout.own": "独立换行",
 			"settings.dockLayout.shared": "共用一行",
-			"settings.dockLayoutHint": "独立换行：额度单独占底下一行。共用一行：跟官方统计、TPS 排在同一行最后面。",
+			"settings.dockLayoutHint": "单独占一行，或跟底部统计并排。",
 			"settings.showCapsule": "累计消耗胶囊",
-			"settings.showCapsuleHint": "右下角可拖拽的今天/本周/本月累计消耗。",
+			"settings.showCapsuleHint": "右下角可拖拽的累计消耗。",
 			"settings.showPopover": "悬停详情气泡",
-			"settings.showPopoverHint": "鼠标悬停底部读数时弹出余额/额度与本会话明细。",
+			"settings.showPopoverHint": "悬停底部读数时显示明细。",
 			"settings.quotaMode": "额度查询模式",
 			"settings.quotaMode.follow": "跟随当前模型供应商",
 			"settings.quotaMode.custom": "自定义固定展示",
-			"settings.quotaModeHint": "跟随：Go 模型显示套餐额度，其他供应商显示官方余额。自定义：始终按下方数据源展示，不随模型切换。",
+			"settings.quotaModeHint": "跟随当前模型，或固定下方数据源。",
 			"settings.currency": "计价货币",
-			"settings.currencyHint": "影响本会话估算与状态灯。所有钱包都会列出；切换后套用该币种官方单价。",
-			"settings.currencyHintQuota": "不影响额度百分比，只改右侧本会话估算。",
+			"settings.currencyHint": "用于本会话估算与状态灯。",
+			"settings.currencyHintQuota": "只影响本会话估算。",
 			"settings.warning": "预警阈值 (黄灯 🟡)",
-			"settings.warningHint": "当余额低于此值时显示黄色预警状态。",
+			"settings.warningHint": "低于此值亮黄灯。",
 			"settings.danger": "告急阈值 (红灯 🔴)",
-			"settings.dangerHint": "当余额低于此值时显示红色告急状态。",
-			"settings.sliderHint": "💡 拖动手柄或点击轨道设置告急线与预警线：",
+			"settings.dangerHint": "低于此值亮红灯。",
+			"settings.sliderHint": "拖动或点击轨道设置告急/预警线。",
 			"settings.serverInterval": "服务端查询间隔",
 			"settings.provider": "额度数据源",
 			"settings.provider.deepseek": "DeepSeek 官方余额",
 			"settings.provider.opencode": "OpenCode Go 订阅用量",
-			"settings.providerHintFollow": "无法识别当前对话模型时，用此项作为回退。",
-			"settings.providerHintCustom": "自定义模式下始终展示此项，忽略当前对话模型。",
+			"settings.providerHintFollow": "无法识别模型时作为回退。",
+			"settings.providerHintCustom": "自定义模式下始终使用。",
 			"settings.opencodeApiKeyRef": "OpenCode Go 凭证引用名",
-			"settings.opencodeApiKeyRefHint": "优先从 credentials / 环境变量读取此名称。",
+			"settings.opencodeApiKeyRefHint": "从环境变量或 credentials 读取。",
 			"settings.opencodeApiKey": "OpenCode Go API Key",
-			"settings.opencodeApiKeyHint": "留空则读取 OPENCODE_GO_API_KEY 或 OpenCode auth.json。",
+			"settings.opencodeApiKeyHint": "留空则用环境变量或 auth.json。",
 			"settings.opencodeBaseUrl": "OpenCode Go Usage API",
-			"settings.opencodeBaseUrlHint": "官方接口见 https://opencode.ai/zen/go/v1/usage",
-			"settings.serverIntervalHintQuota": "后台向 OpenCode Go 查询真实用量的频率。",
+			"settings.serverIntervalHintQuota": "后台查询真实用量的频率。",
 			"settings.warningPercent": "剩余额度预警阈值 (黄灯 🟡)",
 			"settings.dangerPercent": "剩余额度告急阈值 (红灯 🔴)",
-			"settings.warningHintQuota": "剩余额度低于此百分比时显示黄色预警状态。",
-			"settings.dangerHintQuota": "剩余额度低于此百分比时显示红色告急状态。",
-			"settings.serverIntervalHint": "后台向 DeepSeek 查询真实余额的频率。",
+			"settings.warningHintQuota": "剩余低于此百分比亮黄灯。",
+			"settings.dangerHintQuota": "剩余低于此百分比亮红灯。",
+			"settings.serverIntervalHint": "后台查询真实余额的频率。",
 			"settings.clientInterval": "前端读取缓存间隔",
-			"settings.clientIntervalHint": "浏览器从本地只读缓存拉取数据的频率。",
-			"settings.pricingDesc": "配置各模型每 1M Token 的命中 / 未命中 / 输出单价：",
+			"settings.clientIntervalHint": "页面读取本地缓存的频率。",
+			"settings.timeout": "请求超时（毫秒）",
+			"settings.timeoutHint": "单次查询最长等待。",
 			"settings.pricingHit": "缓存命中",
 			"settings.pricingMiss": "未命中",
 			"settings.pricingOut": "输出",
@@ -628,16 +679,12 @@ window.__ModuleLoader__.load({
 			"settings.addModel": "➕ 添加自定义模型",
 			"settings.addModelName": "模型名称 (如 deepseek-chat)",
 			"settings.btnAdd": "添加",
-			"settings.exportDesc": "复制下方片段到 cordis.patch.yml 即可持久保存：",
 			"settings.btnCopy": "📋 复制 YAML 配置",
 			"settings.copied": "✓ 已复制到剪贴板！",
-			"settings.btnResetAll": "恢复默认设置",
-			"settings.resetConfirmTitle": "恢复默认设置？",
-			"settings.resetConfirmBody": "表单会回到插件默认值，不会立刻写入。确认后请再点「保存并生效」。",
-			"settings.resetConfirmOk": "恢复默认",
-			"settings.resetConfirmCancel": "取消",
-			"settings.btnSave": "保存并生效",
-			"settings.saving": "正在保存...",
+			"settings.btnDiscard": "放弃修改",
+			"settings.btnSave": "保存",
+			"settings.saving": "保存中…",
+			"settings.saveFailed": "本部署没有接受这些值，已保留供你修改。",
 			"settings.savedToast": "✓ 设置已成功保存并立即生效",
 			"spend.pill": "{range} {amount}",
 			"spend.title": "累计消耗",
@@ -703,52 +750,65 @@ window.__ModuleLoader__.load({
 			/* Settings translations */
 			"settings.nav": "Credits",
 			"settings.title": "Credits & spend",
-			"settings.tab.general": "🎯 General & Thresholds",
-			"settings.tab.pricing": "⚡ Model Pricing",
-			"settings.tab.export": "📋 YAML Export",
+			"settings.desc": "Bottom quota bar, spend capsule, and model pricing.",
+			"settings.unsaved": "Unsaved",
+			"settings.overridden": "Overridden",
+			"settings.resetField": "Restore default",
+			"settings.expand": "Show settings",
+			"settings.collapse": "Hide settings",
+			"settings.card.display": "Display",
+			"settings.card.displayDesc": "Bottom bar, spend capsule, and hover card.",
+			"settings.card.quota": "Quota source",
+			"settings.card.quotaDesc": "Data source, currency, and credentials.",
+			"settings.card.thresholds": "Thresholds & refresh",
+			"settings.card.thresholdsDesc": "Status-light thresholds and backend poll interval.",
+			"settings.card.pricing": "Model pricing",
+			"settings.card.pricingDesc": "Cache hit / miss / output price per 1M tokens.",
+			"settings.card.export": "YAML export",
+			"settings.card.exportDesc": "Copy into cordis.patch.yml for a durable override.",
 			"settings.showDock": "Bottom status bar",
-			"settings.showDockHint": "Show quota and session cost under the composer. Turn off to keep only the Web UI stats.",
+			"settings.showDockHint": "Quota and session cost below the input.",
 			"settings.dockLayout": "Status bar layout",
 			"settings.dockLayout.own": "Own line",
 			"settings.dockLayout.shared": "Share one line",
-			"settings.dockLayoutHint": "Own line: credits sit on a row below the official stats. Share one line: append after official stats and TPS.",
+			"settings.dockLayoutHint": "Own row, or share the bottom stats row.",
 			"settings.showCapsule": "Spend capsule",
-			"settings.showCapsuleHint": "Draggable today / week / month spend tracker in the corner.",
+			"settings.showCapsuleHint": "Draggable spend tracker in the corner.",
 			"settings.showPopover": "Hover details",
-			"settings.showPopoverHint": "Show the balance / quota and session breakdown when hovering the bottom readout.",
+			"settings.showPopoverHint": "Details when hovering the bottom readout.",
 			"settings.quotaMode": "Quota query mode",
 			"settings.quotaMode.follow": "Follow current model provider",
 			"settings.quotaMode.custom": "Custom fixed display",
-			"settings.quotaModeHint": "Follow: Go models show subscription usage; other providers show the official balance. Custom: always use the source below, ignoring the current model.",
+			"settings.quotaModeHint": "Follow the current model, or pin the source below.",
 			"settings.currency": "Currency",
-			"settings.currencyHint": "Used for session estimates and the status light. All wallets stay visible; switching loads that currency's official prices.",
-			"settings.currencyHintQuota": "Does not change quota percent; only the session cost estimate.",
+			"settings.currencyHint": "For session estimates and the status light.",
+			"settings.currencyHintQuota": "Only affects the session estimate.",
 			"settings.warning": "Warning Threshold (Yellow 🟡)",
-			"settings.warningHint": "Show yellow warning status when balance is below this value.",
+			"settings.warningHint": "Yellow below this value.",
 			"settings.danger": "Danger Threshold (Red 🔴)",
-			"settings.dangerHint": "Show red critical status when balance is below this value.",
-			"settings.sliderHint": "💡 Drag handles or click the track to set danger and warning lines:",
+			"settings.dangerHint": "Red below this value.",
+			"settings.sliderHint": "Drag or click the track to set the lines.",
 			"settings.serverInterval": "Server Refresh Interval",
 			"settings.provider": "Quota Source",
 			"settings.provider.deepseek": "DeepSeek official balance",
 			"settings.provider.opencode": "OpenCode Go subscription usage",
-			"settings.providerHintFollow": "Used only when the current chat model cannot be identified.",
-			"settings.providerHintCustom": "In custom mode this source is always shown, ignoring the current chat model.",
+			"settings.providerHintFollow": "Fallback when the model is unknown.",
+			"settings.providerHintCustom": "Always used in custom mode.",
 			"settings.opencodeApiKeyRef": "OpenCode Go Credential Ref",
-			"settings.opencodeApiKeyRefHint": "Resolved from the credentials seam / environment by this name.",
+			"settings.opencodeApiKeyRefHint": "Read from env or credentials.",
 			"settings.opencodeApiKey": "OpenCode Go API Key",
-			"settings.opencodeApiKeyHint": "Leave empty to read OPENCODE_GO_API_KEY or OpenCode auth.json.",
+			"settings.opencodeApiKeyHint": "Empty uses env or auth.json.",
 			"settings.opencodeBaseUrl": "OpenCode Go Usage API",
-			"settings.opencodeBaseUrlHint": "Official endpoint: https://opencode.ai/zen/go/v1/usage.",
-			"settings.serverIntervalHintQuota": "Interval for backend querying OpenCode Go usage.",
+			"settings.serverIntervalHintQuota": "How often the backend fetches usage.",
 			"settings.warningPercent": "Remaining quota warning threshold (Yellow 🟡)",
 			"settings.dangerPercent": "Remaining quota danger threshold (Red 🔴)",
-			"settings.warningHintQuota": "Show yellow warning when remaining quota is below this percent.",
-			"settings.dangerHintQuota": "Show red critical when remaining quota is below this percent.",
-			"settings.serverIntervalHint": "Interval for backend querying DeepSeek balance API.",
+			"settings.warningHintQuota": "Yellow below this remaining percent.",
+			"settings.dangerHintQuota": "Red below this remaining percent.",
+			"settings.serverIntervalHint": "How often the backend fetches the balance.",
 			"settings.clientInterval": "Client Poll Interval",
-			"settings.clientIntervalHint": "Interval for frontend fetching local cache from backend.",
-			"settings.pricingDesc": "Configure price per 1M tokens for each model:",
+			"settings.clientIntervalHint": "How often the page reads the local cache.",
+			"settings.timeout": "Request timeout (ms)",
+			"settings.timeoutHint": "Max wait for one quota request.",
 			"settings.pricingHit": "Cache Hit",
 			"settings.pricingMiss": "Cache Miss",
 			"settings.pricingOut": "Output",
@@ -756,16 +816,12 @@ window.__ModuleLoader__.load({
 			"settings.addModel": "➕ Add Custom Model",
 			"settings.addModelName": "Model Name (e.g. deepseek-chat)",
 			"settings.btnAdd": "Add",
-			"settings.exportDesc": "Copy the snippet below into cordis.patch.yml to persist settings:",
 			"settings.btnCopy": "📋 Copy YAML",
 			"settings.copied": "✓ Copied to clipboard!",
-			"settings.btnResetAll": "Reset All to Default",
-			"settings.resetConfirmTitle": "Reset to defaults?",
-			"settings.resetConfirmBody": "The form will return to plugin defaults and will not be written until you save.",
-			"settings.resetConfirmOk": "Reset",
-			"settings.resetConfirmCancel": "Cancel",
-			"settings.btnSave": "Save Changes",
-			"settings.saving": "Saving...",
+			"settings.btnDiscard": "Discard changes",
+			"settings.btnSave": "Save",
+			"settings.saving": "Saving…",
+			"settings.saveFailed": "The deployment did not accept these values; they were left for you to correct.",
 			"settings.savedToast": "✓ Settings saved and applied successfully",
 			"spend.pill": "{range} {amount}",
 			"spend.title": "Spend",
@@ -981,52 +1037,357 @@ window.__ModuleLoader__.load({
 			]);
 		}
 
+		function cloneSettings(form) {
+			return JSON.parse(JSON.stringify(form));
+		}
+
+		function configToForm(c) {
+			const loadedPrices = (c.prices && Object.keys(c.prices).length > 0) ? { ...c.prices } : { ...DEFAULT_PRICES };
+			return {
+				quotaMode: c.quotaMode === "custom" ? "custom" : "follow",
+				showDock: c.showDock !== false,
+				dockLayout: normalizeDockLayout(c.dockLayout),
+				showCapsule: c.showCapsule !== false,
+				showPopover: c.showPopover !== false,
+				provider: c.provider === "opencode-go" ? "opencode-go" : "deepseek",
+				currency: c.currency ?? "CNY",
+				warningThreshold: c.warningThreshold ?? 10,
+				dangerThreshold: c.dangerThreshold ?? 5,
+				refreshIntervalMs: c.refreshIntervalMs ?? 300000,
+				clientPollIntervalMs: c.clientPollIntervalMs ?? 30000,
+				timeoutMs: c.timeoutMs ?? 8000,
+				baseUrl: c.baseUrl ?? "https://api.deepseek.com",
+				apiKey: "",
+				opencodeApiKeyRef: c.opencodeApiKeyRef || "OPENCODE_GO_API_KEY",
+				opencodeApiKey: "",
+				opencodeBaseUrl: c.opencodeBaseUrl || "https://opencode.ai/zen/go/v1/usage",
+				prices: loadedPrices,
+				defaultPrices: c.defaultPrices ?? officialDefaultPrices(c.currency ?? "CNY")
+			};
+		}
+
+		const CARD_IDS = ["display", "quota", "thresholds", "pricing"];
+		const CARD_KEYS = {
+			display: ["showDock", "dockLayout", "showCapsule", "showPopover"],
+			quota: ["quotaMode", "provider", "currency", "opencodeApiKeyRef", "opencodeApiKey", "opencodeBaseUrl"],
+			thresholds: ["warningThreshold", "dangerThreshold", "refreshIntervalMs", "clientPollIntervalMs", "timeoutMs"],
+			pricing: ["prices", "defaultPrices"]
+		};
+		const SECRET_FIELDS = ["apiKey", "opencodeApiKey"];
+		const SETTINGS_DRAFT_PREFIX = "dsh-credits.settingsDraft.";
+
+		function mergeView(baseline, drafts) {
+			const next = cloneSettings(baseline || DEFAULT_SETTINGS);
+			for (const cardId of CARD_IDS) {
+				const overlay = drafts?.[cardId];
+				if (!overlay || typeof overlay !== "object") continue;
+				for (const [key, value] of Object.entries(overlay)) next[key] = value;
+			}
+			return next;
+		}
+
+		function valuesEqual(field, a, b) {
+			if (field === "prices") {
+				const pa = {};
+				const pb = {};
+				for (const [model, rates] of Object.entries(a || {})) {
+					pa[model] = { cacheHit: Number(rates?.cacheHit), cacheMiss: Number(rates?.cacheMiss), output: Number(rates?.output) };
+				}
+				for (const [model, rates] of Object.entries(b || {})) {
+					pb[model] = { cacheHit: Number(rates?.cacheHit), cacheMiss: Number(rates?.cacheMiss), output: Number(rates?.output) };
+				}
+				return JSON.stringify(pa) === JSON.stringify(pb);
+			}
+			if (field === "defaultPrices") return JSON.stringify(a || {}) === JSON.stringify(b || {});
+			if (typeof a === "boolean" || typeof b === "boolean") return Boolean(a) === Boolean(b);
+			if (typeof a === "number" || typeof b === "number") return Number(a) === Number(b);
+			return String(a ?? "") === String(b ?? "");
+		}
+
+		function schemaDefault(field, currency) {
+			if (field === "prices") return { ...officialPricesFor(currency || "CNY") };
+			if (field === "defaultPrices") return officialDefaultPrices(currency || "CNY");
+			if (field === "dockLayout") return "own";
+			return DEFAULT_SETTINGS[field];
+		}
+
+		function isSchemaOverridden(field, value, currency) {
+			if (SECRET_FIELDS.includes(field)) return String(value ?? "").trim() !== "";
+			return !valuesEqual(field, value, schemaDefault(field, currency));
+		}
+
+		function pricesEqualModel(a, b) {
+			return Number(a?.cacheHit) === Number(b?.cacheHit)
+				&& Number(a?.cacheMiss) === Number(b?.cacheMiss)
+				&& Number(a?.output) === Number(b?.output);
+		}
+
+		function overlayWithoutSecrets(overlay) {
+			if (!overlay || typeof overlay !== "object") return overlay;
+			const next = cloneSettings(overlay);
+			for (const key of SECRET_FIELDS) delete next[key];
+			return next;
+		}
+
+		function isCardDirty(cardId, overlay, baseline) {
+			if (!overlay || typeof overlay !== "object") return false;
+			const keys = Object.keys(overlay);
+			if (keys.length === 0) return false;
+			for (const key of keys) {
+				if (!valuesEqual(key, overlay[key], baseline?.[key])) return true;
+			}
+			return false;
+		}
+
+		const settingsDraftMem = {
+			hydrated: false,
+			baseline: null,
+			drafts: { display: null, quota: null, thresholds: null, pricing: null },
+			open: { display: false, quota: false, thresholds: false, pricing: false, export: false }
+		};
+
+		function readSessionDraft() {
+			try {
+				if (typeof sessionStorage === "undefined") return null;
+				const raw = sessionStorage.getItem(SETTINGS_DRAFT_PREFIX + "state");
+				if (!raw) return null;
+				const parsed = JSON.parse(raw);
+				if (!parsed || typeof parsed !== "object" || !parsed.baseline) return null;
+				return {
+					baseline: parsed.baseline,
+					drafts: parsed.drafts && typeof parsed.drafts === "object" ? parsed.drafts : {},
+					open: parsed.open && typeof parsed.open === "object" ? parsed.open : {}
+				};
+			} catch {
+				return null;
+			}
+		}
+
+		function persistSessionDraft() {
+			try {
+				if (typeof sessionStorage === "undefined") return;
+				const drafts = {};
+				let dirty = false;
+				for (const cardId of CARD_IDS) {
+					const overlay = overlayWithoutSecrets(settingsDraftMem.drafts[cardId]);
+					if (overlay && isCardDirty(cardId, overlay, settingsDraftMem.baseline)) {
+						drafts[cardId] = overlay;
+						dirty = true;
+					}
+				}
+				if (!settingsDraftMem.hydrated || !dirty || !settingsDraftMem.baseline) {
+					sessionStorage.removeItem(SETTINGS_DRAFT_PREFIX + "state");
+					return;
+				}
+				sessionStorage.setItem(SETTINGS_DRAFT_PREFIX + "state", JSON.stringify({
+					baseline: overlayWithoutSecrets(settingsDraftMem.baseline),
+					drafts,
+					open: settingsDraftMem.open
+				}));
+			} catch { /* ignore quota / private mode */ }
+		}
+
+		function bootSettingsDraft() {
+			if (settingsDraftMem.baseline) {
+				return {
+					baseline: settingsDraftMem.baseline,
+					drafts: settingsDraftMem.drafts,
+					open: settingsDraftMem.open
+				};
+			}
+			const session = readSessionDraft();
+			if (session) {
+				settingsDraftMem.baseline = session.baseline;
+				settingsDraftMem.drafts = { display: null, quota: null, thresholds: null, pricing: null, ...session.drafts };
+				settingsDraftMem.open = { display: false, quota: false, thresholds: false, pricing: false, export: false, ...session.open };
+				for (const cardId of CARD_IDS) {
+					if (isCardDirty(cardId, settingsDraftMem.drafts[cardId], settingsDraftMem.baseline)) {
+						settingsDraftMem.open[cardId] = true;
+					}
+				}
+				settingsDraftMem.hydrated = true;
+				return {
+					baseline: settingsDraftMem.baseline,
+					drafts: settingsDraftMem.drafts,
+					open: settingsDraftMem.open
+				};
+			}
+			settingsDraftMem.baseline = cloneSettings(DEFAULT_SETTINGS);
+			return {
+				baseline: settingsDraftMem.baseline,
+				drafts: settingsDraftMem.drafts,
+				open: settingsDraftMem.open
+			};
+		}
+
+		function FieldRow({ t, label, hint, overridden, onReset, disabled, trailing, wide, children }) {
+			return react.createElement("div", { className: "dshqb_field" + (wide ? " dshqb_field_full" : "") }, [
+				react.createElement("div", { className: "dshqb_field_head", key: "head" }, [
+					react.createElement("span", { className: "dshqb_field_label", key: "label" }, label),
+					overridden ? react.createElement("span", { className: "dshqb_field_badges", key: "badges" }, [
+						react.createElement("span", { className: "dshqb_field_badge", key: "ov" }, t("settings.overridden")),
+						react.createElement("button", {
+							type: "button",
+							className: "dshqb_field_reset",
+							disabled,
+							onClick: (e) => {
+								e.preventDefault();
+								e.stopPropagation();
+								onReset();
+							},
+							key: "reset"
+						}, t("settings.resetField"))
+					]) : null,
+					trailing || null
+				]),
+				children || null,
+				hint ? react.createElement("span", { className: "dshqb_form_hint", key: "hint" }, hint) : null
+			]);
+		}
+
+		function FieldGrid({ children }) {
+			return react.createElement("div", { className: "dshqb_field_grid" }, children);
+		}
+
+		function PluginCard({ t, title, description, dirty, open, onToggle, saving, failed, onDiscard, onSave, hideFooter, children }) {
+			const blocked = !dirty || saving;
+			return react.createElement("li", {
+				className: "dshqb_pcard" + (open ? " dshqb_pcard_open" : "")
+			}, [
+				react.createElement("button", {
+					type: "button",
+					className: "dshqb_pcard_header",
+					"aria-expanded": open,
+					"aria-label": t(open ? "settings.collapse" : "settings.expand") + ": " + title,
+					onClick: onToggle,
+					key: "hdr"
+				}, [
+					react.createElement("span", { className: "dshqb_pcard_head_text", key: "txt" }, [
+						react.createElement("span", { className: "dshqb_pcard_name", key: "n" }, title),
+						react.createElement("span", { className: "dshqb_pcard_desc", key: "d" }, description)
+					]),
+					dirty ? react.createElement("span", { className: "dshqb_unsaved", key: "unsaved" }, t("settings.unsaved")) : null,
+					react.createElement("span", {
+						className: "dshqb_pcard_chevron" + (open ? " dshqb_pcard_chevron_open" : ""),
+						"aria-hidden": "true",
+						key: "ch"
+					}, "▾")
+				]),
+				open ? react.createElement("div", { className: "dshqb_pcard_body", key: "body" }, [
+					children,
+					hideFooter ? null : react.createElement("div", { className: "dshqb_pcard_footer", key: "ftr" }, [
+						failed ? react.createElement("p", { className: "dshqb_pcard_failed", role: "status", key: "fail" }, t("settings.saveFailed")) : null,
+						react.createElement("button", {
+							type: "button",
+							className: "dshqb_btn dshqb_btn_outline",
+							disabled: !dirty || saving,
+							onClick: (e) => {
+								e.preventDefault();
+								e.stopPropagation();
+								onDiscard();
+							},
+							key: "discard"
+						}, t("settings.btnDiscard")),
+						react.createElement("button", {
+							type: "button",
+							className: "dshqb_btn dshqb_btn_primary",
+							disabled: blocked,
+							onClick: (e) => {
+								e.preventDefault();
+								e.stopPropagation();
+								onSave();
+							},
+							key: "save"
+						}, t(saving ? "settings.saving" : "settings.btnSave"))
+					])
+				]) : null
+			]);
+		}
+
 		function SettingsPanel({ t }) {
-			// Tab 顺序: 常规与阈值 -> 模型单价 -> YAML导出
-			const [activeTab, setActiveTab] = react.useState("general");
-			const [form, setForm] = react.useState(DEFAULT_SETTINGS);
-			const [saving, setSaving] = react.useState(false);
+			const boot = react.useMemo(() => bootSettingsDraft(), []);
+			const [baseline, setBaseline] = react.useState(boot.baseline);
+			const [drafts, setDrafts] = react.useState(boot.drafts);
+			const [open, setOpen] = react.useState(boot.open);
+			const [savingCard, setSavingCard] = react.useState(null);
+			const [failedCard, setFailedCard] = react.useState(null);
 			const [toast, setToast] = react.useState(null);
 			const [copied, setCopied] = react.useState(false);
-			const [resetOpen, setResetOpen] = react.useState(false);
-
-			// 自定义新增模型表单字段
 			const [newModelName, setNewModelName] = react.useState("");
 			const [newModelHit, setNewModelHit] = react.useState(0.1);
 			const [newModelMiss, setNewModelMiss] = react.useState(1.0);
 			const [newModelOut, setNewModelOut] = react.useState(2.0);
 
+			const view = mergeView(baseline, drafts);
+			const dirtyOf = (cardId) => isCardDirty(cardId, drafts[cardId], baseline);
+
+			const commitMem = (nextBaseline, nextDrafts, nextOpen) => {
+				if (nextBaseline !== undefined) settingsDraftMem.baseline = nextBaseline;
+				if (nextDrafts !== undefined) settingsDraftMem.drafts = nextDrafts;
+				if (nextOpen !== undefined) settingsDraftMem.open = nextOpen;
+				persistSessionDraft();
+			};
+
+			const patchCard = (cardId, patch) => {
+				setDrafts((prev) => {
+					const current = { ...(prev[cardId] || {}) };
+					for (const [key, value] of Object.entries(patch)) {
+						if (valuesEqual(key, value, baseline[key])) delete current[key];
+						else current[key] = value;
+					}
+					const nextDrafts = { ...prev, [cardId]: Object.keys(current).length ? current : null };
+					commitMem(undefined, nextDrafts, undefined);
+					return nextDrafts;
+				});
+				setFailedCard((id) => id === cardId ? null : id);
+			};
+
+			const resetField = (cardId, field) => {
+				const currency = field === "prices" || field === "defaultPrices" ? view.currency : view.currency;
+				patchCard(cardId, { [field]: schemaDefault(field, currency) });
+			};
+
+			const toggleOpen = (cardId) => {
+				setOpen((prev) => {
+					const next = { ...prev, [cardId]: !prev[cardId] };
+					commitMem(undefined, undefined, next);
+					return next;
+				});
+			};
+
 			react.useEffect(() => {
+				let cancelled = false;
 				fetch("/query-credits/config", { cache: "no-store" })
 					.then((r) => r.json())
 					.then((data) => {
-						if (data && data.ok && data.config) {
-							const c = data.config;
-							const loadedPrices = (c.prices && Object.keys(c.prices).length > 0) ? { ...c.prices } : { ...DEFAULT_PRICES };
-							setForm({
-								quotaMode: c.quotaMode === "custom" ? "custom" : "follow",
-								showDock: c.showDock !== false,
-								dockLayout: normalizeDockLayout(c.dockLayout),
-								showCapsule: c.showCapsule !== false,
-								showPopover: c.showPopover !== false,
-								provider: c.provider === "opencode-go" ? "opencode-go" : "deepseek",
-								currency: c.currency ?? "CNY",
-								warningThreshold: c.warningThreshold ?? 10,
-								dangerThreshold: c.dangerThreshold ?? 5,
-								refreshIntervalMs: c.refreshIntervalMs ?? 300000,
-								clientPollIntervalMs: c.clientPollIntervalMs ?? 30000,
-								timeoutMs: c.timeoutMs ?? 8000,
-								baseUrl: c.baseUrl ?? "https://api.deepseek.com",
-								apiKey: "",
-								opencodeApiKeyRef: c.opencodeApiKeyRef || "OPENCODE_GO_API_KEY",
-								opencodeApiKey: "",
-								opencodeBaseUrl: c.opencodeBaseUrl || "https://opencode.ai/zen/go/v1/usage",
-								prices: loadedPrices,
-								defaultPrices: c.defaultPrices ?? officialDefaultPrices(c.currency ?? "CNY")
-							});
+						if (cancelled || !data || !data.ok || !data.config) return;
+						const loaded = configToForm(data.config);
+						const memBase = settingsDraftMem.baseline;
+						const keep = memBase && JSON.stringify(overlayWithoutSecrets(loaded)) === JSON.stringify(overlayWithoutSecrets(memBase));
+						const nextBase = keep ? memBase : loaded;
+						const nextDrafts = keep ? settingsDraftMem.drafts : { display: null, quota: null, thresholds: null, pricing: null };
+						const nextOpen = { ...settingsDraftMem.open };
+						if (!keep) {
+							nextOpen.display = false;
+							nextOpen.quota = false;
+							nextOpen.thresholds = false;
+							nextOpen.pricing = false;
+						} else {
+							for (const cardId of CARD_IDS) {
+								if (isCardDirty(cardId, nextDrafts[cardId], nextBase)) nextOpen[cardId] = true;
+							}
 						}
+						settingsDraftMem.baseline = nextBase;
+						settingsDraftMem.drafts = nextDrafts;
+						settingsDraftMem.open = nextOpen;
+						settingsDraftMem.hydrated = true;
+						persistSessionDraft();
+						setBaseline(nextBase);
+						setDrafts(nextDrafts);
+						setOpen(nextOpen);
 					})
 					.catch(() => {});
+				return () => { cancelled = true; };
 			}, []);
 
 			const showToast = (msg) => {
@@ -1034,30 +1395,50 @@ window.__ModuleLoader__.load({
 				setTimeout(() => setToast(null), 2500);
 			};
 
-			const handleSave = async () => {
-				setSaving(true);
+			const discardCard = (cardId) => {
+				setDrafts((prev) => {
+					const nextDrafts = { ...prev, [cardId]: null };
+					commitMem(undefined, nextDrafts, undefined);
+					return nextDrafts;
+				});
+				setFailedCard((id) => id === cardId ? null : id);
+			};
+
+			const saveCard = async (cardId) => {
+				if (!dirtyOf(cardId) || savingCard) return;
+				setSavingCard(cardId);
+				setFailedCard(null);
+				const merged = mergeView(baseline, { ...drafts, [cardId]: drafts[cardId] });
+				const payload = {};
 				try {
-					const payload = {
-						...form,
-						quotaMode: form.quotaMode === "custom" ? "custom" : "follow",
-						showDock: form.showDock !== false,
-						dockLayout: normalizeDockLayout(form.dockLayout),
-						showCapsule: form.showCapsule !== false,
-						showPopover: form.showPopover !== false,
-						provider: form.provider === "opencode-go" ? "opencode-go" : "deepseek",
-						warningThreshold: Number(form.warningThreshold),
-						dangerThreshold: Number(form.dangerThreshold),
-						refreshIntervalMs: Number(form.refreshIntervalMs),
-						clientPollIntervalMs: Number(form.clientPollIntervalMs),
-						timeoutMs: Number(form.timeoutMs),
-						opencodeApiKeyRef: String(form.opencodeApiKeyRef ?? "").trim(),
-						opencodeBaseUrl: String(form.opencodeBaseUrl ?? "").trim(),
-					};
-					// 空密钥不提交, 避免覆盖服务端已配置的 apiKey / opencodeApiKey。
-					if (String(form.apiKey ?? "").trim() !== "") payload.apiKey = String(form.apiKey).trim();
-					else delete payload.apiKey;
-					if (String(form.opencodeApiKey ?? "").trim() !== "") payload.opencodeApiKey = String(form.opencodeApiKey).trim();
-					else delete payload.opencodeApiKey;
+					if (cardId === "display") {
+						payload.showDock = merged.showDock !== false;
+						payload.dockLayout = normalizeDockLayout(merged.dockLayout);
+						payload.showCapsule = merged.showCapsule !== false;
+						payload.showPopover = merged.showPopover !== false;
+					} else if (cardId === "quota") {
+						payload.quotaMode = merged.quotaMode === "custom" ? "custom" : "follow";
+						payload.provider = merged.provider === "opencode-go" ? "opencode-go" : "deepseek";
+						payload.currency = String(merged.currency ?? "CNY").trim().toUpperCase();
+						payload.opencodeApiKeyRef = String(merged.opencodeApiKeyRef ?? "").trim();
+						payload.opencodeBaseUrl = String(merged.opencodeBaseUrl ?? "").trim();
+						if (String(merged.opencodeApiKey ?? "").trim() !== "") payload.opencodeApiKey = String(merged.opencodeApiKey).trim();
+						if (payload.currency !== String(baseline.currency ?? "").toUpperCase() && !isCardDirty("pricing", drafts.pricing, baseline)) {
+							const overlayPrices = { ...(baseline.prices || {}) };
+							for (const [model, p] of Object.entries(officialPricesFor(payload.currency))) overlayPrices[model] = p;
+							payload.prices = overlayPrices;
+							payload.defaultPrices = officialDefaultPrices(payload.currency);
+						}
+					} else if (cardId === "thresholds") {
+						payload.warningThreshold = Number(merged.warningThreshold);
+						payload.dangerThreshold = Number(merged.dangerThreshold);
+						payload.refreshIntervalMs = Number(merged.refreshIntervalMs);
+						payload.clientPollIntervalMs = Number(merged.clientPollIntervalMs);
+						payload.timeoutMs = Number(merged.timeoutMs);
+					} else if (cardId === "pricing") {
+						payload.prices = { ...(merged.prices || {}) };
+						payload.defaultPrices = { ...(merged.defaultPrices || officialDefaultPrices(merged.currency)) };
+					}
 					const res = await fetch("/query-credits/config", {
 						method: "POST",
 						headers: { "Content-Type": "application/json" },
@@ -1065,21 +1446,36 @@ window.__ModuleLoader__.load({
 					});
 					const data = await res.json();
 					if (data.ok) {
+						const nextBase = cloneSettings(baseline);
+						for (const [key, value] of Object.entries(payload)) {
+							if (SECRET_FIELDS.includes(key)) continue;
+							nextBase[key] = value;
+						}
+						if (cardId === "quota") {
+							nextBase.opencodeApiKey = "";
+						}
+						const nextDrafts = { ...drafts, [cardId]: null };
+						settingsDraftMem.baseline = nextBase;
+						settingsDraftMem.drafts = nextDrafts;
+						settingsDraftMem.hydrated = true;
+						persistSessionDraft();
+						setBaseline(nextBase);
+						setDrafts(nextDrafts);
 						showToast(t("settings.savedToast"));
 						void balanceStore.forceRefresh();
 						void spendStore.refresh();
 					} else {
-						alert("Save failed: " + (data.error || "unknown error"));
+						setFailedCard(cardId);
 					}
-				} catch (err) {
-					alert("Save failed: " + (err.message || String(err)));
+				} catch (_err) {
+					setFailedCard(cardId);
 				} finally {
-					setSaving(false);
+					setSavingCard(null);
 				}
 			};
 
 			const handleCopyYaml = () => {
-				const yaml = generateYaml(form);
+				const yaml = generateYaml(view);
 				if (navigator && navigator.clipboard && navigator.clipboard.writeText) {
 					navigator.clipboard.writeText(yaml).then(() => {
 						setCopied(true);
@@ -1089,456 +1485,475 @@ window.__ModuleLoader__.load({
 				}
 			};
 
-			const handleResetAll = () => setResetOpen(true);
-			const confirmResetAll = () => {
-				setForm({ ...DEFAULT_SETTINGS, prices: { ...DEFAULT_PRICES } });
-				setResetOpen(false);
-			};
+			const percentMode = view.provider === "opencode-go";
+			const showOpencode = view.quotaMode === "follow" || view.provider === "opencode-go";
+			const currency = view.currency ?? "CNY";
 
-			const handleResetPricing = () => {
-				setForm((prev) => ({ ...prev, prices: { ...DEFAULT_PRICES } }));
-			};
+			const displayCheck = (field, labelKey, hintKey) => react.createElement(FieldRow, {
+				t,
+				key: field,
+				label: t(labelKey),
+				hint: t(hintKey),
+				overridden: isSchemaOverridden(field, view[field], currency),
+				onReset: () => resetField("display", field),
+				disabled: savingCard === "display",
+				trailing: react.createElement("input", {
+					type: "checkbox",
+					className: "dshqb_check",
+					checked: view[field] !== false,
+					onChange: (e) => patchCard("display", { [field]: e.target.checked })
+				})
+			});
 
-			const handleAddModel = () => {
-				const name = newModelName.trim();
-				if (!name) return;
-				setForm((prev) => ({
-					...prev,
-					prices: {
-						...prev.prices,
-						[name]: {
-							cacheHit: Number(newModelHit),
-							cacheMiss: Number(newModelMiss),
-							output: Number(newModelOut)
-						}
-					}
-				}));
-				setNewModelName("");
-			};
-
-			const handleDeleteModel = (modelName) => {
-				setForm((prev) => {
-					const next = { ...prev.prices };
-					delete next[modelName];
-					return { ...prev, prices: next };
-				});
-			};
-
-			return react.createElement("div", {
-				className: "dshqb_settings_page"
+			const displayCard = react.createElement(PluginCard, {
+				t,
+				title: t("settings.card.display"),
+				description: t("settings.card.displayDesc"),
+				dirty: dirtyOf("display"),
+				open: open.display === true,
+				onToggle: () => toggleOpen("display"),
+				saving: savingCard === "display",
+				failed: failedCard === "display",
+				onDiscard: () => discardCard("display"),
+				onSave: () => { void saveCard("display"); },
+				key: "display"
 			}, [
-					react.createElement("div", { className: "dshqb_modal_header", key: "hdr" }, [
-						react.createElement("span", { key: "title" }, t("settings.title"))
+				react.createElement(FieldGrid, { key: "display_bar" }, [
+					displayCheck("showDock", "settings.showDock", "settings.showDockHint"),
+					react.createElement(FieldRow, {
+						t,
+						key: "dockLayout",
+						label: t("settings.dockLayout"),
+						hint: t("settings.dockLayoutHint"),
+						overridden: isSchemaOverridden("dockLayout", view.dockLayout, currency),
+						onReset: () => resetField("display", "dockLayout"),
+						disabled: savingCard === "display" || view.showDock === false
+					}, react.createElement("select", {
+						className: "dshqb_select",
+						value: normalizeDockLayout(view.dockLayout),
+						disabled: view.showDock === false,
+						onChange: (e) => patchCard("display", { dockLayout: normalizeDockLayout(e.target.value) })
+					}, [
+						react.createElement("option", { value: "own", key: "own" }, t("settings.dockLayout.own")),
+						react.createElement("option", { value: "shared", key: "shared" }, t("settings.dockLayout.shared"))
+					]))
+				]),
+				react.createElement(FieldGrid, { key: "display_extra" }, [
+					displayCheck("showCapsule", "settings.showCapsule", "settings.showCapsuleHint"),
+					displayCheck("showPopover", "settings.showPopover", "settings.showPopoverHint")
+				])
+			]);
+
+			const quotaCard = react.createElement(PluginCard, {
+				t,
+				title: t("settings.card.quota"),
+				description: t("settings.card.quotaDesc"),
+				dirty: dirtyOf("quota"),
+				open: open.quota === true,
+				onToggle: () => toggleOpen("quota"),
+				saving: savingCard === "quota",
+				failed: failedCard === "quota",
+				onDiscard: () => discardCard("quota"),
+				onSave: () => { void saveCard("quota"); },
+				key: "quota"
+			}, [
+				react.createElement(FieldGrid, { key: "quota_fields" }, [
+					react.createElement(FieldRow, {
+						t,
+						key: "quotaMode",
+						label: t("settings.quotaMode"),
+						hint: t("settings.quotaModeHint"),
+						overridden: isSchemaOverridden("quotaMode", view.quotaMode, currency),
+						onReset: () => resetField("quota", "quotaMode"),
+						disabled: savingCard === "quota"
+					}, react.createElement("select", {
+						className: "dshqb_select",
+						value: view.quotaMode === "custom" ? "custom" : "follow",
+						onChange: (e) => patchCard("quota", { quotaMode: e.target.value === "custom" ? "custom" : "follow" })
+					}, [
+						react.createElement("option", { value: "follow", key: "follow" }, t("settings.quotaMode.follow")),
+						react.createElement("option", { value: "custom", key: "custom" }, t("settings.quotaMode.custom"))
+					])),
+					react.createElement(FieldRow, {
+						t,
+						key: "provider",
+						label: t("settings.provider"),
+						hint: t(view.quotaMode === "custom" ? "settings.providerHintCustom" : "settings.providerHintFollow"),
+						overridden: isSchemaOverridden("provider", view.provider, currency),
+						onReset: () => resetField("quota", "provider"),
+						disabled: savingCard === "quota"
+					}, react.createElement("select", {
+						className: "dshqb_select",
+						value: view.provider,
+						onChange: (e) => patchCard("quota", { provider: e.target.value === "opencode-go" ? "opencode-go" : "deepseek" })
+					}, [
+						react.createElement("option", { value: "deepseek", key: "ds" }, t("settings.provider.deepseek")),
+						react.createElement("option", { value: "opencode-go", key: "oc" }, t("settings.provider.opencode"))
+					])),
+					react.createElement(FieldRow, {
+						t,
+						key: "currency",
+						label: t("settings.currency"),
+						hint: t(view.provider === "opencode-go" ? "settings.currencyHintQuota" : "settings.currencyHint"),
+						overridden: isSchemaOverridden("currency", view.currency, currency),
+						onReset: () => resetField("quota", "currency"),
+						disabled: savingCard === "quota"
+					}, react.createElement("select", {
+						className: "dshqb_select",
+						value: view.currency,
+						onChange: (e) => patchCard("quota", { currency: e.target.value })
+					}, [
+						react.createElement("option", { value: "CNY", key: "cny" }, "CNY (人民币 ¥)"),
+						react.createElement("option", { value: "USD", key: "usd" }, "USD (美元 $)"),
+						react.createElement("option", { value: "EUR", key: "eur" }, "EUR (欧元 €)")
+					])),
+					showOpencode ? react.createElement(FieldRow, {
+						t,
+						key: "oc_base",
+						wide: true,
+						label: t("settings.opencodeBaseUrl"),
+						overridden: isSchemaOverridden("opencodeBaseUrl", view.opencodeBaseUrl, currency),
+						onReset: () => resetField("quota", "opencodeBaseUrl"),
+						disabled: savingCard === "quota"
+					}, react.createElement("input", {
+						type: "text",
+						className: "dshqb_input",
+						value: view.opencodeBaseUrl,
+						onChange: (e) => patchCard("quota", { opencodeBaseUrl: e.target.value })
+					})) : null,
+					showOpencode ? react.createElement(FieldRow, {
+						t,
+						key: "oc_ref",
+						label: t("settings.opencodeApiKeyRef"),
+						hint: t("settings.opencodeApiKeyRefHint"),
+						overridden: isSchemaOverridden("opencodeApiKeyRef", view.opencodeApiKeyRef, currency),
+						onReset: () => resetField("quota", "opencodeApiKeyRef"),
+						disabled: savingCard === "quota"
+					}, react.createElement("input", {
+						type: "text",
+						className: "dshqb_input",
+						value: view.opencodeApiKeyRef,
+						onChange: (e) => patchCard("quota", { opencodeApiKeyRef: e.target.value })
+					})) : null,
+					showOpencode ? react.createElement(FieldRow, {
+						t,
+						key: "oc_key",
+						label: t("settings.opencodeApiKey"),
+						hint: t("settings.opencodeApiKeyHint"),
+						overridden: isSchemaOverridden("opencodeApiKey", view.opencodeApiKey, currency),
+						onReset: () => patchCard("quota", { opencodeApiKey: "" }),
+						disabled: savingCard === "quota"
+					}, react.createElement("input", {
+						type: "password",
+						className: "dshqb_input",
+						placeholder: "sk-opencode-…",
+						value: view.opencodeApiKey,
+						onChange: (e) => patchCard("quota", { opencodeApiKey: e.target.value })
+					})) : null
+				])
+			]);
+
+			const threshCard = react.createElement(PluginCard, {
+				t,
+				title: t("settings.card.thresholds"),
+				description: t("settings.card.thresholdsDesc"),
+				dirty: dirtyOf("thresholds"),
+				open: open.thresholds === true,
+				onToggle: () => toggleOpen("thresholds"),
+				saving: savingCard === "thresholds",
+				failed: failedCard === "thresholds",
+				onDiscard: () => discardCard("thresholds"),
+				onSave: () => { void saveCard("thresholds"); },
+				key: "thresholds"
+			}, [
+				react.createElement(InteractiveThresholdSlider, {
+					danger: view.dangerThreshold,
+					warning: view.warningThreshold,
+					currency: view.currency,
+					percentMode,
+					onChange: (nextDanger, nextWarning) => patchCard("thresholds", {
+						dangerThreshold: nextDanger,
+						warningThreshold: nextWarning
+					}),
+					t,
+					key: "slider"
+				}),
+				react.createElement(FieldGrid, { key: "thresh_pair" }, [
+					react.createElement(FieldRow, {
+						t,
+						key: "danger",
+						label: t(percentMode ? "settings.dangerPercent" : "settings.danger"),
+						hint: t(percentMode ? "settings.dangerHintQuota" : "settings.dangerHint"),
+						overridden: isSchemaOverridden("dangerThreshold", view.dangerThreshold, currency),
+						onReset: () => resetField("thresholds", "dangerThreshold"),
+						disabled: savingCard === "thresholds"
+					}, react.createElement("input", {
+						type: "number",
+						className: "dshqb_input",
+						value: view.dangerThreshold,
+						onChange: (e) => patchCard("thresholds", { dangerThreshold: Number(e.target.value) })
+					})),
+					react.createElement(FieldRow, {
+						t,
+						key: "warning",
+						label: t(percentMode ? "settings.warningPercent" : "settings.warning"),
+						hint: t(percentMode ? "settings.warningHintQuota" : "settings.warningHint"),
+						overridden: isSchemaOverridden("warningThreshold", view.warningThreshold, currency),
+						onReset: () => resetField("thresholds", "warningThreshold"),
+						disabled: savingCard === "thresholds"
+					}, react.createElement("input", {
+						type: "number",
+						className: "dshqb_input",
+						value: view.warningThreshold,
+						onChange: (e) => patchCard("thresholds", { warningThreshold: Number(e.target.value) })
+					}))
+				]),
+				react.createElement(FieldGrid, { key: "interval_pair" }, [
+					react.createElement(FieldRow, {
+						t,
+						key: "server_int",
+						label: t("settings.serverInterval"),
+						hint: t(percentMode ? "settings.serverIntervalHintQuota" : "settings.serverIntervalHint"),
+						overridden: isSchemaOverridden("refreshIntervalMs", view.refreshIntervalMs, currency),
+						onReset: () => resetField("thresholds", "refreshIntervalMs"),
+						disabled: savingCard === "thresholds"
+					}, react.createElement("select", {
+						className: "dshqb_select",
+						value: view.refreshIntervalMs,
+						onChange: (e) => patchCard("thresholds", { refreshIntervalMs: Number(e.target.value) })
+					}, [
+						react.createElement("option", { value: 60000, key: "1m" }, "1 分钟 (高频)"),
+						react.createElement("option", { value: 180000, key: "3m" }, "3 分钟"),
+						react.createElement("option", { value: 300000, key: "5m" }, "5 分钟 (推荐)"),
+						react.createElement("option", { value: 600000, key: "10m" }, "10 分钟")
+					])),
+					react.createElement(FieldRow, {
+						t,
+						key: "client_int",
+						label: t("settings.clientInterval"),
+						hint: t("settings.clientIntervalHint"),
+						overridden: isSchemaOverridden("clientPollIntervalMs", view.clientPollIntervalMs, currency),
+						onReset: () => resetField("thresholds", "clientPollIntervalMs"),
+						disabled: savingCard === "thresholds"
+					}, react.createElement("select", {
+						className: "dshqb_select",
+						value: view.clientPollIntervalMs,
+						onChange: (e) => patchCard("thresholds", { clientPollIntervalMs: Number(e.target.value) })
+					}, [
+						react.createElement("option", { value: 10000, key: "10s" }, "10 秒"),
+						react.createElement("option", { value: 30000, key: "30s" }, "30 秒 (推荐)"),
+						react.createElement("option", { value: 60000, key: "60s" }, "60 秒")
+					])),
+					react.createElement(FieldRow, {
+						t,
+						key: "timeout",
+						label: t("settings.timeout"),
+						hint: t("settings.timeoutHint"),
+						overridden: isSchemaOverridden("timeoutMs", view.timeoutMs, currency),
+						onReset: () => resetField("thresholds", "timeoutMs"),
+						disabled: savingCard === "thresholds"
+					}, react.createElement("input", {
+						type: "number",
+						className: "dshqb_input",
+						value: view.timeoutMs,
+						onChange: (e) => patchCard("thresholds", { timeoutMs: Number(e.target.value) })
+					}))
+				])
+			]);
+
+			const official = officialPricesFor(currency);
+			const pricingCard = react.createElement(PluginCard, {
+				t,
+				title: t("settings.card.pricing"),
+				description: t("settings.card.pricingDesc"),
+				dirty: dirtyOf("pricing"),
+				open: open.pricing === true,
+				onToggle: () => toggleOpen("pricing"),
+				saving: savingCard === "pricing",
+				failed: failedCard === "pricing",
+				onDiscard: () => discardCard("pricing"),
+				onSave: () => { void saveCard("pricing"); },
+				key: "pricing"
+			}, [
+				react.createElement("table", { className: "dshqb_pricing_table", key: "p_table" }, [
+					react.createElement("thead", { key: "th" }, [
+						react.createElement("tr", { key: "r" }, [
+							react.createElement("th", { key: "m" }, "Model"),
+							react.createElement("th", { key: "hit" }, t("settings.pricingHit") + " (" + currency + ")"),
+							react.createElement("th", { key: "miss" }, t("settings.pricingMiss") + " (" + currency + ")"),
+							react.createElement("th", { key: "out" }, t("settings.pricingOut") + " (" + currency + ")"),
+							react.createElement("th", { style: { width: "72px" }, key: "act" }, "")
+						])
 					]),
-					// 2. Tabs (常规与阈值 -> 模型单价 -> YAML导出)
-					react.createElement("div", { className: "dshqb_modal_tabs", key: "tabs" }, [
-						react.createElement("button", {
-							className: "dshqb_modal_tab" + (activeTab === "general" ? " dshqb_modal_tab_active" : ""),
-							onClick: () => setActiveTab("general"),
-							key: "tab_general"
-						}, t("settings.tab.general")),
-						react.createElement("button", {
-							className: "dshqb_modal_tab" + (activeTab === "pricing" ? " dshqb_modal_tab_active" : ""),
-							onClick: () => setActiveTab("pricing"),
-							key: "tab_pricing"
-						}, t("settings.tab.pricing")),
-						react.createElement("button", {
-							className: "dshqb_modal_tab" + (activeTab === "export" ? " dshqb_modal_tab_active" : ""),
-							onClick: () => setActiveTab("export"),
-							key: "tab_export"
-						}, t("settings.tab.export"))
-					]),
-					// 3. Body
-					react.createElement("div", { className: "dshqb_modal_body", key: "body" }, [
-						// Tab 1: 常规与阈值 (告急阈值在前，预警阈值在后，支持拖拽设置)
-						activeTab === "general" ? react.createElement("div", { className: "dshqb_col", key: "general_content" }, [
-							react.createElement("div", { className: "dshqb_toggle_list", key: "display" }, [
-								["showDock", "settings.showDock", "settings.showDockHint"],
-								["showCapsule", "settings.showCapsule", "settings.showCapsuleHint"],
-								["showPopover", "settings.showPopover", "settings.showPopoverHint"]
-							].map(([field, labelKey, hintKey]) =>
-								react.createElement("label", { className: "dshqb_toggle_row", key: field }, [
-									react.createElement("span", { className: "dshqb_toggle_copy", key: "txt" }, [
-										react.createElement("span", { className: "dshqb_form_label", key: "l" }, t(labelKey)),
-										react.createElement("span", { className: "dshqb_form_hint", key: "h" }, t(hintKey))
-									]),
+					react.createElement("tbody", { key: "tb" },
+						Object.entries(view.prices || {}).map(([model, rates]) => {
+							const officialRates = official[model];
+							const overridden = !officialRates || !pricesEqualModel(rates, officialRates);
+							return react.createElement("tr", { key: model }, [
+								react.createElement("td", { style: { fontWeight: "600" }, key: "m_name" }, [
+									react.createElement("div", { key: "n" }, model),
+									overridden ? react.createElement("button", {
+										type: "button",
+										className: "dshqb_model_reset",
+										onClick: () => {
+											const next = { ...(view.prices || {}) };
+											if (officialRates) next[model] = { ...officialRates };
+											else delete next[model];
+											patchCard("pricing", { prices: next });
+										},
+										key: "rst"
+									}, t("settings.resetField")) : null
+								]),
+								react.createElement("td", { key: "m_hit" }, [
 									react.createElement("input", {
-										type: "checkbox",
-										className: "dshqb_check",
-										checked: form[field] !== false,
-										onChange: (e) => setForm({ ...form, [field]: e.target.checked }),
-										key: "chk"
+										type: "number",
+										step: "0.001",
+										className: "dshqb_input dshqb_input_num",
+										value: rates.cacheHit,
+										onChange: (e) => patchCard("pricing", {
+											prices: { ...view.prices, [model]: { ...rates, cacheHit: Number(e.target.value) } }
+										})
 									})
-								])
-							)),
-							react.createElement("div", { className: "dshqb_form_group", key: "dockLayout" }, [
-								react.createElement("label", { className: "dshqb_form_label", key: "lbl" }, t("settings.dockLayout")),
-								react.createElement("select", {
-									className: "dshqb_select",
-									value: normalizeDockLayout(form.dockLayout),
-									disabled: form.showDock === false,
-									onChange: (e) => setForm({ ...form, dockLayout: normalizeDockLayout(e.target.value) }),
-									key: "sel"
-								}, [
-									react.createElement("option", { value: "own", key: "own" }, t("settings.dockLayout.own")),
-									react.createElement("option", { value: "shared", key: "shared" }, t("settings.dockLayout.shared"))
 								]),
-								react.createElement("span", { className: "dshqb_form_hint", key: "hint" }, t("settings.dockLayoutHint"))
-							]),
-							react.createElement("div", { className: "dshqb_form_group", key: "quotaMode" }, [
-								react.createElement("label", { className: "dshqb_form_label", key: "lbl" }, t("settings.quotaMode")),
-								react.createElement("select", {
-									className: "dshqb_select",
-									value: form.quotaMode === "custom" ? "custom" : "follow",
-									onChange: (e) => setForm({ ...form, quotaMode: e.target.value === "custom" ? "custom" : "follow" }),
-									key: "sel"
-								}, [
-									react.createElement("option", { value: "follow", key: "follow" }, t("settings.quotaMode.follow")),
-									react.createElement("option", { value: "custom", key: "custom" }, t("settings.quotaMode.custom"))
-								]),
-								react.createElement("span", { className: "dshqb_form_hint", key: "hint" }, t("settings.quotaModeHint"))
-							]),
-							react.createElement("div", { className: "dshqb_form_group", key: "provider" }, [
-								react.createElement("label", { className: "dshqb_form_label", key: "lbl" }, t("settings.provider")),
-								react.createElement("select", {
-									className: "dshqb_select",
-									value: form.provider,
-									onChange: (e) => setForm({ ...form, provider: e.target.value === "opencode-go" ? "opencode-go" : "deepseek" }),
-									key: "sel"
-								}, [
-									react.createElement("option", { value: "deepseek", key: "ds" }, t("settings.provider.deepseek")),
-									react.createElement("option", { value: "opencode-go", key: "oc" }, t("settings.provider.opencode"))
-								]),
-								react.createElement("span", { className: "dshqb_form_hint", key: "hint" }, t(form.quotaMode === "custom" ? "settings.providerHintCustom" : "settings.providerHintFollow"))
-							]),
-							react.createElement("div", { className: "dshqb_form_group", key: "cur" }, [
-								react.createElement("label", { className: "dshqb_form_label", key: "lbl" }, t("settings.currency")),
-								react.createElement("select", {
-									className: "dshqb_select",
-									value: form.currency,
-									onChange: (e) => {
-										const next = e.target.value;
-										setForm((prev) => {
-											const official = officialPricesFor(next);
-											const prices = { ...(prev.prices || {}) };
-											for (const [model, p] of Object.entries(official)) prices[model] = p;
-											return { ...prev, currency: next, prices, defaultPrices: officialDefaultPrices(next) };
-										});
-									},
-									key: "sel"
-								}, [
-									react.createElement("option", { value: "CNY", key: "cny" }, "CNY (人民币 ¥)"),
-									react.createElement("option", { value: "USD", key: "usd" }, "USD (美元 $)"),
-									react.createElement("option", { value: "EUR", key: "eur" }, "EUR (欧元 €)")
-								]),
-								react.createElement("span", { className: "dshqb_form_hint", key: "hint" }, t(form.provider === "opencode-go" ? "settings.currencyHintQuota" : "settings.currencyHint"))
-							]),
-							// OpenCode Go 专属配置
-							form.quotaMode === "follow" || form.provider === "opencode-go" ? react.createElement("div", { className: "dshqb_col", key: "opencode_fields" }, [
-								react.createElement("div", { className: "dshqb_form_group", key: "oc_base" }, [
-									react.createElement("label", { className: "dshqb_form_label", key: "lbl" }, t("settings.opencodeBaseUrl")),
-									react.createElement("input", {
-										type: "text",
-										className: "dshqb_input",
-										value: form.opencodeBaseUrl,
-										onChange: (e) => setForm({ ...form, opencodeBaseUrl: e.target.value }),
-										key: "inp"
-									}),
-									react.createElement("span", { className: "dshqb_form_hint", key: "hint" }, t("settings.opencodeBaseUrlHint"))
-								]),
-								react.createElement("div", { className: "dshqb_grid_2", key: "oc_keys" }, [
-									react.createElement("div", { className: "dshqb_form_group", key: "oc_ref" }, [
-										react.createElement("label", { className: "dshqb_form_label", key: "lbl" }, t("settings.opencodeApiKeyRef")),
-										react.createElement("input", {
-											type: "text",
-											className: "dshqb_input",
-											value: form.opencodeApiKeyRef,
-											onChange: (e) => setForm({ ...form, opencodeApiKeyRef: e.target.value }),
-											key: "inp"
-										}),
-										react.createElement("span", { className: "dshqb_form_hint", key: "hint" }, t("settings.opencodeApiKeyRefHint"))
-									]),
-									react.createElement("div", { className: "dshqb_form_group", key: "oc_key" }, [
-										react.createElement("label", { className: "dshqb_form_label", key: "lbl" }, t("settings.opencodeApiKey")),
-										react.createElement("input", {
-											type: "password",
-											className: "dshqb_input",
-											placeholder: "sk-opencode-…",
-											value: form.opencodeApiKey,
-											onChange: (e) => setForm({ ...form, opencodeApiKey: e.target.value }),
-											key: "inp"
-										}),
-										react.createElement("span", { className: "dshqb_form_hint", key: "hint" }, t("settings.opencodeApiKeyHint"))
-									])
-								]),
-							]) : null,
-							// 交互式滑块条组件
-							react.createElement(InteractiveThresholdSlider, {
-								danger: form.dangerThreshold,
-								warning: form.warningThreshold,
-								currency: form.currency,
-								percentMode: form.provider === "opencode-go",
-								onChange: (nextDanger, nextWarning) => {
-									setForm((prev) => ({
-										...prev,
-										dangerThreshold: nextDanger,
-										warningThreshold: nextWarning
-									}));
-								},
-								t,
-								key: "slider"
-							}),
-							// 阈值数值输入框 (左: 告急阈值, 右: 预警阈值)
-							react.createElement("div", { className: "dshqb_grid_2", key: "thresh_grid" }, [
-								react.createElement("div", { className: "dshqb_form_group", key: "dang" }, [
-									react.createElement("label", { className: "dshqb_form_label", key: "lbl" }, t(form.provider === "opencode-go" ? "settings.dangerPercent" : "settings.danger")),
+								react.createElement("td", { key: "m_miss" }, [
 									react.createElement("input", {
 										type: "number",
-										className: "dshqb_input",
-										value: form.dangerThreshold,
-										onChange: (e) => setForm({ ...form, dangerThreshold: Number(e.target.value) }),
-										key: "inp"
-									}),
-									react.createElement("span", { className: "dshqb_form_hint", key: "hint" }, t(form.provider === "opencode-go" ? "settings.dangerHintQuota" : "settings.dangerHint"))
+										step: "0.01",
+										className: "dshqb_input dshqb_input_num",
+										value: rates.cacheMiss,
+										onChange: (e) => patchCard("pricing", {
+											prices: { ...view.prices, [model]: { ...rates, cacheMiss: Number(e.target.value) } }
+										})
+									})
 								]),
-								react.createElement("div", { className: "dshqb_form_group", key: "warn" }, [
-									react.createElement("label", { className: "dshqb_form_label", key: "lbl" }, t(form.provider === "opencode-go" ? "settings.warningPercent" : "settings.warning")),
+								react.createElement("td", { key: "m_out" }, [
 									react.createElement("input", {
 										type: "number",
-										className: "dshqb_input",
-										value: form.warningThreshold,
-										onChange: (e) => setForm({ ...form, warningThreshold: Number(e.target.value) }),
-										key: "inp"
-									}),
-									react.createElement("span", { className: "dshqb_form_hint", key: "hint" }, t(form.provider === "opencode-go" ? "settings.warningHintQuota" : "settings.warningHint"))
-								])
-							]),
-							react.createElement("div", { className: "dshqb_grid_2", key: "int_grid" }, [
-								react.createElement("div", { className: "dshqb_form_group", key: "server_int" }, [
-									react.createElement("label", { className: "dshqb_form_label", key: "lbl" }, t("settings.serverInterval")),
-									react.createElement("select", {
-										className: "dshqb_select",
-										value: form.refreshIntervalMs,
-										onChange: (e) => setForm({ ...form, refreshIntervalMs: Number(e.target.value) }),
-										key: "sel"
-									}, [
-										react.createElement("option", { value: 60000, key: "1m" }, "1 分钟 (高频)"),
-										react.createElement("option", { value: 180000, key: "3m" }, "3 分钟"),
-										react.createElement("option", { value: 300000, key: "5m" }, "5 分钟 (推荐)"),
-										react.createElement("option", { value: 600000, key: "10m" }, "10 分钟")
-									]),
-									react.createElement("span", { className: "dshqb_form_hint", key: "hint" }, t(form.provider === "opencode-go" ? "settings.serverIntervalHintQuota" : "settings.serverIntervalHint"))
+										step: "0.01",
+										className: "dshqb_input dshqb_input_num",
+										value: rates.output,
+										onChange: (e) => patchCard("pricing", {
+											prices: { ...view.prices, [model]: { ...rates, output: Number(e.target.value) } }
+										})
+									})
 								]),
-								react.createElement("div", { className: "dshqb_form_group", key: "client_int" }, [
-									react.createElement("label", { className: "dshqb_form_label", key: "lbl" }, t("settings.clientInterval")),
-									react.createElement("select", {
-										className: "dshqb_select",
-										value: form.clientPollIntervalMs,
-										onChange: (e) => setForm({ ...form, clientPollIntervalMs: Number(e.target.value) }),
-										key: "sel"
-									}, [
-										react.createElement("option", { value: 10000, key: "10s" }, "10 秒"),
-										react.createElement("option", { value: 30000, key: "30s" }, "30 秒 (推荐)"),
-										react.createElement("option", { value: 60000, key: "60s" }, "60 秒")
-									]),
-									react.createElement("span", { className: "dshqb_form_hint", key: "hint" }, t("settings.clientIntervalHint"))
+								react.createElement("td", { key: "m_del" }, [
+									!model.toLowerCase().includes("v4") ? react.createElement("button", {
+										type: "button",
+										className: "dshqb_btn_del",
+										onClick: () => {
+											const next = { ...view.prices };
+											delete next[model];
+											patchCard("pricing", { prices: next });
+										},
+										title: "移除该模型",
+										key: "del"
+									}, "🗑️") : null
 								])
-							])
-						]) : null,
+							]);
+						})
+					)
+				]),
+				react.createElement("div", { className: "dshqb_add_model_box", key: "add_box" }, [
+					react.createElement("input", {
+						type: "text",
+						className: "dshqb_input",
+						style: { flex: 2 },
+						placeholder: t("settings.addModelName"),
+						value: newModelName,
+						onChange: (e) => setNewModelName(e.target.value),
+						key: "inp_name"
+					}),
+					react.createElement("input", {
+						type: "number",
+						step: "0.01",
+						className: "dshqb_input dshqb_input_num",
+						title: t("settings.pricingHit"),
+						placeholder: "命中",
+						value: newModelHit,
+						onChange: (e) => setNewModelHit(Number(e.target.value)),
+						key: "inp_hit"
+					}),
+					react.createElement("input", {
+						type: "number",
+						step: "0.01",
+						className: "dshqb_input dshqb_input_num",
+						title: t("settings.pricingMiss"),
+						placeholder: "未命中",
+						value: newModelMiss,
+						onChange: (e) => setNewModelMiss(Number(e.target.value)),
+						key: "inp_miss"
+					}),
+					react.createElement("input", {
+						type: "number",
+						step: "0.01",
+						className: "dshqb_input dshqb_input_num",
+						title: t("settings.pricingOut"),
+						placeholder: "输出",
+						value: newModelOut,
+						onChange: (e) => setNewModelOut(Number(e.target.value)),
+						key: "inp_out"
+					}),
+					react.createElement("button", {
+						type: "button",
+						className: "dshqb_btn dshqb_btn_secondary",
+						onClick: () => {
+							const name = newModelName.trim();
+							if (!name) return;
+							patchCard("pricing", {
+								prices: {
+									...view.prices,
+									[name]: {
+										cacheHit: Number(newModelHit),
+										cacheMiss: Number(newModelMiss),
+										output: Number(newModelOut)
+									}
+								}
+							});
+							setNewModelName("");
+						},
+						key: "btn_add"
+					}, t("settings.btnAdd"))
+				])
+			]);
 
-						// Tab 2: 模型单价 (默认显示 V4 并支持手动添加自定义模型)
-						activeTab === "pricing" ? react.createElement("div", { className: "dshqb_col", key: "pricing_content" }, [
-							react.createElement("div", { className: "dshqb_form_label_row", key: "p_head" }, [
-								react.createElement("span", { className: "dshqb_form_hint", key: "desc" }, t("settings.pricingDesc")),
-								react.createElement("button", {
-									type: "button",
-									className: "dshqb_btn dshqb_btn_outline",
-									style: { padding: "3px 8px", fontSize: "11px" },
-									onClick: handleResetPricing,
-									key: "p_reset"
-								}, t("settings.pricingReset"))
-							]),
-							react.createElement("table", { className: "dshqb_pricing_table", key: "p_table" }, [
-								react.createElement("thead", { key: "th" }, [
-									react.createElement("tr", { key: "r" }, [
-										react.createElement("th", { key: "m" }, "Model"),
-										react.createElement("th", { key: "hit" }, t("settings.pricingHit") + " (" + form.currency + ")"),
-										react.createElement("th", { key: "miss" }, t("settings.pricingMiss") + " (" + form.currency + ")"),
-										react.createElement("th", { key: "out" }, t("settings.pricingOut") + " (" + form.currency + ")"),
-										react.createElement("th", { style: { width: "32px" }, key: "act" }, "")
-									])
-								]),
-								react.createElement("tbody", { key: "tb" },
-									Object.entries(form.prices || {}).map(([model, rates]) =>
-										react.createElement("tr", { key: model }, [
-											react.createElement("td", { style: { fontWeight: "600" }, key: "m_name" }, model),
-											react.createElement("td", { key: "m_hit" }, [
-												react.createElement("input", {
-													type: "number",
-													step: "0.001",
-													className: "dshqb_input dshqb_input_num",
-													value: rates.cacheHit,
-													onChange: (e) => {
-														const val = Number(e.target.value);
-														setForm({
-															...form,
-															prices: { ...form.prices, [model]: { ...rates, cacheHit: val } }
-														});
-													}
-												})
-											]),
-											react.createElement("td", { key: "m_miss" }, [
-												react.createElement("input", {
-													type: "number",
-													step: "0.01",
-													className: "dshqb_input dshqb_input_num",
-													value: rates.cacheMiss,
-													onChange: (e) => {
-														const val = Number(e.target.value);
-														setForm({
-															...form,
-															prices: { ...form.prices, [model]: { ...rates, cacheMiss: val } }
-														});
-													}
-												})
-											]),
-											react.createElement("td", { key: "m_out" }, [
-												react.createElement("input", {
-													type: "number",
-													step: "0.01",
-													className: "dshqb_input dshqb_input_num",
-													value: rates.output,
-													onChange: (e) => {
-														const val = Number(e.target.value);
-														setForm({
-															...form,
-															prices: { ...form.prices, [model]: { ...rates, output: val } }
-														});
-													}
-												})
-											]),
-											react.createElement("td", { key: "m_del" }, [
-												!model.toLowerCase().includes("v4") ? react.createElement("button", {
-													type: "button",
-													className: "dshqb_btn_del",
-													onClick: () => handleDeleteModel(model),
-													title: "移除该模型",
-													key: "del"
-												}, "🗑️") : null
-											])
-										])
-									)
-								)
-							]),
-							// 手动添加自定义模型栏
-							react.createElement("div", { className: "dshqb_add_model_box", key: "add_box" }, [
-								react.createElement("input", {
-									type: "text",
-									className: "dshqb_input",
-									style: { flex: 2 },
-									placeholder: t("settings.addModelName"),
-									value: newModelName,
-									onChange: (e) => setNewModelName(e.target.value),
-									key: "inp_name"
-								}),
-								react.createElement("input", {
-									type: "number",
-									step: "0.01",
-									className: "dshqb_input dshqb_input_num",
-									title: t("settings.pricingHit"),
-									placeholder: "命中",
-									value: newModelHit,
-									onChange: (e) => setNewModelHit(Number(e.target.value)),
-									key: "inp_hit"
-								}),
-								react.createElement("input", {
-									type: "number",
-									step: "0.01",
-									className: "dshqb_input dshqb_input_num",
-									title: t("settings.pricingMiss"),
-									placeholder: "未命中",
-									value: newModelMiss,
-									onChange: (e) => setNewModelMiss(Number(e.target.value)),
-									key: "inp_miss"
-								}),
-								react.createElement("input", {
-									type: "number",
-									step: "0.01",
-									className: "dshqb_input dshqb_input_num",
-									title: t("settings.pricingOut"),
-									placeholder: "输出",
-									value: newModelOut,
-									onChange: (e) => setNewModelOut(Number(e.target.value)),
-									key: "inp_out"
-								}),
-								react.createElement("button", {
-									type: "button",
-									className: "dshqb_btn dshqb_btn_secondary",
-									onClick: handleAddModel,
-									key: "btn_add"
-								}, t("settings.btnAdd"))
-							])
-						]) : null,
+			const exportCard = react.createElement(PluginCard, {
+				t,
+				title: t("settings.card.export"),
+				description: t("settings.card.exportDesc"),
+				dirty: false,
+				open: open.export === true,
+				onToggle: () => toggleOpen("export"),
+				saving: false,
+				failed: false,
+				onDiscard: () => {},
+				onSave: () => {},
+				hideFooter: true,
+				key: "export"
+			}, [
+				react.createElement("pre", { className: "dshqb_code_block", key: "code" }, generateYaml(view)),
+				react.createElement("div", { style: { display: "flex", justifyContent: "flex-end", paddingTop: "8px" }, key: "act" }, [
+					react.createElement("button", {
+						type: "button",
+						className: "dshqb_btn dshqb_btn_secondary",
+						onClick: handleCopyYaml,
+						key: "btn_copy"
+					}, copied ? t("settings.copied") : t("settings.btnCopy"))
+				])
+			]);
 
-						// Tab 3: YAML 导出
-						activeTab === "export" ? react.createElement("div", { className: "dshqb_col", key: "export_content" }, [
-							react.createElement("span", { className: "dshqb_form_hint", key: "desc" }, t("settings.exportDesc")),
-							react.createElement("pre", { className: "dshqb_code_block", key: "code" }, generateYaml(form)),
-							react.createElement("div", { style: { display: "flex", justifyContent: "flex-end" }, key: "act" }, [
-								react.createElement("button", {
-									type: "button",
-									className: "dshqb_btn dshqb_btn_secondary",
-									onClick: handleCopyYaml,
-									key: "btn_copy"
-								}, copied ? t("settings.copied") : t("settings.btnCopy"))
-							])
-						]) : null
-					]),
-					// 4. Footer
-					react.createElement("div", { className: "dshqb_modal_footer", key: "ftr" }, [
-						react.createElement("button", {
-							type: "button",
-							className: "dshqb_btn dshqb_btn_outline",
-							onClick: handleResetAll,
-							key: "btn_reset"
-						}, t("settings.btnResetAll")),
-						react.createElement("button", {
-							type: "button",
-							className: "dshqb_btn dshqb_btn_primary",
-							onClick: handleSave,
-							disabled: saving,
-							key: "btn_save"
-						}, saving ? t("settings.saving") : t("settings.btnSave"))
-					]),
-				resetOpen ? react.createElement("div", {
-					className: "dshqb_confirm_mask",
-					key: "reset_mask",
-					onClick: (e) => {
-						if (e.target === e.currentTarget) setResetOpen(false);
-					}
-				}, react.createElement("div", {
-					className: "dshqb_confirm",
-					role: "dialog",
-					"aria-modal": "true",
-					"aria-labelledby": "dshqb-reset-title"
-				}, [
-					react.createElement("div", { className: "dshqb_confirm_title", id: "dshqb-reset-title", key: "t" }, t("settings.resetConfirmTitle")),
-					react.createElement("div", { className: "dshqb_confirm_body", key: "b" }, t("settings.resetConfirmBody")),
-					react.createElement("div", { className: "dshqb_confirm_actions", key: "a" }, [
-						react.createElement("button", {
-							type: "button",
-							className: "dshqb_btn dshqb_btn_secondary",
-							onClick: () => setResetOpen(false),
-							key: "cancel"
-						}, t("settings.resetConfirmCancel")),
-						react.createElement("button", {
-							type: "button",
-							className: "dshqb_btn dshqb_btn_primary",
-							onClick: confirmResetAll,
-							key: "ok"
-						}, t("settings.resetConfirmOk"))
-					])
-				])) : null,
+			return react.createElement("div", { className: "dshqb_settings_page" }, [
+				react.createElement("div", { className: "dshqb_settings_intro", key: "intro" }, [
+					react.createElement("span", { className: "dshqb_settings_intro_title", key: "title" }, t("settings.title")),
+					react.createElement("span", { className: "dshqb_settings_desc", key: "desc" }, t("settings.desc"))
+				]),
+				react.createElement("ul", { className: "dshqb_pcard_list", key: "cards" }, [
+					displayCard,
+					quotaCard,
+					threshCard,
+					pricingCard,
+					exportCard
+				]),
 				toast ? react.createElement("div", { className: "dshqb_toast", key: "toast" }, toast) : null
 			]);
 		}
