@@ -156,11 +156,13 @@ async function runTests() {
   assert.equal(resGetConfig.data.config.dangerThreshold, 5)
   assert.equal(resGetConfig.data.config.currency, 'CNY')
   assert.equal(resGetConfig.data.config.provider, 'deepseek')
+  assert.equal(resGetConfig.data.config.enabled, true)
   assert.equal(resGetConfig.data.config.quotaMode, 'follow')
   assert.equal(resGetConfig.data.config.showDock, true)
   assert.equal(resGetConfig.data.config.dockLayout, 'own')
-  assert.equal(resGetConfig.data.config.showCapsule, true)
-  assert.equal(resGetConfig.data.config.showPopover, true)
+assert.equal(resGetConfig.data.config.showCapsule, true)
+assert.equal(resGetConfig.data.config.showPopover, true)
+assert.equal(resGetConfig.data.config.showTps, true)
   assert.equal(resGetConfig.data.config.opencodeBaseUrl, 'https://opencode.ai/zen/go/v1/usage')
   console.log('GET /query-credits/config passed')
 
@@ -225,22 +227,35 @@ async function runTests() {
   console.log('quotaSourceFromProvider / resolveQuotaSource mapping passed')
 
   const resQuotaMode = await invokeRoute('/query-credits/config', 'POST', {
+    enabled: false,
     quotaMode: 'custom',
     showDock: false,
     dockLayout: 'shared',
     showCapsule: true,
     showPopover: false,
+    showTps: false,
+    prices: {
+      'deepseek-v4-flash': { cacheHit: 0.02, cacheMiss: 1, output: 2 },
+      'disabled-price-test': { cacheHit: 0.03, cacheMiss: 0.4, output: 0.8 },
+    },
+    defaultPrices: { cacheHit: 0.04, cacheMiss: 0.5, output: 0.9 },
   })
-  assert.equal(resQuotaMode.data.config.quotaMode, 'custom')
-  assert.equal(resQuotaMode.data.config.showDock, false)
-  assert.equal(resQuotaMode.data.config.dockLayout, 'shared')
+  assert.equal(resQuotaMode.data.config.quotaMode, 'follow', 'disabled global switch should ignore other config updates')
+  assert.equal(resQuotaMode.data.config.enabled, false)
+  assert.equal(resQuotaMode.data.config.showDock, true)
+  assert.equal(resQuotaMode.data.config.dockLayout, 'own')
   assert.equal(resQuotaMode.data.config.showCapsule, true)
-  assert.equal(resQuotaMode.data.config.showPopover, false)
+  assert.equal(resQuotaMode.data.config.showPopover, true)
+  assert.equal(resQuotaMode.data.config.showTps, true)
+  assert.deepEqual(resQuotaMode.data.config.prices['disabled-price-test'], { cacheHit: 0.03, cacheMiss: 0.4, output: 0.8 }, 'disabled global switch should still allow model price updates')
+  assert.deepEqual(resQuotaMode.data.config.defaultPrices, { cacheHit: 0.04, cacheMiss: 0.5, output: 0.9 }, 'disabled global switch should still allow default price updates')
   const resQuotaPayload = await invokeRoute('/query-credits', 'GET')
-  assert.equal(resQuotaPayload.data.quotaMode, 'custom')
-  assert.equal(resQuotaPayload.data.showDock, false)
-  assert.equal(resQuotaPayload.data.dockLayout, 'shared')
-  assert.equal(resQuotaPayload.data.showPopover, false)
+  assert.equal(resQuotaPayload.data.quotaMode, 'follow')
+  assert.equal(resQuotaPayload.data.enabled, false)
+  assert.equal(resQuotaPayload.data.showDock, true)
+  assert.equal(resQuotaPayload.data.dockLayout, 'own')
+  assert.equal(resQuotaPayload.data.showPopover, true)
+  assert.equal(resQuotaPayload.data.showTps, true)
   console.log('quotaMode / display flags config passed')
 
   const resOpenCodeConn = await invokeRoute('/query-credits/test-connection', 'POST', {
@@ -292,4 +307,3 @@ runTests().catch((err) => {
   console.error('Test failed:', err)
   process.exit(1)
 })
-

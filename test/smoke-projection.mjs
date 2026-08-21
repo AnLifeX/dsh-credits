@@ -3,7 +3,7 @@
  * 同步骤替换语义、模型归属、花费计算与 schema 校验。
  * 运行: node test/smoke-projection.mjs
  */
-import { makeCostProjection, resolveModelPrice } from '../src/index.js'
+import { makeCostProjection, makeTpsProjection, resolveModelPrice } from '../src/index.js'
 import assert from 'node:assert/strict'
 
 const usdFlash = resolveModelPrice({
@@ -119,3 +119,49 @@ assert.equal(v4Def.view(v4State).cost, 4.5, 'session cost must sum peak 3 + off-
 v4 = { ...v4, currency: 'USD', pricingEpoch: 1 }
 assert.equal(v4Def.view(v4State).cost, 0.63)
 console.log('PROJECTION TEST PASSED')
+
+// 实时 TPS 投影：流式输出按字符估算，step/end 后保留最近一次速率。
+const tpsDef = makeTpsProjection()
+let tpsState = tpsDef.init()
+tpsState = tpsDef.apply(tpsState, {
+  type: 'step/start',
+  time: 1000,
+  data: { turn: 0, step: 0 },
+})
+tpsState = tpsDef.apply(tpsState, {
+  type: 'assistant/chunk',
+  time: 1000,
+  data: { turn: 0, step: 0, chunk: { type: 'text-delta', index: 0, text: 'a'.repeat(40) } },
+})
+tpsState = tpsDef.apply(tpsState, {
+  type: 'assistant/chunk',
+  time: 3000,
+  data: { turn: 0, step: 0, chunk: { type: 'text-delta', index: 0, text: 'b'.repeat(40) } },
+})
+assert.equal(tpsDef.view(tpsState).tokensPerSecond, 12, 'streaming output should expose estimated TPS')
+tpsState = tpsDef.apply(tpsState, {
+  type: 'step/end',
+  time: 3000,
+  data: { turn: 0, step: 0 },
+})
+tpsDef.schema.parse(tpsDef.view(tpsState))
+assert.equal(tpsDef.view(tpsState).tokensPerSecond, 12, 'last TPS should remain visible after step end')
+
+// provider 精确 usage 替换流式估算，但保留首个输出时间用于速率计算。
+tpsState = tpsDef.apply(tpsState, {
+  type: 'step/start',
+  time: 5000,
+  data: { turn: 0, step: 1 },
+})
+tpsState = tpsDef.apply(tpsState, {
+  type: 'assistant/chunk',
+  time: 5000,
+  data: { turn: 0, step: 1, chunk: { type: 'text-delta', index: 0, text: 'c'.repeat(20) } },
+})
+tpsState = tpsDef.apply(tpsState, {
+  type: 'assistant/chunk',
+  time: 7000,
+  data: { turn: 0, step: 1, chunk: { type: 'usage', usage: { inputTokens: 100, outputTokens: 30, cacheReadTokens: 0, cacheWriteTokens: 0 } } },
+})
+assert.equal(tpsDef.view(tpsState).tokensPerSecond, 15, 'exact usage should replace estimated output for TPS')
+console.log('TPS PROJECTION TEST PASSED')

@@ -9,8 +9,9 @@
  *    DeepSeek 密钥优先取 `apiKey`, 否则经 credentials 解析 `apiKeyRef`; OpenCode Go
  *    密钥优先取 `opencodeApiKey`, 再经 credentials/环境变量解析 `opencodeApiKeyRef`,
  *    最后回退读取 OpenCode CLI 的 `~/.local/share/opencode/auth.json`。
- * 2. 会话花费投影: 注册 `sessionProjections` 单元 `queryCreditsCost`, 在已提交的
- *    会话事件上按模型折叠 token 用量, 用配置中的单价估算本会话消耗。
+ * 2. 会话投影: 注册 `queryCreditsCost` 花费单元与 `liveTokenUsage` TPS 单元；前者
+ *    在已提交的会话事件上按模型折叠 token 用量并计价，后者从流式输出事件估算
+ *    生成吞吐，收到 provider usage 后替换为精确输出 token。
  *
  * 投影折叠规则与 dsh-token-meter 的 tokenUsage 一致(同 (turn,step) 的样本替换
  * 而非重复计数); 模型取自 `request/header` / `request/context`(last-wins)。
@@ -58,6 +59,8 @@ const ModelPrice = Schema.object({
 })
 
 export const Config = Schema.object({
+  /** 整个额度功能总开关；关闭后不查询额度且前端隐藏所有额度 UI */
+  enabled: Schema.boolean().default(true),
   /** follow=跟随当前对话模型; custom=固定使用 provider */
   quotaMode: Schema.union(QUOTA_MODES).default('follow'),
   /** 底部统计条是否展示额度读数 */
@@ -68,6 +71,8 @@ export const Config = Schema.object({
   showCapsule: Schema.boolean().default(true),
   /** 悬停额度/花费详情气泡 */
   showPopover: Schema.boolean().default(true),
+  /** 底部统计条是否展示实时生成吞吐 TPS */
+  showTps: Schema.boolean().default(true),
   /** 自定义模式的数据源; 跟随模式下仅在无法识别当前模型时作为回退 */
   provider: Schema.union(PROVIDERS).default('deepseek'),
   /** 显式 DeepSeek API 密钥; 留空则走 apiKeyRef(credentials / 环境变量) */
@@ -271,6 +276,171 @@ export const makeCostProjection = (configOrGetter) => {
   }
 }
 
+/**
+ * 会话实时输出吞吐投影。
+ *
+ * 仅消费 DSH 会话事件，不访问网络：流式 chunk 阶段按字符数估算输出 token，
+ * 收到 provider usage 后替换为精确 outputTokens；步骤结束时用首个/最后一个
+ * 输出事件的墙钟时间计算 tokensPerSecond，并把最近一次速率常驻到视图中。
+ */
+export const makeTpsProjection = () => {
+  const charsPerToken = 4
+  const roleOverhead = 4
+  const eventTime = (event) => {
+    const t = Number(event?.time)
+    return Number.isFinite(t) && t > 0 ? t : Date.now()
+  }
+  const emptyActive = (turn = 0, step = 0) => ({
+    turn,
+    step,
+    blocks: {},
+    outputTokens: 0,
+    firstOutputTime: null,
+    latestOutputTime: null,
+    exact: false,
+  })
+  const blockTokens = (block) => {
+    if (!block) return 0
+    if (block.kind === 'fixed') return Math.max(0, Number(block.tokens) || 0)
+    if (block.kind === 'tool-call') {
+      return Math.ceil((Math.max(0, Number(block.nameCharacters) || 0) + Math.max(0, Number(block.argumentCharacters) || 0)) / charsPerToken)
+    }
+    return Math.ceil(Math.max(0, Number(block.characters) || 0) / charsPerToken)
+  }
+  const outputFromBlocks = (blocks) => {
+    const entries = Object.values(blocks ?? {})
+    if (entries.length === 0) return 0
+    return entries.reduce((sum, block) => sum + blockTokens(block), 0) + roleOverhead
+  }
+  const rateOf = (active) => {
+    if (!active || active.firstOutputTime === null || active.latestOutputTime === null) return undefined
+    const elapsed = active.latestOutputTime - active.firstOutputTime
+    if (elapsed <= 0 || active.outputTokens <= 0) return undefined
+    return active.outputTokens * 1000 / elapsed
+  }
+  const withOutputTime = (active, outputTokens, time) => {
+    if (outputTokens <= 0) return { ...active, outputTokens }
+    return {
+      ...active,
+      outputTokens,
+      firstOutputTime: active.firstOutputTime ?? time,
+      latestOutputTime: time,
+    }
+  }
+  const ensureActive = (state, turn, step) => {
+    if (state.active && state.active.turn === turn && state.active.step === step) return state.active
+    return emptyActive(turn, step)
+  }
+
+  return {
+    key: 'liveTokenUsage',
+    schema: z.object({
+      tokensPerSecond: z.number().nonnegative().optional(),
+    }).strict(),
+    init: () => ({ active: null, last: null }),
+    apply: (state, event) => {
+      if (event.type === 'step/start') {
+        return {
+          ...state,
+          active: emptyActive(Number(event.data?.turn) || 0, Number(event.data?.step) || 0),
+        }
+      }
+
+      if (event.type === 'assistant/chunk') {
+        const turn = Number(event.data?.turn) || 0
+        const step = Number(event.data?.step) || 0
+        const time = eventTime(event)
+        const chunk = event.data?.chunk ?? {}
+        const active = ensureActive(state, turn, step)
+        if (chunk.type === 'usage') {
+          const outputTokens = Math.max(0, Number(chunk.usage?.outputTokens) || 0)
+          return {
+            ...state,
+            active: {
+              ...active,
+              outputTokens,
+              exact: true,
+              ...(outputTokens > 0
+                ? { firstOutputTime: active.firstOutputTime ?? time, latestOutputTime: time }
+                : {}),
+              blocks: {},
+            },
+          }
+        }
+        if (active.exact) return state.active === active ? state : { ...state, active }
+
+        const index = String(chunk.index ?? 0)
+        const previous = active.blocks[index]
+        let nextBlock = null
+        if (chunk.type === 'text-delta' || chunk.type === 'reasoning-delta') {
+          const text = typeof chunk.text === 'string' ? chunk.text : ''
+          if (text === '') return state.active === active ? state : { ...state, active }
+          nextBlock = {
+            kind: chunk.type === 'reasoning-delta' ? 'reasoning' : 'text',
+            characters: (previous?.kind === (chunk.type === 'reasoning-delta' ? 'reasoning' : 'text') ? previous.characters : 0) + text.length,
+          }
+        } else if (chunk.type === 'tool-call-delta') {
+          const argumentDelta = typeof chunk.argumentsDelta === 'string' ? chunk.argumentsDelta : ''
+          if (chunk.name === undefined && argumentDelta === '') return state.active === active ? state : { ...state, active }
+          nextBlock = {
+            kind: 'tool-call',
+            nameCharacters: typeof chunk.name === 'string' ? chunk.name.length : (previous?.nameCharacters ?? 0),
+            argumentCharacters: (previous?.argumentCharacters ?? 0) + argumentDelta.length,
+          }
+        } else if (chunk.type === 'block-end') {
+          let tokens = 0
+          try { tokens = Math.ceil(JSON.stringify(chunk.block ?? null).length / charsPerToken) + roleOverhead } catch { tokens = roleOverhead }
+          nextBlock = { kind: 'fixed', tokens }
+        }
+        if (nextBlock === null) return state.active === active ? state : { ...state, active }
+        const blocks = { ...active.blocks, [index]: nextBlock }
+        const outputTokens = outputFromBlocks(blocks)
+        return { ...state, active: withOutputTime({ ...active, blocks }, outputTokens, time) }
+      }
+
+      if (event.type === 'assistant/message') {
+        const turn = Number(event.data?.turn) || 0
+        const step = Number(event.data?.step) || 0
+        const time = eventTime(event)
+        const active = ensureActive(state, turn, step)
+        if (event.data?.usage !== undefined) {
+          const outputTokens = Math.max(0, Number(event.data.usage?.outputTokens) || 0)
+          return {
+            ...state,
+            active: {
+              ...active,
+              outputTokens,
+              exact: true,
+              ...(outputTokens > 0
+                ? { firstOutputTime: active.firstOutputTime ?? time, latestOutputTime: time }
+                : {}),
+              blocks: {},
+            },
+          }
+        }
+        return active.outputTokens > 0
+          ? { ...state, active: { ...active, latestOutputTime: time } }
+          : { ...state, active }
+      }
+
+      if (event.type === 'step/end' && state.active !== null) {
+        const rate = rateOf(state.active)
+        return {
+          active: null,
+          last: Number.isFinite(rate) ? { tokensPerSecond: rate } : state.last,
+        }
+      }
+
+      return state
+    },
+    view: (state) => {
+      const rate = rateOf(state.active) ?? state.last?.tokensPerSecond
+      return Number.isFinite(rate) ? { tokensPerSecond: rate } : {}
+    },
+    stateVersion: 1,
+  }
+}
+
 /** 读取 HTTP POST JSON Body */
 const readJsonBody = (req) => new Promise((resolve, reject) => {
   let body = ''
@@ -294,11 +464,13 @@ const readJsonBody = (req) => new Promise((resolve, reject) => {
 export function apply(ctx, config) {
   // 运行时可变配置（优先使用用户在设置面板中动态修改的值）
   let runtimeConfig = {
+    enabled: config.enabled !== false,
     quotaMode: config.quotaMode === 'custom' ? 'custom' : 'follow',
     showDock: config.showDock !== false,
     dockLayout: normalizeDockLayout(config.dockLayout),
     showCapsule: config.showCapsule !== false,
     showPopover: config.showPopover !== false,
+    showTps: config.showTps !== false,
     provider: config.provider ?? 'deepseek',
     apiKey: config.apiKey ?? '',
     apiKeyRef: config.apiKeyRef ?? 'DEEPSEEK_API_KEY',
@@ -530,6 +702,7 @@ export function apply(ctx, config) {
   }
 
   const refresh = (provider = null) => {
+    if (runtimeConfig.enabled === false) return Promise.resolve()
     if (provider) return refreshOne(provider)
     return Promise.all([refreshOne('deepseek'), refreshOne('opencode-go')])
   }
@@ -541,6 +714,10 @@ export function apply(ctx, config) {
       loopTimer = null
     }
     const run = () => {
+      if (runtimeConfig.enabled === false) {
+        loopTimer = null
+        return
+      }
       void refresh().then(() => {
         const bothMissing = PROVIDERS.every((p) => caches[p].state === 'error' && caches[p].error === 'api-key-missing')
         const delay = bothMissing ? 5000 : runtimeConfig.refreshIntervalMs
@@ -565,11 +742,13 @@ export function apply(ctx, config) {
 
   const getSanitizedConfig = () => {
     return {
+      enabled: runtimeConfig.enabled !== false,
       quotaMode: runtimeConfig.quotaMode === 'custom' ? 'custom' : 'follow',
       showDock: runtimeConfig.showDock !== false,
       dockLayout: normalizeDockLayout(runtimeConfig.dockLayout),
       showCapsule: runtimeConfig.showCapsule !== false,
       showPopover: runtimeConfig.showPopover !== false,
+      showTps: runtimeConfig.showTps !== false,
       provider: runtimeConfig.provider,
       hasCustomKey: Boolean(runtimeConfig.apiKey),
       apiKeyMasked: maskKey(runtimeConfig.apiKey),
@@ -626,6 +805,7 @@ export function apply(ctx, config) {
       const view = serializeView(picked)
       return {
         ok: view.ok,
+        enabled: runtimeConfig.enabled !== false,
         provider: picked,
         defaultProvider: quotaSourceFromProvider(runtimeConfig.provider),
         quotaMode: runtimeConfig.quotaMode === 'custom' ? 'custom' : 'follow',
@@ -633,6 +813,7 @@ export function apply(ctx, config) {
         dockLayout: normalizeDockLayout(runtimeConfig.dockLayout),
         showCapsule: runtimeConfig.showCapsule !== false,
         showPopover: runtimeConfig.showPopover !== false,
+        showTps: runtimeConfig.showTps !== false,
         fetchedAt: view.fetchedAt,
         refreshIntervalMs: runtimeConfig.refreshIntervalMs,
         clientPollIntervalMs: runtimeConfig.clientPollIntervalMs,
@@ -718,24 +899,29 @@ export function apply(ctx, config) {
           try {
             const body = await readJsonBody(req)
             // 局部合并与类型校验
-            if (typeof body.quotaMode === 'string' && QUOTA_MODES.includes(body.quotaMode)) runtimeConfig.quotaMode = body.quotaMode
-            if (typeof body.showDock === 'boolean') runtimeConfig.showDock = body.showDock
-            if (typeof body.dockLayout === 'string' && DOCK_LAYOUTS.includes(body.dockLayout)) runtimeConfig.dockLayout = body.dockLayout
-            if (typeof body.showCapsule === 'boolean') runtimeConfig.showCapsule = body.showCapsule
-            if (typeof body.showPopover === 'boolean') runtimeConfig.showPopover = body.showPopover
-            if (typeof body.provider === 'string' && PROVIDERS.includes(body.provider)) runtimeConfig.provider = body.provider
-            if (typeof body.apiKey === 'string') runtimeConfig.apiKey = body.apiKey.trim()
-            if (typeof body.apiKeyRef === 'string' && body.apiKeyRef.trim()) runtimeConfig.apiKeyRef = body.apiKeyRef.trim()
-            if (typeof body.baseUrl === 'string' && body.baseUrl.trim()) runtimeConfig.baseUrl = body.baseUrl.trim()
-            if (typeof body.opencodeApiKey === 'string') runtimeConfig.opencodeApiKey = body.opencodeApiKey.trim()
-            if (typeof body.opencodeApiKeyRef === 'string' && body.opencodeApiKeyRef.trim()) runtimeConfig.opencodeApiKeyRef = body.opencodeApiKeyRef.trim()
-            if (typeof body.opencodeBaseUrl === 'string' && body.opencodeBaseUrl.trim()) runtimeConfig.opencodeBaseUrl = body.opencodeBaseUrl.trim()
-            if (typeof body.warningThreshold === 'number' && body.warningThreshold >= 0) runtimeConfig.warningThreshold = body.warningThreshold
-            if (typeof body.dangerThreshold === 'number' && body.dangerThreshold >= 0) runtimeConfig.dangerThreshold = body.dangerThreshold
-            if (typeof body.refreshIntervalMs === 'number' && body.refreshIntervalMs >= 1000) runtimeConfig.refreshIntervalMs = body.refreshIntervalMs
-            if (typeof body.clientPollIntervalMs === 'number' && body.clientPollIntervalMs >= 1000) runtimeConfig.clientPollIntervalMs = body.clientPollIntervalMs
-            if (typeof body.timeoutMs === 'number' && body.timeoutMs >= 1000) runtimeConfig.timeoutMs = body.timeoutMs
-            if (typeof body.currency === 'string' && body.currency.trim()) runtimeConfig.currency = body.currency.trim().toUpperCase()
+            if (typeof body.enabled === 'boolean') runtimeConfig.enabled = body.enabled
+            if (runtimeConfig.enabled !== false) {
+              if (typeof body.quotaMode === 'string' && QUOTA_MODES.includes(body.quotaMode)) runtimeConfig.quotaMode = body.quotaMode
+              if (typeof body.showDock === 'boolean') runtimeConfig.showDock = body.showDock
+              if (typeof body.dockLayout === 'string' && DOCK_LAYOUTS.includes(body.dockLayout)) runtimeConfig.dockLayout = body.dockLayout
+              if (typeof body.showCapsule === 'boolean') runtimeConfig.showCapsule = body.showCapsule
+              if (typeof body.showPopover === 'boolean') runtimeConfig.showPopover = body.showPopover
+              if (typeof body.showTps === 'boolean') runtimeConfig.showTps = body.showTps
+              if (typeof body.provider === 'string' && PROVIDERS.includes(body.provider)) runtimeConfig.provider = body.provider
+              if (typeof body.apiKey === 'string') runtimeConfig.apiKey = body.apiKey.trim()
+              if (typeof body.apiKeyRef === 'string' && body.apiKeyRef.trim()) runtimeConfig.apiKeyRef = body.apiKeyRef.trim()
+              if (typeof body.baseUrl === 'string' && body.baseUrl.trim()) runtimeConfig.baseUrl = body.baseUrl.trim()
+              if (typeof body.opencodeApiKey === 'string') runtimeConfig.opencodeApiKey = body.opencodeApiKey.trim()
+              if (typeof body.opencodeApiKeyRef === 'string' && body.opencodeApiKeyRef.trim()) runtimeConfig.opencodeApiKeyRef = body.opencodeApiKeyRef.trim()
+              if (typeof body.opencodeBaseUrl === 'string' && body.opencodeBaseUrl.trim()) runtimeConfig.opencodeBaseUrl = body.opencodeBaseUrl.trim()
+              if (typeof body.warningThreshold === 'number' && body.warningThreshold >= 0) runtimeConfig.warningThreshold = body.warningThreshold
+              if (typeof body.dangerThreshold === 'number' && body.dangerThreshold >= 0) runtimeConfig.dangerThreshold = body.dangerThreshold
+              if (typeof body.refreshIntervalMs === 'number' && body.refreshIntervalMs >= 1000) runtimeConfig.refreshIntervalMs = body.refreshIntervalMs
+              if (typeof body.clientPollIntervalMs === 'number' && body.clientPollIntervalMs >= 1000) runtimeConfig.clientPollIntervalMs = body.clientPollIntervalMs
+              if (typeof body.timeoutMs === 'number' && body.timeoutMs >= 1000) runtimeConfig.timeoutMs = body.timeoutMs
+              if (typeof body.currency === 'string' && body.currency.trim()) runtimeConfig.currency = body.currency.trim().toUpperCase()
+            }
+            // 总开关只停用额度相关功能；模型单价与 YAML 导出仍然可独立使用。
             if (body.prices && typeof body.prices === 'object') {
               runtimeConfig.prices = { ...body.prices }
             }
@@ -892,18 +1078,24 @@ export function apply(ctx, config) {
 
   // 可选 sessionProjections: 会话花费投影 (使用动态 getter)
   ctx.inject(['sessionProjections'], (projectionCtx) => {
-    let dispose = null
+    let disposers = []
     let stateVersion = 2
     const mount = () => {
-      if (typeof dispose === 'function') {
-        try { dispose() } catch { /* 旧单元卸载失败时仍注册新单元 */ }
+      for (const dispose of disposers) {
+        if (typeof dispose === 'function') {
+          try { dispose() } catch { /* 旧单元卸载失败时仍注册新单元 */ }
+        }
       }
-      const unit = makeCostProjection(getConfig)
-      unit.stateVersion = stateVersion
-      const ret = projectionCtx.sessionProjections.register(unit)
-      dispose = typeof ret === 'function'
-        ? ret
-        : (ret && typeof ret.dispose === 'function' ? () => ret.dispose() : null)
+      disposers = []
+      // 保持 queryCreditsCost 最后注册，兼容宿主按最近注册单元读取的旧实现。
+      for (const unit of [makeTpsProjection(), makeCostProjection(getConfig)]) {
+        unit.stateVersion = stateVersion
+        const ret = projectionCtx.sessionProjections.register(unit)
+        const dispose = typeof ret === 'function'
+          ? ret
+          : (ret && typeof ret.dispose === 'function' ? () => ret.dispose() : null)
+        if (dispose) disposers.push(dispose)
+      }
     }
     remountCostProjection = () => {
       stateVersion += 1
@@ -912,4 +1104,3 @@ export function apply(ctx, config) {
     mount()
   })
 }
-
