@@ -161,74 +161,54 @@ export const makeCostProjection = (configOrGetter) => {
   }
   const round6 = (n) => Math.round(n * 1e6) / 1e6
 
-  return {
-    key: 'queryCreditsCost',
-    schema: z.object({
-      models: z.array(z.string()),
-      cost: z.number().nonnegative(),
-      costByModel: z.record(z.string(), z.number().nonnegative()),
-      tokens: z.object({
-        uncachedInput: z.number().int().nonnegative(),
-        cacheRead: z.number().int().nonnegative(),
-        cacheWrite: z.number().int().nonnegative(),
-        output: z.number().int().nonnegative(),
-      }).strict(),
-      tokensByModel: z.record(z.string(), z.object({
-        uncachedInput: z.number().int().nonnegative(),
-        cacheRead: z.number().int().nonnegative(),
-        cacheWrite: z.number().int().nonnegative(),
-        output: z.number().int().nonnegative(),
-      }).strict()),
-      legs: z.array(z.object({
-        t: z.number(),
-        model: z.string(),
-        uncachedInput: z.number().int().nonnegative(),
-        cacheRead: z.number().int().nonnegative(),
-        cacheWrite: z.number().int().nonnegative(),
-        output: z.number().int().nonnegative(),
-      }).strict()),
-      currency: z.string(),
-      pricingEpoch: z.number().int().nonnegative(),
+  const viewSchema = z.object({
+    models: z.array(z.string()),
+    cost: z.number().nonnegative(),
+    costByModel: z.record(z.string(), z.number().nonnegative()),
+    tokens: z.object({
+      uncachedInput: z.number().int().nonnegative(),
+      cacheRead: z.number().int().nonnegative(),
+      cacheWrite: z.number().int().nonnegative(),
+      output: z.number().int().nonnegative(),
     }).strict(),
-    init: () => ({ currentModel: null, last: null, samples: {}, modelOrder: [] }),
-    apply: (state, event) => {
-      let nextModel = state.currentModel
-      if (event.type === 'request/header') {
-        const model = event.data.header?.config?.model
-        if (typeof model === 'string' && model !== '') nextModel = model
-      } else if (event.type === 'request/context') {
-        const model = event.data.model
-        if (typeof model === 'string' && model !== '') nextModel = model
-      }
-      let usage = null
-      let turn = 0
-      let step = 0
-      if (event.type === 'assistant/chunk' && event.data.chunk.type === 'usage') {
-        ({ turn, step } = event.data)
-        usage = event.data.chunk.usage
-      } else if (event.type === 'assistant/message' && event.data.usage !== undefined) {
-        ({ turn, step, usage } = event.data)
-      }
-      if (usage === null) {
-        return nextModel === state.currentModel ? state : { ...state, currentModel: nextModel }
-      }
-      const model = nextModel ?? 'unknown'
-      const buckets = bucketsOf(usage)
-      const t = eventTime(event)
-      const key = `${turn}:${step}`
-      const previous = state.samples?.[key]
-      if (previous && previous.model === model && bucketsEqual(previous.buckets, buckets) && previous.t === t) {
-        return nextModel === state.currentModel ? state : { ...state, currentModel: nextModel }
-      }
-      const isNewModel = !(state.modelOrder ?? []).includes(model)
-      return {
-        currentModel: nextModel,
-        last: { turn, step, model },
-        samples: { ...(state.samples ?? {}), [key]: { t, model, buckets } },
-        modelOrder: isNewModel ? [...(state.modelOrder ?? []), model] : state.modelOrder,
-      }
-    },
-    view: (state) => {
+    tokensByModel: z.record(z.string(), z.object({
+      uncachedInput: z.number().int().nonnegative(),
+      cacheRead: z.number().int().nonnegative(),
+      cacheWrite: z.number().int().nonnegative(),
+      output: z.number().int().nonnegative(),
+    }).strict()),
+    legs: z.array(z.object({
+      t: z.number(),
+      model: z.string(),
+      uncachedInput: z.number().int().nonnegative(),
+      cacheRead: z.number().int().nonnegative(),
+      cacheWrite: z.number().int().nonnegative(),
+      output: z.number().int().nonnegative(),
+    }).strict()),
+    currency: z.string(),
+    pricingEpoch: z.number().int().nonnegative(),
+  }).strict()
+  const bucketSchema = z.object({
+    uncachedInputTokens: z.number().int().nonnegative(),
+    cacheReadTokens: z.number().int().nonnegative(),
+    cacheWriteTokens: z.number().int().nonnegative(),
+    outputTokens: z.number().int().nonnegative(),
+  }).strict()
+  const stateSchema = z.object({
+    currentModel: z.string().nullable(),
+    last: z.object({
+      turn: z.number().int().nonnegative(),
+      step: z.number().int().nonnegative(),
+      model: z.string(),
+    }).strict().nullable(),
+    samples: z.record(z.string(), z.object({
+      t: z.number(),
+      model: z.string(),
+      buckets: bucketSchema,
+    }).strict()),
+    modelOrder: z.array(z.string()),
+  }).strict()
+  const view = (state) => {
       const cfg = getConfig()
       const tokens = { uncachedInput: 0, cacheRead: 0, cacheWrite: 0, output: 0 }
       const tokensByModel = {}
@@ -271,8 +251,53 @@ export const makeCostProjection = (configOrGetter) => {
         currency: cfg.currency,
         pricingEpoch: Number(cfg.pricingEpoch ?? 0),
       }
+    }
+
+  return {
+    key: 'queryCreditsCost',
+    stateSchema,
+    schema: viewSchema,
+    init: () => ({ currentModel: null, last: null, samples: {}, modelOrder: [] }),
+    apply: (state, event) => {
+      let nextModel = state.currentModel
+      if (event.type === 'request/header') {
+        const model = event.data.header?.config?.model
+        if (typeof model === 'string' && model !== '') nextModel = model
+      } else if (event.type === 'request/context') {
+        const model = event.data.model
+        if (typeof model === 'string' && model !== '') nextModel = model
+      }
+      let usage = null
+      let turn = 0
+      let step = 0
+      if (event.type === 'assistant/chunk' && event.data.chunk.type === 'usage') {
+        ({ turn, step } = event.data)
+        usage = event.data.chunk.usage
+      } else if (event.type === 'assistant/message' && event.data.usage !== undefined) {
+        ({ turn, step, usage } = event.data)
+      }
+      if (usage === null) {
+        return nextModel === state.currentModel ? state : { ...state, currentModel: nextModel }
+      }
+      const model = nextModel ?? 'unknown'
+      const buckets = bucketsOf(usage)
+      const t = eventTime(event)
+      const key = `${turn}:${step}`
+      const previous = state.samples?.[key]
+      if (previous && previous.model === model && bucketsEqual(previous.buckets, buckets) && previous.t === t) {
+        return nextModel === state.currentModel ? state : { ...state, currentModel: nextModel }
+      }
+      const isNewModel = !(state.modelOrder ?? []).includes(model)
+      return {
+        currentModel: nextModel,
+        last: { turn, step, model },
+        samples: { ...(state.samples ?? {}), [key]: { t, model, buckets } },
+        modelOrder: isNewModel ? [...(state.modelOrder ?? []), model] : state.modelOrder,
+      }
     },
+    view,
     stateVersion: 2,
+    wire: { viewSchema, view },
   }
 }
 
@@ -332,11 +357,35 @@ export const makeTpsProjection = () => {
     return emptyActive(turn, step)
   }
 
+  const viewSchema = z.object({
+    tokensPerSecond: z.number().nonnegative().optional(),
+  }).strict()
+  const stateSchema = z.object({
+    active: z.object({
+      turn: z.number().int().nonnegative(),
+      step: z.number().int().nonnegative(),
+      blocks: z.record(z.string(), z.union([
+        z.object({ kind: z.literal('text'), characters: z.number().int().nonnegative() }).strict(),
+        z.object({ kind: z.literal('reasoning'), characters: z.number().int().nonnegative() }).strict(),
+        z.object({ kind: z.literal('tool-call'), nameCharacters: z.number().int().nonnegative(), argumentCharacters: z.number().int().nonnegative() }).strict(),
+        z.object({ kind: z.literal('fixed'), tokens: z.number().int().nonnegative() }).strict(),
+      ])),
+      outputTokens: z.number().int().nonnegative(),
+      firstOutputTime: z.number().nullable(),
+      latestOutputTime: z.number().nullable(),
+      exact: z.boolean(),
+    }).strict().nullable(),
+    last: z.object({ tokensPerSecond: z.number().nonnegative() }).strict().nullable(),
+  }).strict()
+  const view = (state) => {
+      const rate = rateOf(state.active) ?? state.last?.tokensPerSecond
+      return Number.isFinite(rate) ? { tokensPerSecond: rate } : {}
+    }
+
   return {
     key: 'liveTokenUsage',
-    schema: z.object({
-      tokensPerSecond: z.number().nonnegative().optional(),
-    }).strict(),
+    stateSchema,
+    schema: viewSchema,
     init: () => ({ active: null, last: null }),
     apply: (state, event) => {
       if (event.type === 'step/start') {
@@ -433,11 +482,9 @@ export const makeTpsProjection = () => {
 
       return state
     },
-    view: (state) => {
-      const rate = rateOf(state.active) ?? state.last?.tokensPerSecond
-      return Number.isFinite(rate) ? { tokensPerSecond: rate } : {}
-    },
+    view,
     stateVersion: 1,
+    wire: { viewSchema, view },
   }
 }
 

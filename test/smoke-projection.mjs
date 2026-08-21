@@ -1,6 +1,6 @@
 /**
  * 服务器端投影折叠逻辑测试: 验证 queryCreditsCost 单元的
- * 同步骤替换语义、模型归属、花费计算与 schema 校验。
+ * 同步骤替换语义、模型归属、花费计算，以及新旧 DSH 投影接口兼容性。
  * 运行: node test/smoke-projection.mjs
  */
 import { makeCostProjection, makeTpsProjection, resolveModelPrice } from '../src/index.js'
@@ -29,8 +29,12 @@ const config = {
   defaultPrices: { cacheHit: 0.2, cacheMiss: 2, output: 8 },
 }
 const def = makeCostProjection(config)
+assert.ok(def.stateSchema, 'DSH 0.1.1-rc.1 requires a persisted-state schema')
+assert.ok(def.wire?.viewSchema && typeof def.wire.view === 'function', 'DSH 0.1.1-rc.1 requires a client-visible wire view')
+assert.equal(def.schema, def.wire.viewSchema, 'legacy and current DSH must validate the same cost view')
 
 let state = def.init()
+def.stateSchema.parse(state)
 
 // 无关事件必须返回同一引用(变更流靠 Object.is 把关)
 const untouched = def.apply(state, { type: 'turn/start', data: { turn: 0 } })
@@ -60,6 +64,8 @@ state = def.apply(state, {
 
 let view = def.view(state)
 def.schema.parse(view) // schema 校验
+def.stateSchema.parse(state)
+def.wire.viewSchema.parse(def.wire.view(state))
 console.log('view:', JSON.stringify(view))
 
 assert.deepEqual(view.tokens, { uncachedInput: 300, cacheRead: 60, cacheWrite: 10, output: 100 })
@@ -122,7 +128,11 @@ console.log('PROJECTION TEST PASSED')
 
 // 实时 TPS 投影：流式输出按字符估算，step/end 后保留最近一次速率。
 const tpsDef = makeTpsProjection()
+assert.ok(tpsDef.stateSchema, 'TPS projection must expose its persisted-state schema')
+assert.ok(tpsDef.wire?.viewSchema && typeof tpsDef.wire.view === 'function', 'TPS projection must be wired to the DSH client')
+assert.equal(tpsDef.schema, tpsDef.wire.viewSchema, 'legacy and current DSH must validate the same TPS view')
 let tpsState = tpsDef.init()
+tpsDef.stateSchema.parse(tpsState)
 tpsState = tpsDef.apply(tpsState, {
   type: 'step/start',
   time: 1000,
@@ -145,6 +155,8 @@ tpsState = tpsDef.apply(tpsState, {
   data: { turn: 0, step: 0 },
 })
 tpsDef.schema.parse(tpsDef.view(tpsState))
+tpsDef.stateSchema.parse(tpsState)
+tpsDef.wire.viewSchema.parse(tpsDef.wire.view(tpsState))
 assert.equal(tpsDef.view(tpsState).tokensPerSecond, 12, 'last TPS should remain visible after step end')
 
 // provider 精确 usage 替换流式估算，但保留首个输出时间用于速率计算。

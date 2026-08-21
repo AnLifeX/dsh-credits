@@ -49,6 +49,10 @@ const mockCtx = {
       const projCtx = {
         sessionProjections: {
           register(proj) {
+            assert.ok(proj.stateSchema, `${proj.key} must provide stateSchema for DSH 0.1.1-rc.1`)
+            assert.ok(proj.wire?.viewSchema && typeof proj.wire.view === 'function', `${proj.key} must provide a client wire view`)
+            proj.stateSchema.parse(proj.init())
+            proj.wire.viewSchema.parse(proj.wire.view(proj.init()))
             mockCtx._projection = proj
           },
         },
@@ -284,7 +288,8 @@ assert.equal(resGetConfig.data.config.showTps, true)
         usage: { inputTokens: 1000, outputTokens: 500, cacheReadTokens: 0, cacheWriteTokens: 0 },
       },
     })
-    const view = mockCtx._projection.view(state)
+    const view = mockCtx._projection.wire.view(state)
+    mockCtx._projection.wire.viewSchema.parse(view)
     assert.equal(view.currency, 'USD', 'Projection should reflect updated currency')
     console.log('Dynamic projection config update passed')
   }
