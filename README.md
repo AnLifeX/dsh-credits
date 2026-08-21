@@ -10,10 +10,13 @@ DeepSeek Harness（`dsh web`）额度插件：在输入框下方显示账户额�
   默认独立换行，额度单独占底下一行；也可改成跟底部已有统计共用一行、排在最后。底部条、累计胶囊、悬停卡片都可以关掉。
 - **本会话估算消耗**  
   按模型单价估算（单价可在设置里改）。DeepSeek V4 自 2026-08-17 起按北京时间自动套用峰谷价。
+- **实时生成吞吐 TPS**
+  直接消费 DSH 会话事件，在流式输出时估算并显示 `TPS n tok/s`；收到 provider 精确 usage 后自动替换估算值。可在「设置 → 展示 → 实时 TPS」关闭，不需要额外安装 `@linxin666/dsh-live-stats`。
 - **累计消耗胶囊**  
   右下角可拖动气泡，查看今天 / 昨天 / 本周 / 本月 / 自定义时间范围内的跨会话估算总额（按当前计价货币与单价现算）。
 - **设置卡片**  
   展示、额度查询、阈值与刷新、模型单价、YAML 导出各一张卡。每张独立「放弃修改 / 保存」，改过的字段可「恢复默认」。关掉再打开，未保存的草稿还在。
+  顶部「启用额度功能」总开关关闭后会隐藏额度、TPS、峰谷徽章、悬停详情与累计消耗，停止额度轮询，并锁定展示、额度查询、阈值与刷新；模型单价和 YAML 导出仍可用。
 
 ## 界面预览
 
@@ -113,6 +116,8 @@ dsh plugin --profile web remove dsh-balance
 | `dockLayout` | `own` | `own` 独立换行；`shared` 与底部已有统计共用一行 |
 | `showCapsule` | `true` | 右下角累计消耗胶囊 |
 | `showPopover` | `true` | 悬停底部读数时的双栏详情 |
+| `showTps` | `true` | 是否显示实时 TPS |
+| `enabled` | `true` | 额度功能总开关；关闭后隐藏相关 UI、停止轮询，并锁定展示、额度查询、阈值与刷新；不影响模型单价和 YAML 导出 |
 
 ### OpenCode Go 回退
 
@@ -188,7 +193,7 @@ dsh plugin --profile web remove dsh-balance
 | `POST /query-credits/config` | 保存配置并立即生效 |
 | `POST /query-credits/test-connection` | 连通性测试 |
 
-本会话花费由 `queryCreditsCost` 投影折叠 token（每笔带事件时间），按该笔发生时的北京时间峰谷价计价；前端切货币时仍按各自行情重算，不会用“此刻”的单价覆盖早上的高峰用量。累计消耗同样按事件时间计价，并落盘到 `$DSH_HOME/storages/dsh-credits-spend.json`。胶囊位置和所选时间范围记在浏览器 `localStorage`。
+本会话花费由 `queryCreditsCost` 投影折叠 token（每笔带事件时间），按该笔发生时的北京时间峰谷价计价；前端切货币时仍按各自行情重算，不会用“此刻”的单价覆盖早上的高峰用量。实时 TPS 由同一组会话事件生成 `liveTokenUsage` 投影：流式 chunk 阶段按字符估算，provider usage 到达后替换为精确输出 token，步骤结束后保留最近一次速率。累计消耗同样按事件时间计价，并落盘到 `$DSH_HOME/storages/dsh-credits-spend.json`。胶囊位置和所选时间范围记在浏览器 `localStorage`。
 
 密钥走 Harness `credentials`，默认不写进配置文件。
 
@@ -265,4 +270,4 @@ A: DeepSeek 按余额金额对比 `warningThreshold` / `dangerThreshold`。OpenC
 A: 会，跟着输入框当前模型的供应商走。只有供应商 id 恰好是 `opencode-go` 时才显示订阅用量；`deepseek`、Anthropic、OpenAI、普通 OpenCode Zen 等都走官方余额。设置里的数据源不会盖过已经识别到的模型。
 
 **Q: 8 月 17 日峰谷价会自动切吗？**  
-A: 会。北京时间 2026-08-17 00:00 之后，V4 Flash / Pro 按 09:00–12:00、14:00–18:00 高峰价，其余时段半价。
+A: 会。北京时间 2026-08-17 00:00 之后，V4 Flash / Pro 按 09:00–12:00、14:00–18:00 高峰价；谷时段是 00:00–09:00、12:00–14:00、18:00–24:00，其余时段半价。
