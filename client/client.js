@@ -4,7 +4,7 @@
  * 在 `conversation.composer.dock`(输入框下方统计条所在行) 注册余额读数:
  *   - 余额: 单例轮询器按服务器下发的 `clientPollIntervalMs` 读取 `/query-credits`
  *     (只读缓存, 不直接访问 DeepSeek); 页面隐藏时暂停轮询。
- *   - 本会话消耗: 读取宿主推送的 `queryCreditsCost` 投影(按模型计价)。
+ *   - 本会话消耗 / TPS: 读取宿主推送的 `queryCreditsCost` 与 `liveTokenUsage` 投影。
  *   - 设置: 注册一级 `settings.section`(展示 / 额度查询 / 阈值 / 单价 / YAML 多张可折叠卡片)。
  *     每张独立「未保存 / 放弃修改 / 保存」，字段有「已覆盖 / 恢复默认」；关掉再回来草稿仍在。
  *
@@ -66,6 +66,15 @@ window.__ModuleLoader__.load({
 				".dshqb_card_badge_warning{background:rgba(245,158,11,0.12);color:var(--dsw-alias-state-warn-primary,var(--dsw-alias-state-warning-primary,#f59e0b))}",
 				".dshqb_card_badge_danger{background:rgba(239,68,68,0.12);color:var(--dsw-alias-state-error-primary,#ef4444)}",
 				".dshqb_card_badge_info{background:rgba(59,130,246,0.12);color:var(--dsw-alias-brand-primary,#3b82f6)}",
+				".dshqb_card_badges{display:inline-flex;align-items:center;justify-content:flex-end;gap:6px;min-width:0;flex-shrink:0}",
+				".dshqb_tariff_badge{appearance:none;border:0;font:inherit;cursor:pointer}",
+				".dshqb_tariff_peak{background:rgba(245,158,11,0.14);color:var(--dsw-alias-state-warn-primary,var(--dsw-alias-state-warning-primary,#f59e0b))}",
+				".dshqb_tariff_offpeak{background:rgba(16,185,129,0.14);color:var(--dsw-alias-state-success-primary,#10b981)}",
+				".dshqb_tariff_badge:hover{filter:brightness(1.12)}",
+				".dshqb_hover_tip_wrap{position:relative;display:inline-flex;align-items:center;min-width:0}",
+				".dshqb_hover_tip{position:absolute;left:50%;bottom:calc(100% + 8px);z-index:10020;width:max-content;max-width:min(420px,calc(100vw - 24px));padding:7px 10px;border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,.22));border-radius:7px;background:var(--dsw-alias-bg-layer-1,var(--dsw-hovercard-bg,#fff));box-shadow:var(--dsw-shadow-lv2,0 6px 18px rgba(0,0,0,.16));color:var(--dsw-alias-label-primary);font-size:11px;font-weight:400;line-height:1.5;text-align:left;white-space:pre-line;overflow-wrap:anywhere;opacity:0;pointer-events:none;transform:translate(-50%,4px);transition:opacity .15s ease,transform .15s ease}",
+				".dshqb_hover_tip:after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--dsw-alias-bg-layer-1,var(--dsw-hovercard-bg,#fff))}",
+				".dshqb_hover_tip_wrap:hover>.dshqb_hover_tip,.dshqb_hover_tip_wrap:focus-within>.dshqb_hover_tip{opacity:1;transform:translate(-50%,0)}",
 				".dshqb_card_row{display:flex;align-items:baseline;justify-content:space-between;font-size:12px}",
 				".dshqb_card_val_main{font-size:16px;font-size:clamp(13px,3.8cqi,16px);font-weight:600;color:var(--dsw-alias-label-primary);font-variant-numeric:tabular-nums;flex-shrink:0;white-space:nowrap}",
 				".dshqb_card_sub{font-size:11px;color:var(--dsw-alias-label-tertiary);display:flex;gap:8px}",
@@ -162,7 +171,18 @@ window.__ModuleLoader__.load({
 				".dshqb_btn_del{color:var(--dsw-alias-state-error-primary,#ef4444);background:transparent;border:none;cursor:pointer;padding:2px 6px;border-radius:4px;font-size:13px;line-height:1;transition:background-color .15s ease}",
 				".dshqb_btn_del:hover{background:rgba(239,68,68,0.12)}",
 				".dshqb_add_model_box{display:flex;gap:8px;align-items:center;background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,0.03));border:1px dashed var(--dsw-alias-border-l2,rgba(128,128,128,0.2));border-radius:6px;padding:8px 10px;margin-top:8px}",
-				".dshqb_code_block{background:var(--dsw-alias-markdown-code-block,var(--dsw-alias-bg-layer-2,rgba(128,128,128,0.06)));border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.15));border-radius:8px;padding:12px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11.5px;color:var(--dsw-alias-label-primary);overflow-x:auto;white-space:pre;line-height:1.5;max-height:220px}",
+				".dshqb_code_wrap{position:relative;margin-top:4px}",
+				".dshqb_code_block{background:var(--dsw-alias-markdown-code-block,var(--dsw-alias-bg-layer-2,rgba(128,128,128,0.06)));border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.15));border-radius:8px;margin:0;padding:12px 46px 12px 12px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11.5px;color:var(--dsw-alias-label-primary);overflow-x:auto;white-space:pre;line-height:1.5;max-height:220px}",
+				".dshqb_code_copy_wrap{position:absolute;top:8px;right:8px}",
+				".dshqb_code_copy{appearance:none;position:relative;width:28px;height:28px;padding:0;border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.2));border-radius:6px;background:var(--dsw-alias-bg-layer-1,var(--dsw-alias-bg-base,#fff));color:var(--dsw-alias-label-secondary);cursor:pointer;display:inline-flex;align-items:center;justify-content:center;box-shadow:var(--dsw-shadow-lv1,0 1px 4px rgba(0,0,0,.08));transition:color .15s ease,border-color .15s ease,background-color .15s ease,transform .15s ease}",
+				".dshqb_code_copy:hover{color:var(--dsw-alias-label-primary);border-color:var(--dsw-alias-label-dimmed,rgba(128,128,128,.45));background:var(--dsw-alias-interactive-bg-hover,rgba(128,128,128,.08))}",
+				".dshqb_code_copy:active{transform:scale(.96)}",
+				".dshqb_code_copy:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,#3b82f6);outline-offset:2px}",
+				".dshqb_code_copy_done{color:var(--dsw-alias-state-success-primary,#10b981)}",
+				".dshqb_copy_icon{position:relative;display:block;width:14px;height:14px}",
+				".dshqb_copy_icon:before,.dshqb_copy_icon:after{content:'';position:absolute;width:8px;height:9px;border:1.5px solid currentColor;border-radius:2px;box-sizing:border-box}",
+				".dshqb_copy_icon:before{left:1px;top:1px;opacity:.6}",
+				".dshqb_copy_icon:after{left:5px;top:4px;background:var(--dsw-alias-bg-layer-1,var(--dsw-alias-bg-base,#fff))}",
 				".dshqb_btn{padding:8px 16px;border-radius:6px;font-size:12.5px;font-weight:500;cursor:pointer;border:1px solid transparent;display:inline-flex;align-items:center;justify-content:center;gap:6px;transition:all .15s ease}",
 				".dshqb_btn_primary{background:var(--dsw-alias-brand-primary,var(--dsw-alias-button-primary-fill,#3b82f6));color:var(--dsw-alias-label-primary-foreground,#ffffff);font-weight:600}",
 				".dshqb_btn_primary:hover{filter:brightness(1.12)}",
@@ -212,10 +232,43 @@ window.__ModuleLoader__.load({
 				".dshqb_model_reset{font:inherit;color:var(--dsw-alias-label-secondary);cursor:pointer;background:transparent;border:none;padding:0;font-size:11px;white-space:nowrap}",
 				".dshqb_model_reset:hover{color:var(--dsw-alias-label-primary)}",
 				".dshqb_toggle_list{display:flex;flex-direction:column;gap:0;border:1px solid var(--dsw-alias-border-l3,rgba(128,128,128,0.12));border-radius:8px;padding:2px 14px;background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,0.04))}",
+				".dshqb_toggle_list>.dshqb_field{padding:11px 0}",
+				".dshqb_toggle_list>.dshqb_field+.dshqb_field{border-top:1px solid var(--dsw-alias-border-l3,rgba(128,128,128,0.08))}",
+				".dshqb_toggle_list .dshqb_field_head{align-items:flex-start}",
 				".dshqb_toggle_row{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:11px 0;cursor:pointer}",
 				".dshqb_toggle_row+.dshqb_toggle_row{border-top:1px solid var(--dsw-alias-border-l3,rgba(128,128,128,0.08))}",
 				".dshqb_toggle_copy{display:flex;flex-direction:column;gap:3px;min-width:0}",
 				".dshqb_check{width:16px;height:16px;margin:0;flex-shrink:0;accent-color:var(--dsw-alias-brand-primary,#3b82f6);cursor:pointer}",
+				".dshqb_switch{position:relative;display:inline-flex;width:38px;height:22px;flex:0 0 auto;vertical-align:middle}",
+				".dshqb_switch_input{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}",
+				".dshqb_switch_track{position:absolute;inset:0;border-radius:999px;background:var(--dsw-alias-border-l2,rgba(128,128,128,0.3));box-shadow:inset 0 0 0 1px var(--dsw-alias-border-l2,rgba(128,128,128,0.18));cursor:pointer;transition:background-color .18s ease,box-shadow .18s ease}",
+				".dshqb_switch_track:after{content:'';position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:var(--dsw-alias-bg-base,#fff);box-shadow:0 1px 3px rgba(0,0,0,.25);transition:transform .18s ease}",
+				".dshqb_switch_input:checked+.dshqb_switch_track{background:var(--dsw-alias-brand-primary,#3b82f6);box-shadow:inset 0 0 0 1px var(--dsw-alias-brand-primary,#3b82f6)}",
+				".dshqb_switch_input:checked+.dshqb_switch_track:after{transform:translateX(16px)}",
+				".dshqb_switch_input:focus-visible+.dshqb_switch_track{outline:2px solid var(--dsw-alias-brand-primary,#3b82f6);outline-offset:2px}",
+				".dshqb_switch_input:disabled+.dshqb_switch_track{cursor:not-allowed;opacity:.55}",
+				".dshqb_switch_large{width:44px;height:25px}",
+				".dshqb_switch_large .dshqb_switch_track:after{width:19px;height:19px;top:3px;left:3px}",
+				".dshqb_switch_large .dshqb_switch_input:checked+.dshqb_switch_track:after{transform:translateX(19px)}",
+				".dshqb_layout_choices{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}",
+				".dshqb_layout_choice{appearance:none;min-width:0;display:flex;align-items:center;gap:9px;padding:11px 12px;border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,.18));border-radius:8px;background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.04));color:var(--dsw-alias-label-secondary);font:inherit;text-align:left;cursor:pointer;transition:border-color .15s ease,background-color .15s ease,color .15s ease,transform .15s ease}",
+				".dshqb_layout_choice:hover:not(:disabled){border-color:var(--dsw-alias-label-dimmed,rgba(128,128,128,.45));color:var(--dsw-alias-label-primary)}",
+				".dshqb_layout_choice:active:not(:disabled){transform:scale(.985)}",
+				".dshqb_layout_choice:focus-visible{outline:2px solid var(--dsw-alias-brand-primary,#3b82f6);outline-offset:2px}",
+				".dshqb_layout_choice:disabled{cursor:not-allowed;opacity:.55}",
+				".dshqb_layout_choice_selected{border-color:var(--dsw-alias-brand-primary,#3b82f6);background:color-mix(in srgb,var(--dsw-alias-brand-primary,#3b82f6) 10%,transparent);color:var(--dsw-alias-label-primary)}",
+				".dshqb_layout_choice_mark{position:relative;width:14px;height:14px;box-sizing:border-box;border:1.5px solid currentColor;border-radius:50%;flex:0 0 auto;opacity:.75}",
+				".dshqb_layout_choice_selected .dshqb_layout_choice_mark{border-color:var(--dsw-alias-brand-primary,#3b82f6);opacity:1}",
+				".dshqb_layout_choice_selected .dshqb_layout_choice_mark:after{content:'';position:absolute;inset:3px;border-radius:50%;background:var(--dsw-alias-brand-primary,#3b82f6)}",
+				".dshqb_layout_choice_label{min-width:0;font-size:12.5px;font-weight:500;line-height:1.4}",
+				".dshqb_settings_global{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.18));border-radius:12px;background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,0.04))}",
+				".dshqb_settings_global_copy{display:flex;flex-direction:column;gap:3px;min-width:0}",
+				".dshqb_settings_global_head{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}",
+				".dshqb_settings_global_title{font-size:13px;font-weight:600;color:var(--dsw-alias-label-primary)}",
+				".dshqb_settings_global_hint{font-size:11.5px;line-height:1.45;color:var(--dsw-alias-label-tertiary);white-space:normal}",
+				".dshqb_settings_locked{opacity:.5;pointer-events:none;user-select:none;filter:grayscale(.2)}",
+				".dshqb_settings_fieldset{display:block;min-width:0;margin:0;padding:0;border:0}",
+				".dshqb_settings_cards{display:flex;flex-direction:column;gap:12px}",
 				".dshqb_confirm_mask{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;background:var(--dsw-alias-bg-mask-1,rgba(0,0,0,0.45));backdrop-filter:blur(6px)}",
 				".dshqb_confirm{width:min(380px,100%);background:var(--dsw-alias-bg-layer-1,var(--dsw-alias-bg-base,#fff));border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.18));border-radius:12px;box-shadow:var(--dsw-shadow-lv3,0 16px 40px rgba(0,0,0,0.22));padding:18px 18px 16px;display:flex;flex-direction:column;gap:8px;box-sizing:border-box}",
 				".dshqb_confirm_title{font-size:15px;font-weight:600;color:var(--dsw-alias-label-primary)}",
@@ -248,6 +301,11 @@ window.__ModuleLoader__.load({
 			if (n < 1e3) return String(n);
 			if (n < 1e6) return scaled(n / 1e3) + "K";
 			return scaled(n / 1e6) + "M";
+		}
+		function formatTokensPerSecond(n) {
+			const value = Number(n);
+			if (!Number.isFinite(value)) return "—";
+			return value < 100 ? String(Math.round(value * 10) / 10) : String(Math.round(value));
 		}
 		function formatClock(ms) {
 			if (ms <= 0) return "—";
@@ -327,6 +385,10 @@ window.__ModuleLoader__.load({
 		function isPeakBeijing(timestamp) {
 			const hourBJT = (new Date(timestamp).getUTCHours() + 8) % 24;
 			return (hourBJT >= 9 && hourBJT < 12) || (hourBJT >= 14 && hourBJT < 18);
+		}
+		/** 当前北京时间峰谷时段; 与 V4 计价时段保持一致。 */
+		function currentTariffPeriod(timestamp = Date.now()) {
+			return isPeakBeijing(timestamp) ? "peak" : "offPeak";
 		}
 		function resolveClientPrice(cfg, model, timestamp) {
 			const currency = cfg.currency || "CNY";
@@ -573,6 +635,7 @@ window.__ModuleLoader__.load({
 			"btn.refresh": "点击立即刷新余额",
 			"btn.refreshing": "正在刷新余额...",
 			"sessionCost": "本会话约 {amount}",
+			"tps": "TPS {rate} tok/s",
 			"card.balanceTitle": "📊 账户余额",
 			"card.sessionTitle": "⚡ 本会话消耗",
 			"card.total": "总额: ",
@@ -585,6 +648,10 @@ window.__ModuleLoader__.load({
 			"card.tokensHit": "命中: {hit} ({hitRate}%)",
 			"card.noCost": "本会话暂未产生消耗",
 			"card.pricingHint": "💡 计价规则与单价请见右侧 [?]",
+			"tariff.peak": "梁文峰时刻",
+			"tariff.offPeak": "梁文谷时刻",
+			"tariff.peakTitle": "梁文峰时刻：（北京时间）09:00–12:00、14:00–18:00\n梁文谷时刻：（北京时间）00:00–09:00、12:00–14:00、18:00–24:00",
+			"tariff.offPeakTitle": "梁文峰时刻：（北京时间）09:00–12:00、14:00–18:00\n梁文谷时刻：（北京时间）00:00–09:00、12:00–14:00、18:00–24:00",
 			"card.error": "【账户余额】异常: {error}",
 			/* OpenCode Go quota translations */
 			"quota.readout": "Go 额度 月 {monthly} · 周 {weekly} · 5h {rolling}",
@@ -629,6 +696,8 @@ window.__ModuleLoader__.load({
 			"settings.card.pricingDesc": "各模型每 1M Token 的命中 / 未命中 / 输出价。",
 			"settings.card.export": "YAML 导出",
 			"settings.card.exportDesc": "复制到 cordis.patch.yml 做持久覆盖。",
+			"settings.enabled": "启用额度功能",
+			"settings.enabledHint": "关闭后隐藏额度、TPS、峰谷徽章、悬停详情与累计消耗，并锁定展示、额度查询、阈值与刷新；模型单价和 YAML 导出仍可用。",
 			"settings.showDock": "底部统计条",
 			"settings.showDockHint": "输入框下方的额度与本会话消耗。",
 			"settings.dockLayout": "底部条布局",
@@ -639,6 +708,8 @@ window.__ModuleLoader__.load({
 			"settings.showCapsuleHint": "右下角可拖拽的累计消耗。",
 			"settings.showPopover": "悬停详情气泡",
 			"settings.showPopoverHint": "悬停底部读数时显示明细。",
+			"settings.showTps": "实时 TPS",
+			"settings.showTpsHint": "显示流式输出的实时生成速度。",
 			"settings.quotaMode": "额度查询模式",
 			"settings.quotaMode.follow": "跟随当前模型供应商",
 			"settings.quotaMode.custom": "自定义固定展示",
@@ -679,8 +750,8 @@ window.__ModuleLoader__.load({
 			"settings.addModel": "➕ 添加自定义模型",
 			"settings.addModelName": "模型名称 (如 deepseek-chat)",
 			"settings.btnAdd": "添加",
-			"settings.btnCopy": "📋 复制 YAML 配置",
-			"settings.copied": "✓ 已复制到剪贴板！",
+			"settings.btnCopy": "复制 YAML 配置",
+			"settings.copied": "已复制到剪贴板",
 			"settings.btnDiscard": "放弃修改",
 			"settings.btnSave": "保存",
 			"settings.saving": "保存中…",
@@ -710,6 +781,7 @@ window.__ModuleLoader__.load({
 			"btn.refresh": "Click to refresh balance",
 			"btn.refreshing": "Refreshing balance...",
 			"sessionCost": "~{amount} this session",
+			"tps": "TPS {rate} tok/s",
 			"card.balanceTitle": "📊 Account Balance",
 			"card.sessionTitle": "⚡ Session Cost",
 			"card.total": "Total: ",
@@ -722,6 +794,10 @@ window.__ModuleLoader__.load({
 			"card.tokensHit": "Cache hit: {hit} ({hitRate}%)",
 			"card.noCost": "No cost in this session yet",
 			"card.pricingHint": "💡 View pricing & rates via [?]",
+			"tariff.peak": "Liangwen Peak Time",
+			"tariff.offPeak": "Liangwen Valley Time",
+			"tariff.peakTitle": "Peak period: (Beijing time) 09:00–12:00, 14:00–18:00\nValley period: (Beijing time) 00:00–09:00, 12:00–14:00, 18:00–24:00",
+			"tariff.offPeakTitle": "Peak period: (Beijing time) 09:00–12:00, 14:00–18:00\nValley period: (Beijing time) 00:00–09:00, 12:00–14:00, 18:00–24:00",
 			"card.error": "【Account Balance】Error: {error}",
 			/* OpenCode Go quota translations */
 			"quota.readout": "Go quota M {monthly} · W {weekly} · 5h {rolling}",
@@ -766,6 +842,8 @@ window.__ModuleLoader__.load({
 			"settings.card.pricingDesc": "Cache hit / miss / output price per 1M tokens.",
 			"settings.card.export": "YAML export",
 			"settings.card.exportDesc": "Copy into cordis.patch.yml for a durable override.",
+			"settings.enabled": "Enable quota features",
+			"settings.enabledHint": "When off, hide quota, TPS, tariff badges, hover details, and spend tracking, and lock display, quota, thresholds, and refresh. Pricing and YAML export remain available.",
 			"settings.showDock": "Bottom status bar",
 			"settings.showDockHint": "Quota and session cost below the input.",
 			"settings.dockLayout": "Status bar layout",
@@ -776,6 +854,8 @@ window.__ModuleLoader__.load({
 			"settings.showCapsuleHint": "Draggable spend tracker in the corner.",
 			"settings.showPopover": "Hover details",
 			"settings.showPopoverHint": "Details when hovering the bottom readout.",
+			"settings.showTps": "Live TPS",
+			"settings.showTpsHint": "Show the live streaming generation speed.",
 			"settings.quotaMode": "Quota query mode",
 			"settings.quotaMode.follow": "Follow current model provider",
 			"settings.quotaMode.custom": "Custom fixed display",
@@ -816,8 +896,8 @@ window.__ModuleLoader__.load({
 			"settings.addModel": "➕ Add Custom Model",
 			"settings.addModelName": "Model Name (e.g. deepseek-chat)",
 			"settings.btnAdd": "Add",
-			"settings.btnCopy": "📋 Copy YAML",
-			"settings.copied": "✓ Copied to clipboard!",
+			"settings.btnCopy": "Copy YAML",
+			"settings.copied": "Copied to clipboard",
 			"settings.btnDiscard": "Discard changes",
 			"settings.btnSave": "Save",
 			"settings.saving": "Saving…",
@@ -864,11 +944,13 @@ window.__ModuleLoader__.load({
 		}
 
 		const DEFAULT_SETTINGS = {
+			enabled: true,
 			quotaMode: "follow",
 			showDock: true,
 			dockLayout: "own",
 			showCapsule: true,
 			showPopover: true,
+			showTps: true,
 			provider: "deepseek",
 			currency: "CNY",
 			warningThreshold: 10,
@@ -890,11 +972,13 @@ window.__ModuleLoader__.load({
 			const lines = [
 				"- id: dsh-credits",
 				"  config:",
+				`    enabled: ${config.enabled !== false}`,
 				`    quotaMode: ${config.quotaMode === "custom" ? "custom" : "follow"}`,
 				`    showDock: ${config.showDock !== false}`,
 				`    dockLayout: ${normalizeDockLayout(config.dockLayout)}`,
 				`    showCapsule: ${config.showCapsule !== false}`,
 				`    showPopover: ${config.showPopover !== false}`,
+				`    showTps: ${config.showTps !== false}`,
 				`    provider: ${config.provider}`,
 				`    dangerThreshold: ${config.dangerThreshold}`,
 				`    warningThreshold: ${config.warningThreshold}`,
@@ -1044,11 +1128,13 @@ window.__ModuleLoader__.load({
 		function configToForm(c) {
 			const loadedPrices = (c.prices && Object.keys(c.prices).length > 0) ? { ...c.prices } : { ...DEFAULT_PRICES };
 			return {
+				enabled: c.enabled !== false,
 				quotaMode: c.quotaMode === "custom" ? "custom" : "follow",
 				showDock: c.showDock !== false,
 				dockLayout: normalizeDockLayout(c.dockLayout),
 				showCapsule: c.showCapsule !== false,
 				showPopover: c.showPopover !== false,
+				showTps: c.showTps !== false,
 				provider: c.provider === "opencode-go" ? "opencode-go" : "deepseek",
 				currency: c.currency ?? "CNY",
 				warningThreshold: c.warningThreshold ?? 10,
@@ -1068,7 +1154,7 @@ window.__ModuleLoader__.load({
 
 		const CARD_IDS = ["display", "quota", "thresholds", "pricing"];
 		const CARD_KEYS = {
-			display: ["showDock", "dockLayout", "showCapsule", "showPopover"],
+			display: ["showDock", "dockLayout", "showCapsule", "showPopover", "showTps"],
 			quota: ["quotaMode", "provider", "currency", "opencodeApiKeyRef", "opencodeApiKey", "opencodeBaseUrl"],
 			thresholds: ["warningThreshold", "dangerThreshold", "refreshIntervalMs", "clientPollIntervalMs", "timeoutMs"],
 			pricing: ["prices", "defaultPrices"]
@@ -1249,6 +1335,31 @@ window.__ModuleLoader__.load({
 			return react.createElement("div", { className: "dshqb_field_grid" }, children);
 		}
 
+		function SwitchControl({ checked, disabled, onChange, label, large }) {
+			return react.createElement("label", {
+				className: "dshqb_switch" + (large ? " dshqb_switch_large" : ""),
+				title: label
+			}, [
+				react.createElement("input", {
+					type: "checkbox",
+					className: "dshqb_switch_input",
+					checked,
+					disabled,
+					onChange,
+					"aria-label": label,
+					key: "input"
+				}),
+				react.createElement("span", { className: "dshqb_switch_track", "aria-hidden": "true", key: "track" })
+			]);
+		}
+
+		function HoverTooltip({ content, children, className = "" }) {
+			return react.createElement("span", { className: "dshqb_hover_tip_wrap" + (className ? " " + className : "") }, [
+				children,
+				react.createElement("span", { className: "dshqb_hover_tip", role: "tooltip", key: "tip" }, content)
+			]);
+		}
+
 		function PluginCard({ t, title, description, dirty, open, onToggle, saving, failed, onDiscard, onSave, hideFooter, children }) {
 			const blocked = !dirty || saving;
 			return react.createElement("li", {
@@ -1313,12 +1424,16 @@ window.__ModuleLoader__.load({
 			const [failedCard, setFailedCard] = react.useState(null);
 			const [toast, setToast] = react.useState(null);
 			const [copied, setCopied] = react.useState(false);
+			const [savingEnabled, setSavingEnabled] = react.useState(false);
+			const [enabledOverride, setEnabledOverride] = react.useState(null);
 			const [newModelName, setNewModelName] = react.useState("");
 			const [newModelHit, setNewModelHit] = react.useState(0.1);
 			const [newModelMiss, setNewModelMiss] = react.useState(1.0);
 			const [newModelOut, setNewModelOut] = react.useState(2.0);
 
-			const view = mergeView(baseline, drafts);
+			const baseView = mergeView(baseline, drafts);
+			const view = enabledOverride === null ? baseView : { ...baseView, enabled: enabledOverride };
+			const quotaEnabled = view.enabled !== false;
 			const dirtyOf = (cardId) => isCardDirty(cardId, drafts[cardId], baseline);
 
 			const commitMem = (nextBaseline, nextDrafts, nextOpen) => {
@@ -1404,8 +1519,37 @@ window.__ModuleLoader__.load({
 				setFailedCard((id) => id === cardId ? null : id);
 			};
 
+			const setGlobalEnabled = async (nextEnabled) => {
+				if (savingEnabled) return;
+				setEnabledOverride(nextEnabled);
+				setSavingEnabled(true);
+				try {
+					const res = await fetch("/query-credits/config", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({ enabled: nextEnabled })
+					});
+					const data = await res.json();
+					if (!data.ok) throw new Error("save failed");
+					const nextBase = { ...baseline, enabled: nextEnabled };
+					settingsDraftMem.baseline = nextBase;
+					settingsDraftMem.hydrated = true;
+					persistSessionDraft();
+					setBaseline(nextBase);
+					setEnabledOverride(null);
+					showToast(t("settings.savedToast"));
+					void balanceStore.forceRefresh();
+					void spendStore.refresh();
+				} catch (_err) {
+					setEnabledOverride(null);
+					showToast(t("settings.saveFailed"));
+				} finally {
+					setSavingEnabled(false);
+				}
+			};
+
 			const saveCard = async (cardId) => {
-				if (!dirtyOf(cardId) || savingCard) return;
+				if ((!quotaEnabled && cardId !== "pricing") || !dirtyOf(cardId) || savingCard) return;
 				setSavingCard(cardId);
 				setFailedCard(null);
 				const merged = mergeView(baseline, { ...drafts, [cardId]: drafts[cardId] });
@@ -1416,6 +1560,7 @@ window.__ModuleLoader__.load({
 						payload.dockLayout = normalizeDockLayout(merged.dockLayout);
 						payload.showCapsule = merged.showCapsule !== false;
 						payload.showPopover = merged.showPopover !== false;
+						payload.showTps = merged.showTps !== false;
 					} else if (cardId === "quota") {
 						payload.quotaMode = merged.quotaMode === "custom" ? "custom" : "follow";
 						payload.provider = merged.provider === "opencode-go" ? "opencode-go" : "deepseek";
@@ -1496,12 +1641,13 @@ window.__ModuleLoader__.load({
 				hint: t(hintKey),
 				overridden: isSchemaOverridden(field, view[field], currency),
 				onReset: () => resetField("display", field),
-				disabled: savingCard === "display",
-				trailing: react.createElement("input", {
-					type: "checkbox",
-					className: "dshqb_check",
+				disabled: !quotaEnabled || savingCard === "display",
+				trailing: react.createElement(SwitchControl, {
 					checked: view[field] !== false,
-					onChange: (e) => patchCard("display", { [field]: e.target.checked })
+					disabled: !quotaEnabled || savingCard === "display",
+					onChange: (e) => patchCard("display", { [field]: e.target.checked }),
+					label: t(labelKey),
+					key: "switch"
 				})
 			});
 
@@ -1518,8 +1664,13 @@ window.__ModuleLoader__.load({
 				onSave: () => { void saveCard("display"); },
 				key: "display"
 			}, [
-				react.createElement(FieldGrid, { key: "display_bar" }, [
+				react.createElement("div", { className: "dshqb_toggle_list", key: "display_toggles" }, [
 					displayCheck("showDock", "settings.showDock", "settings.showDockHint"),
+					displayCheck("showCapsule", "settings.showCapsule", "settings.showCapsuleHint"),
+					displayCheck("showPopover", "settings.showPopover", "settings.showPopoverHint"),
+					displayCheck("showTps", "settings.showTps", "settings.showTpsHint")
+				]),
+				react.createElement(FieldGrid, { key: "display_bar" }, [
 					react.createElement(FieldRow, {
 						t,
 						key: "dockLayout",
@@ -1528,19 +1679,25 @@ window.__ModuleLoader__.load({
 						overridden: isSchemaOverridden("dockLayout", view.dockLayout, currency),
 						onReset: () => resetField("display", "dockLayout"),
 						disabled: savingCard === "display" || view.showDock === false
-					}, react.createElement("select", {
-						className: "dshqb_select",
-						value: normalizeDockLayout(view.dockLayout),
-						disabled: view.showDock === false,
-						onChange: (e) => patchCard("display", { dockLayout: normalizeDockLayout(e.target.value) })
-					}, [
-						react.createElement("option", { value: "own", key: "own" }, t("settings.dockLayout.own")),
-						react.createElement("option", { value: "shared", key: "shared" }, t("settings.dockLayout.shared"))
-					]))
-				]),
-				react.createElement(FieldGrid, { key: "display_extra" }, [
-					displayCheck("showCapsule", "settings.showCapsule", "settings.showCapsuleHint"),
-					displayCheck("showPopover", "settings.showPopover", "settings.showPopoverHint")
+					}, react.createElement("div", {
+						className: "dshqb_layout_choices",
+						role: "radiogroup",
+						"aria-label": t("settings.dockLayout")
+					}, ["own", "shared"].map((layout) => {
+						const selected = normalizeDockLayout(view.dockLayout) === layout;
+						return react.createElement("button", {
+							type: "button",
+							className: "dshqb_layout_choice" + (selected ? " dshqb_layout_choice_selected" : ""),
+							role: "radio",
+							"aria-checked": selected,
+							disabled: !quotaEnabled || view.showDock === false || savingCard === "display",
+							onClick: () => patchCard("display", { dockLayout: layout }),
+							key: layout
+						}, [
+							react.createElement("span", { className: "dshqb_layout_choice_mark", "aria-hidden": "true", key: "mark" }),
+							react.createElement("span", { className: "dshqb_layout_choice_label", key: "label" }, t("settings.dockLayout." + layout))
+						]);
+					})))
 				])
 			]);
 
@@ -1931,28 +2088,67 @@ window.__ModuleLoader__.load({
 				hideFooter: true,
 				key: "export"
 			}, [
-				react.createElement("pre", { className: "dshqb_code_block", key: "code" }, generateYaml(view)),
-				react.createElement("div", { style: { display: "flex", justifyContent: "flex-end", paddingTop: "8px" }, key: "act" }, [
-					react.createElement("button", {
+				react.createElement("div", { className: "dshqb_code_wrap", key: "code_wrap" }, [
+					react.createElement("pre", { className: "dshqb_code_block", key: "code" }, generateYaml(view)),
+					react.createElement(HoverTooltip, {
+						content: copied ? t("settings.copied") : t("settings.btnCopy"),
+						className: "dshqb_code_copy_wrap",
+						key: "copy_tip"
+					}, react.createElement("button", {
 						type: "button",
-						className: "dshqb_btn dshqb_btn_secondary",
-						onClick: handleCopyYaml,
-						key: "btn_copy"
-					}, copied ? t("settings.copied") : t("settings.btnCopy"))
+						className: "dshqb_code_copy" + (copied ? " dshqb_code_copy_done" : ""),
+						"aria-label": copied ? t("settings.copied") : t("settings.btnCopy"),
+						onClick: handleCopyYaml
+					}, react.createElement("span", { className: "dshqb_copy_icon", "aria-hidden": "true" })))
 				])
 			]);
 
+			const enabledOverridden = isSchemaOverridden("enabled", view.enabled, currency);
 			return react.createElement("div", { className: "dshqb_settings_page" }, [
 				react.createElement("div", { className: "dshqb_settings_intro", key: "intro" }, [
 					react.createElement("span", { className: "dshqb_settings_intro_title", key: "title" }, t("settings.title")),
 					react.createElement("span", { className: "dshqb_settings_desc", key: "desc" }, t("settings.desc"))
 				]),
-				react.createElement("ul", { className: "dshqb_pcard_list", key: "cards" }, [
-					displayCard,
-					quotaCard,
-					threshCard,
-					pricingCard,
-					exportCard
+				react.createElement("div", { className: "dshqb_settings_global", key: "global" }, [
+					react.createElement("span", { className: "dshqb_settings_global_copy", key: "copy" }, [
+						react.createElement("span", { className: "dshqb_settings_global_head", key: "head" }, [
+							react.createElement("span", { className: "dshqb_settings_global_title", key: "title" }, t("settings.enabled")),
+							enabledOverridden ? react.createElement("span", { className: "dshqb_field_badges", key: "badges" }, [
+								react.createElement("span", { className: "dshqb_field_badge", key: "ov" }, t("settings.overridden")),
+								react.createElement("button", {
+									type: "button",
+									className: "dshqb_field_reset",
+									disabled: savingEnabled,
+									onClick: () => { void setGlobalEnabled(schemaDefault("enabled", currency)); },
+									key: "reset"
+								}, t("settings.resetField"))
+							]) : null
+						]),
+						react.createElement("span", { className: "dshqb_settings_global_hint", key: "hint" }, t("settings.enabledHint"))
+					]),
+					react.createElement(SwitchControl, {
+						checked: quotaEnabled,
+						disabled: savingEnabled,
+						onChange: (e) => { void setGlobalEnabled(e.target.checked); },
+						label: t("settings.enabled"),
+						large: true,
+						key: "switch"
+					})
+				]),
+				react.createElement("div", { className: "dshqb_settings_cards", key: "cards" }, [
+					react.createElement("fieldset", {
+						className: "dshqb_settings_fieldset" + (quotaEnabled ? "" : " dshqb_settings_locked"),
+						disabled: !quotaEnabled,
+						key: "quota_settings"
+					}, react.createElement("ul", { className: "dshqb_pcard_list" }, [
+						displayCard,
+						quotaCard,
+						threshCard
+					])),
+					react.createElement("ul", { className: "dshqb_pcard_list", key: "always_available" }, [
+						pricingCard,
+						exportCard
+					])
 				]),
 				toast ? react.createElement("div", { className: "dshqb_toast", key: "toast" }, toast) : null
 			]);
@@ -2146,6 +2342,7 @@ window.__ModuleLoader__.load({
 
 		const BalanceReadout = react.memo(function BalanceReadout({ useProjection, t, session, sessionId }) {
 			const rawCost = useProjection("queryCreditsCost");
+			const liveUsage = useProjection("liveTokenUsage");
 			const balance = react.useSyncExternalStore(balanceStore.subscribe, balanceStore.getSnapshot, balanceStore.getSnapshot);
 			const resolver = react.useSyncExternalStore(
 				(fn) => {
@@ -2176,6 +2373,7 @@ window.__ModuleLoader__.load({
 				? (balance.payload?.defaultProvider ?? balance.payload?.provider)
 				: null;
 			const payload = balance.status === "ok" ? balance.payload : null;
+			const featureEnabled = payload?.enabled !== false;
 			const quotaSource = resolveQuotaSource(modelProvider, {
 				quotaMode: payload?.quotaMode,
 				provider: fallbackProvider
@@ -2184,10 +2382,31 @@ window.__ModuleLoader__.load({
 			const dockLayout = normalizeDockLayout(payload?.dockLayout);
 			const showCapsule = payload?.showCapsule !== false;
 			const showPopover = payload?.showPopover !== false;
+			const showTps = payload?.showTps !== false;
 			const cost = priceSession(rawCost, payload);
 			const rootRef = react.useRef(null);
 
+			// 峰谷切换不依赖额度接口轮询，避免跨过 09:00/12:00/14:00/18:00 后徽章滞后。
+			const [tariffNow, setTariffNow] = react.useState(() => Date.now());
+			react.useEffect(() => {
+				const timer = setInterval(() => setTariffNow(Date.now()), 30000);
+				return () => clearInterval(timer);
+			}, []);
+			if (!featureEnabled) return null;
 			const isRefreshing = balance.isRefreshing === true;
+			const tariffPeriod = currentTariffPeriod(tariffNow);
+			const tariffLabelKey = tariffPeriod === "peak" ? "tariff.peak" : "tariff.offPeak";
+			const tariffTitleKey = tariffPeriod === "peak" ? "tariff.peakTitle" : "tariff.offPeakTitle";
+			const tariffBadge = react.createElement(HoverTooltip, {
+				content: t(tariffTitleKey),
+				className: "dshqb_tariff_wrap",
+				key: "tariff_wrap"
+			}, react.createElement("button", {
+				type: "button",
+				className: "dshqb_card_badge dshqb_card_badge_btn dshqb_tariff_badge dshqb_tariff_" + (tariffPeriod === "peak" ? "peak" : "offpeak"),
+				"aria-label": t(tariffTitleKey),
+				key: "tariff"
+			}, t(tariffLabelKey)));
 			const handleRefresh = (e) => {
 				if (e) {
 					e.stopPropagation();
@@ -2207,14 +2426,16 @@ window.__ModuleLoader__.load({
 					const quota = opencodeQuotaStatus(usage, info.thresholds);
 					const level = quota.available ? quota.level : "danger";
 					const levelText = level === "success" ? t("status.sufficient") : level === "warning" ? t("status.warning") : t("status.danger");
-					const statusDot = react.createElement("button", {
+					const statusDot = react.createElement(HoverTooltip, {
+						content: isRefreshing ? t("btn.refreshingQuota") : t("btn.refreshQuota"),
+						key: "status_tip"
+					}, react.createElement("button", {
 						type: "button",
 						className: "dshqb_dot dshqb_dot_btn dshqb_dot_" + level + (isRefreshing ? " dshqb_dot_loading" : ""),
 						"aria-label": isRefreshing ? t("btn.refreshingQuota") : t("btn.refreshQuota"),
-						title: isRefreshing ? t("btn.refreshingQuota") : t("btn.refreshQuota"),
 						onClick: handleRefresh,
 						disabled: isRefreshing
-					});
+					}));
 					balNode = react.createElement("span", { className: "dshqb_amount", key: "bal" }, statusDot, t("quota.readout", {
 						monthly: formatPercent(usage.monthly?.percent),
 						weekly: formatPercent(usage.weekly?.percent),
@@ -2223,14 +2444,18 @@ window.__ModuleLoader__.load({
 					leftCol = react.createElement("div", { className: "dshqb_col", key: "left" }, [
 						react.createElement("div", { className: "dshqb_card_header", key: "head" }, [
 							react.createElement("span", { className: "dshqb_card_title", key: "title" }, t("quota.cardTitle")),
-							react.createElement("button", {
-								type: "button",
-								className: "dshqb_card_badge dshqb_card_badge_btn dshqb_card_badge_" + level,
-								key: "badge",
-								onClick: handleRefresh,
-								disabled: isRefreshing,
-								title: isRefreshing ? t("btn.refreshingQuota") : t("btn.refreshQuota")
-							}, quota.available ? t("quota.remaining", { percent: formatPercent(quota.minRemaining) }) : t("quota.unavailable"))
+							react.createElement("span", { className: "dshqb_card_badges", key: "badges" }, [
+								tariffBadge,
+								react.createElement(HoverTooltip, {
+									content: isRefreshing ? t("btn.refreshingQuota") : t("btn.refreshQuota"),
+									key: "badge_tip"
+								}, react.createElement("button", {
+									type: "button",
+									className: "dshqb_card_badge dshqb_card_badge_btn dshqb_card_badge_" + level,
+									onClick: handleRefresh,
+									disabled: isRefreshing
+								}, quota.available ? t("quota.remaining", { percent: formatPercent(quota.minRemaining) }) : t("quota.unavailable")))
+							])
 						]),
 						react.createElement("div", { className: "dshqb_quota_rows", key: "rows" },
 							OPENCODE_WINDOW_KEYS.map((key) => {
@@ -2240,14 +2465,15 @@ window.__ModuleLoader__.load({
 								return react.createElement("div", { className: "dshqb_quota_row", key },
 									react.createElement("div", { className: "dshqb_quota_head", key: "head" }, [
 										react.createElement("span", { className: "dshqb_quota_name", key: "name" }, opencodeWindowName(key, t)),
-										react.createElement("button", {
+										react.createElement(HoverTooltip, {
+											content: isRefreshing ? t("btn.refreshingQuota") : t("btn.refreshQuota"),
+											key: "pct_tip"
+										}, react.createElement("button", {
 											type: "button",
 											className: "dshqb_quota_pct dshqb_quota_pct_btn",
-											key: "pct",
 											onClick: handleRefresh,
-											disabled: isRefreshing,
-											title: isRefreshing ? t("btn.refreshingQuota") : t("btn.refreshQuota")
-										}, formatPercent(w.percent))
+											disabled: isRefreshing
+										}, formatPercent(w.percent)))
 									]),
 									react.createElement("div", { className: "dshqb_quota_track", key: "track" },
 										react.createElement("div", {
@@ -2269,14 +2495,16 @@ window.__ModuleLoader__.load({
 					]);
 				} else if (info.provider === "opencode-go") {
 					const message = info.error === "api-key-missing" ? t("balanceMissing") : t("quota.unavailable");
-					const statusDot = react.createElement("button", {
+					const statusDot = react.createElement(HoverTooltip, {
+						content: isRefreshing ? t("btn.refreshingQuota") : t("btn.refreshQuota"),
+						key: "status_tip"
+					}, react.createElement("button", {
 						type: "button",
 						className: "dshqb_dot dshqb_dot_btn dshqb_dot_danger" + (isRefreshing ? " dshqb_dot_loading" : ""),
 						"aria-label": isRefreshing ? t("btn.refreshingQuota") : t("btn.refreshQuota"),
-						title: isRefreshing ? t("btn.refreshingQuota") : t("btn.refreshQuota"),
 						onClick: handleRefresh,
 						disabled: isRefreshing
-					});
+					}));
 					balNode = react.createElement("span", { className: "dshqb_error", key: "bal" }, statusDot, message);
 					leftCol = react.createElement("div", { className: "dshqb_col", key: "left" }, [
 						react.createElement("div", { className: "dshqb_card_header", key: "head" }, react.createElement("span", { className: "dshqb_card_title" }, t("quota.cardTitle"))),
@@ -2288,27 +2516,33 @@ window.__ModuleLoader__.load({
 					const amount = wallets.readout.map((w) => formatMoney(w.total, w.currency)).join(" · ");
 					const level = getStatusLevel(primary.total, info.isAvailable === true, info.thresholds);
 					const levelText = level === "success" ? t("status.sufficient") : level === "warning" ? t("status.warning") : t("status.danger");
-					const statusDot = react.createElement("button", {
+					const statusDot = react.createElement(HoverTooltip, {
+						content: isRefreshing ? t("btn.refreshing") : t("btn.refresh"),
+						key: "status_tip"
+					}, react.createElement("button", {
 						type: "button",
 						className: "dshqb_dot dshqb_dot_btn dshqb_dot_" + level + (isRefreshing ? " dshqb_dot_loading" : ""),
 						"aria-label": isRefreshing ? t("btn.refreshing") : t("btn.refresh"),
-						title: isRefreshing ? t("btn.refreshing") : t("btn.refresh"),
 						onClick: handleRefresh,
 						disabled: isRefreshing
-					});
+					}));
 					balNode = react.createElement("span", { className: "dshqb_amount", key: "bal" }, statusDot, t("balance", { amount }));
 
 					leftCol = react.createElement("div", { className: "dshqb_col", key: "left" }, [
 						react.createElement("div", { className: "dshqb_card_header", key: "head" }, [
 							react.createElement("span", { className: "dshqb_card_title", key: "title" }, t("card.balanceTitle")),
-							react.createElement("button", {
-								type: "button",
-								className: "dshqb_card_badge dshqb_card_badge_btn dshqb_card_badge_" + level,
-								key: "badge",
-								onClick: handleRefresh,
-								disabled: isRefreshing,
-								title: isRefreshing ? t("btn.refreshing") : t("btn.refresh")
-							}, "● " + levelText)
+							react.createElement("span", { className: "dshqb_card_badges", key: "badges" }, [
+								tariffBadge,
+								react.createElement(HoverTooltip, {
+									content: isRefreshing ? t("btn.refreshing") : t("btn.refresh"),
+									key: "badge_tip"
+								}, react.createElement("button", {
+									type: "button",
+									className: "dshqb_card_badge dshqb_card_badge_btn dshqb_card_badge_" + level,
+									onClick: handleRefresh,
+									disabled: isRefreshing
+								}, "● " + levelText))
+							])
 						]),
 						react.createElement("div", { className: "dshqb_wallets", key: "wallets" },
 							wallets.card.map((w) =>
@@ -2369,6 +2603,10 @@ window.__ModuleLoader__.load({
 				const amount = formatMoney(cost.cost, cost.currency ?? "CNY");
 				costNode = react.createElement("span", { className: "dshqb_amount", key: "cost" }, t("sessionCost", { amount }));
 			}
+			const hasTps = showTps && Number.isFinite(liveUsage?.tokensPerSecond) && liveUsage.tokensPerSecond > 0;
+			const tpsNode = hasTps
+				? react.createElement("span", { className: "dshqb_amount dshqb_tps", key: "tps" }, t("tps", { rate: formatTokensPerSecond(liveUsage.tokensPerSecond) }))
+				: null;
 
 			const rightCol = react.createElement("div", { className: "dshqb_col", key: "right" }, [
 				react.createElement("div", { className: "dshqb_card_header", key: "head" }, [
@@ -2494,6 +2732,10 @@ window.__ModuleLoader__.load({
 			if (costNode !== null) {
 				if (triggerChildren.length > 0) triggerChildren.push(react.createElement("span", { className: "dshqb_sep", "aria-hidden": true, key: "sep_cost" }, "|"));
 				triggerChildren.push(costNode);
+			}
+			if (tpsNode !== null) {
+				if (triggerChildren.length > 0) triggerChildren.push(react.createElement("span", { className: "dshqb_sep", "aria-hidden": true, key: "sep_tps" }, "|"));
+				triggerChildren.push(tpsNode);
 			}
 			if (popover !== null) triggerChildren.push(popover);
 

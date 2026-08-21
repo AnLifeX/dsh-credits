@@ -220,6 +220,7 @@ const props = {
       'status.warning': '偏低',
       'status.danger': '告急',
       'sessionCost': '本会话约 {amount}',
+      'tps': 'TPS {rate} tok/s',
       'card.balanceTitle': '📊 账户余额',
       'card.sessionTitle': '⚡ 本会话消耗',
       'card.total': '总额: ',
@@ -232,6 +233,10 @@ const props = {
       'card.tokensHit': '命中: {hit} ({hitRate}%)',
       'card.noCost': '本会话暂未产生消耗',
       'card.pricingHint': '💡 计价规则与单价请见右侧 [?]',
+      'tariff.peak': '梁文峰时刻',
+      'tariff.offPeak': '梁文谷时刻',
+      'tariff.peakTitle': '梁文峰时刻：（北京时间）09:00–12:00、14:00–18:00\n梁文谷时刻：（北京时间）00:00–09:00、12:00–14:00、18:00–24:00',
+      'tariff.offPeakTitle': '梁文峰时刻：（北京时间）09:00–12:00、14:00–18:00\n梁文谷时刻：（北京时间）00:00–09:00、12:00–14:00、18:00–24:00',
       'pricing.title': '📋 DeepSeek V4 定价参考',
       'pricing.rateBadge': '每 1M tokens · {currency}',
       'pricing.hit': '命中 {price}',
@@ -264,7 +269,7 @@ const props = {
     for (const [k, v] of Object.entries(params ?? {})) out = out.replaceAll('{' + k + '}', String(v))
     return out
   },
-  useProjection: () => ({
+  useProjection: (key) => key === 'liveTokenUsage' ? ({ tokensPerSecond: 31.4 }) : ({
     models: ['deepseek-chat'],
     cost: 0.000712,
     costByModel: { 'deepseek-chat': 0.000712 },
@@ -281,6 +286,7 @@ await new Promise((r) => setTimeout(r, 400))
 const htmlGreen = renderToStaticMarkup(ReactMock.createElement(Comp, props))
 console.log('rendered (green):', htmlGreen)
 if (!htmlGreen.includes('100.23')) throw new Error('balance not rendered')
+if (!htmlGreen.includes('TPS 31.4 tok/s')) throw new Error('TPS should render in the bottom dock')
 if (!htmlGreen.includes('dshqb_dot_success')) throw new Error('green status dot missing')
 if (!htmlGreen.includes('dshqb_dot_btn')) throw new Error('status button class missing')
 if (!htmlGreen.includes('<button')) throw new Error('status button element missing')
@@ -315,6 +321,12 @@ if (!htmlGreen.includes('CNY 钱包')) throw new Error('CNY wallet row missing')
 if (!htmlGreen.includes('USD 钱包')) throw new Error('USD wallet row missing')
 if (!htmlGreen.includes('$0.00')) throw new Error('zero USD wallet should still appear on card')
 if (!htmlGreen.includes('dshqb_card_badge_btn')) throw new Error('balance status badge should be a refresh button')
+if (!htmlGreen.includes('梁文峰时刻') && !htmlGreen.includes('梁文谷时刻')) throw new Error('tariff badge should show current peak/valley period')
+if (htmlGreen.includes('dshqb_tariff_tooltip')) throw new Error('old tariff tooltip should be removed')
+if (!htmlGreen.includes('dshqb_hover_tip') || !htmlGreen.includes('梁文峰时刻：（北京时间）09:00–12:00、14:00–18:00') || !htmlGreen.includes('梁文谷时刻：（北京时间）00:00–09:00、12:00–14:00、18:00–24:00')) throw new Error('tariff badge should show the exact two-line Beijing-time tooltip')
+if (htmlGreen.includes('title="梁文峰时刻') || htmlGreen.includes('title="梁文谷时刻')) throw new Error('tariff tooltip should not duplicate as a native title')
+if (!htmlGreen.includes('dshqb_tariff_badge dshqb_card_badge dshqb_card_badge_btn') && !htmlGreen.includes('dshqb_card_badge dshqb_card_badge_btn dshqb_tariff_badge')) throw new Error('tariff badge should use the same button format as status badges')
+if (htmlGreen.indexOf('梁文') > htmlGreen.indexOf('● 充足')) throw new Error('tariff badge should be left of balance status badge')
 if (!htmlGreen.includes('余额 ¥100.23')) throw new Error('CNY preferred readout should hide empty extra currencies')
 if (!htmlGreen.includes('dshqb_cap')) throw new Error('spend capsule missing')
 if (!htmlGreen.includes('dshqb_cap_pill')) throw new Error('spend pill missing')
@@ -340,6 +352,8 @@ const settingsT = (key, params) => {
     'settings.card.pricingDesc': '各模型每 1M Token 的命中 / 未命中 / 输出价。',
     'settings.card.export': 'YAML 导出',
     'settings.card.exportDesc': '复制到 cordis.patch.yml 做持久覆盖。',
+    'settings.enabled': '启用额度功能',
+    'settings.enabledHint': 'global quota hint',
     'settings.showDock': '底部统计条',
     'settings.showDockHint': 'dock hint',
     'settings.dockLayout': '底部条布局',
@@ -350,6 +364,8 @@ const settingsT = (key, params) => {
     'settings.showCapsuleHint': 'capsule hint',
     'settings.showPopover': '悬停详情气泡',
     'settings.showPopoverHint': 'popover hint',
+    'settings.showTps': '实时 TPS',
+    'settings.showTpsHint': 'tps hint',
     'settings.quotaMode': '额度查询模式',
     'settings.quotaMode.follow': '跟随当前模型供应商',
     'settings.quotaMode.custom': '自定义固定展示',
@@ -371,6 +387,14 @@ if (!htmlSettings.includes('额度与消耗')) throw new Error('settings page ti
 if (!htmlSettings.includes('底部额度、累计消耗与模型单价。')) throw new Error('settings page description missing')
 if (!htmlSettings.includes('dshqb_pcard')) throw new Error('settings cards missing')
 if (!htmlSettings.includes('展示')) throw new Error('display card title missing')
+if (!htmlSettings.includes('启用额度功能')) throw new Error('global quota enable switch missing from settings')
+if (!code.includes('displayCheck("showTps", "settings.showTps", "settings.showTpsHint")')) throw new Error('TPS display toggle wiring missing')
+if (!code.includes('dshqb_switch')) throw new Error('settings switches should use slider controls')
+if (!code.includes('dshqb_toggle_list')) throw new Error('display switches should be grouped together')
+if (!code.includes('dshqb_layout_choices') || !code.includes('dshqb_layout_choice_selected')) throw new Error('dock layout should use two selectable cards')
+if (!code.includes('dshqb_code_copy') || !code.includes('dshqb_copy_icon')) throw new Error('YAML copy should be a compact icon inside the code block')
+if (!code.includes('isSchemaOverridden("enabled"')) throw new Error('global quota switch should expose override/reset state')
+if (!code.includes('settings.enabled')) throw new Error('global quota enable switch missing')
 if (!htmlSettings.includes('额度查询')) throw new Error('quota card title missing')
 if (!htmlSettings.includes('阈值与刷新')) throw new Error('thresholds card title missing')
 if (!htmlSettings.includes('模型单价')) throw new Error('pricing card title missing')
@@ -416,11 +440,13 @@ function loadClientFactory() {
     removeItem(key) { delete draftStore[key] },
   }
   const saved = {
+    enabled: true,
     quotaMode: 'follow',
     showDock: true,
     dockLayout: 'own',
     showCapsule: true,
     showPopover: true,
+    showTps: false,
     provider: 'deepseek',
     currency: 'CNY',
     warningThreshold: 10,
@@ -447,14 +473,16 @@ function loadClientFactory() {
   const draftSettings = slotOf(draftRegs, 'settings.section')
   const htmlDraft = renderToStaticMarkup(ReactMock.createElement(draftSettings.comp, { t: settingsT }))
   if (!htmlDraft.includes('未保存')) throw new Error('dirty draft should show unsaved badge')
-  if (!htmlDraft.includes('放弃修改')) throw new Error('dirty draft should show discard')
+if (!htmlDraft.includes('放弃修改')) throw new Error('dirty draft should show discard')
+  if (!htmlDraft.includes('实时 TPS')) throw new Error('TPS display toggle missing from open display settings card')
   if (!htmlDraft.includes('已覆盖')) throw new Error('overridden field should show badge')
   if (!htmlDraft.includes('恢复默认')) throw new Error('overridden field should show restore default')
-  if (!htmlDraft.includes('class="dshqb_select" value="shared"')) throw new Error('dirty draft should restore unsaved dockLayout')
-  if (!/class="dshqb_field_head"[\s\S]*?class="dshqb_check"/.test(htmlDraft)) throw new Error('checkbox should sit on the field title row')
+  if (!htmlDraft.includes('dshqb_layout_choice dshqb_layout_choice_selected')) throw new Error('dirty draft should restore the selected dock layout card')
+  if (!htmlDraft.includes('dshqb_switch')) throw new Error('display settings should render slider switches')
   if (!htmlDraft.includes('dshqb_field_grid')) throw new Error('threshold fields should use two-column grid')
   if (!htmlDraft.includes('dshqb_field_full')) throw new Error('long quota URL should span both columns')
   if (htmlDraft.includes('settings.exportDesc') || htmlDraft.includes('复制下方片段')) throw new Error('YAML body should not repeat the card description')
+  if (!htmlDraft.includes('dshqb_code_copy') || !htmlDraft.includes('dshqb_copy_icon')) throw new Error('YAML code block should contain an icon-only copy button')
   globalThis.sessionStorage = prevSession
   globalThis.window.__ModuleLoader__.load = (entry) => { captured = entry }
   console.log('SETTINGS DRAFT RESTORE SMOKE TEST PASSED')
@@ -500,6 +528,10 @@ const quotaDict = {
   'quota.monthly': '每月',
   'quota.resets': '{time} 重置',
   'quota.unavailable': 'OpenCode Go 额度不可用',
+  'tariff.peak': '梁文峰时刻',
+  'tariff.offPeak': '梁文谷时刻',
+  'tariff.peakTitle': '梁文峰时刻：（北京时间）09:00–12:00、14:00–18:00\n梁文谷时刻：（北京时间）00:00–09:00、12:00–14:00、18:00–24:00',
+  'tariff.offPeakTitle': '梁文峰时刻：（北京时间）09:00–12:00、14:00–18:00\n梁文谷时刻：（北京时间）00:00–09:00、12:00–14:00、18:00–24:00',
   'btn.refreshQuota': '点击立即刷新 OpenCode Go 额度',
   'btn.refreshingQuota': '正在刷新 OpenCode Go 额度...',
   'status.sufficient': '充足',
@@ -550,6 +582,8 @@ if (htmlQuota.includes('dshqb_pricing_wrap')) throw new Error('DeepSeek pricing 
 if (!htmlQuota.includes('dshqb_quota_fill')) throw new Error('opencode quota progress fill missing')
 if (!htmlQuota.includes('dshqb_cap')) throw new Error('spend capsule missing in opencode-go mode')
 if (!htmlQuota.includes('dshqb_card_badge_btn')) throw new Error('quota remaining badge should be a refresh button')
+  if (!htmlQuota.includes('梁文峰时刻') && !htmlQuota.includes('梁文谷时刻')) throw new Error('quota tariff badge should show current peak/valley period')
+  if (htmlQuota.indexOf('梁文') > htmlQuota.indexOf('剩余 88%')) throw new Error('quota tariff badge should be left of remaining badge')
 if (!htmlQuota.includes('dshqb_quota_pct_btn')) throw new Error('quota percent should be a refresh button')
 console.log('OPENCODE CLIENT SMOKE TEST PASSED')
 
@@ -638,15 +672,17 @@ const followProps = {
   t: followT,
   sessionId: 'sess-follow',
   session: { sessionId: 'sess-follow', nodes: [] },
-  useProjection: () => ({
-    models: [],
-    cost: 0,
-    costByModel: {},
-    tokens: { uncachedInput: 0, cacheRead: 0, cacheWrite: 0, output: 0 },
-    tokensByModel: {},
-    legs: [],
-    currency: 'CNY',
-  }),
+  useProjection: (key) => key === 'liveTokenUsage'
+    ? ({ tokensPerSecond: 31.4 })
+    : ({
+        models: [],
+        cost: 0,
+        costByModel: {},
+        tokens: { uncachedInput: 0, cacheRead: 0, cacheWrite: 0, output: 0 },
+        tokensByModel: {},
+        legs: [],
+        currency: 'CNY',
+      }),
 }
 renderToStaticMarkup(ReactMock.createElement(FollowComp, followProps))
 await new Promise((r) => setTimeout(r, 400))
@@ -734,6 +770,7 @@ installFetch(() => ({
   showDock: false,
   showCapsule: true,
   showPopover: false,
+  showTps: false,
   fetchedAt: Date.now(),
   refreshIntervalMs: 300000,
   clientPollIntervalMs: 30000,
@@ -764,10 +801,47 @@ await new Promise((r) => setTimeout(r, 400))
 const htmlFlags = renderToStaticMarkup(ReactMock.createElement(FlagsComp, followProps))
 if (htmlFlags.includes('dshqb_root')) throw new Error('showDock=false should hide the bottom bar')
 if (htmlFlags.includes('dshqb_popover')) throw new Error('hidden dock should not render hover card')
+if (htmlFlags.includes('TPS 31.4 tok/s')) throw new Error('showTps=false should hide TPS')
 if (!htmlFlags.includes('dshqb_cap')) throw new Error('showCapsule=true should keep spend capsule')
 if (!htmlFlags.includes('dshqb_host')) throw new Error('capsule should use zero-size host when dock is hidden')
 console.log('DISPLAY FLAGS CLIENT SMOKE TEST PASSED')
 
+// ---------- 全局功能开关 ----------
+installFetch(() => ({
+  ok: true,
+  enabled: false,
+  showDock: true,
+  showCapsule: true,
+  showPopover: true,
+  showTps: true,
+  fetchedAt: Date.now(),
+  refreshIntervalMs: 300000,
+  clientPollIntervalMs: 30000,
+  currency: 'CNY',
+  thresholds: { warning: 10, danger: 5 },
+  isAvailable: true,
+  balances: [{ currency: 'CNY', total: 100.23, granted: 0, toppedUp: 100.23 }],
+  prices: {},
+  defaultPrices: {},
+}))
+new Function('window', 'require', code)(globalThis.window, (id) => {
+  if (id === 'react') return ReactMock
+  if (id === '@deepseek-ai/dsh-client-ui-primitives') return stubPrimitives(ReactMock)
+  throw new Error('unexpected require: ' + id)
+})
+const disabledApi = captured.factory((id) => {
+  if (id === 'react') return ReactMock
+  if (id === '@deepseek-ai/dsh-client-ui-primitives') return stubPrimitives(ReactMock)
+  throw new Error('unexpected require: ' + id)
+})
+const disabledRegs = []
+disabledApi.apply(makeSlotCtx(disabledRegs))
+const DisabledComp = slotOf(disabledRegs, 'conversation.composer.dock').comp
+renderToStaticMarkup(ReactMock.createElement(DisabledComp, followProps))
+await new Promise((r) => setTimeout(r, 400))
+const htmlDisabled = renderToStaticMarkup(ReactMock.createElement(DisabledComp, followProps))
+if (htmlDisabled !== '') throw new Error('enabled=false should hide all quota UI')
+console.log('GLOBAL ENABLE FLAG CLIENT SMOKE TEST PASSED')
+
 console.log('CLIENT SMOKE TEST PASSED (ZERO-DEPENDENCY)')
 process.exit(0)
-
