@@ -57,7 +57,7 @@ OpenCode Go 模式下，卡片改成三个窗口的用量百分比与重置时�
 1. 页面以 DSH 已启用的供应商为列表，每个供应商独立开启或关闭额度展示。
 2. 能识别的供应商默认用「自动识别」：复用这个供应商在 DSH 保存的 Base URL 和 Key，并选择匹配的解析模板。
 3. 也可以明确选择一个「内置模板」，或让两个模型供应商「复用另一供应商的额度」。
-4. 最后才用「自定义 HTTP 接口」：填 URL、选择当前/其它 DSH 供应商凭证，点「测试并读取字段」，再从下拉列表选「剩余」，或选「已用 + 总额」。不需要手写 JSONPath。
+4. 最后才用「自定义 HTTP 接口」：填 URL，选择 DSH Key、直接 Token/Cookie 或凭证引用；需要时添加请求头、JSON/Form 请求体。点「测试并读取字段」后可直接选择字段，也可以填写 JSONPath 并设置求和、计数、乘数或偏移。
 
 切换模型时只查看当前 DSH 供应商自己的绑定；没有配置或已关闭的供应商不显示额度，也不会回退到无关账户。每个绑定有独立缓存，因此可以在 DSH 里用多个自定义供应商添加多个 OpenCode Go 账号，它们会分别查询和展示。设置修改会立即作用于当前 `dsh web` 进程；需要跨重启保留时，请再从 YAML 导出卡片复制到 profile 配置。
 
@@ -75,7 +75,7 @@ OpenCode Go 模式下，卡片改成三个窗口的用量百分比与重置时�
 - 订阅套餐：Kimi For Coding、智谱 GLM Coding / Z.AI、MiniMax Coding Plan（国内 / 国际）
 - 账户余额：StepFun、OpenRouter、Novita AI
 
-硅基流动仍保留一个可手动选择的旧 `/user/info` 模板，但不会自动开启。自 2025-11 起硅基流动将活动额度迁移为代金券，而公开 API 不返回代金券；实测网页余额也可能与该接口的 `balance` / `chargeBalance` / `totalBalance` 全部不一致。因此模板名称和测试结果会明确标为「API 余额（不含代金券）」，不能把它当作官网总可用额度。
+硅基流动不再提供内置余额模板。旧 `/user/info` 无法可靠反映网页现金余额和代金券；需要时请给对应 DSH 供应商选择「自定义 HTTP 接口」，自行配置网页接口与会话凭证。网页内部接口可能随时调整，Cookie 失效时需要重新填写。
 
 高级 YAML 的每个 `providerQuotas` 绑定可以使用三种数据形态：
 
@@ -264,6 +264,15 @@ dsh plugin --profile web remove dsh-balance
 
 自定义 HTTP 支持直接取「剩余」，也支持用「总额 - 已用」计算剩余。OpenRouter 已是内置模板，不需要再写代理脚本。
 
+请求鉴权支持：
+
+- `Bearer`、`Authorization: Token`、Basic Auth、任意请求头、Cookie、URL 查询参数
+- 将凭证注入 JSON 或 `application/x-www-form-urlencoded` 请求体
+- 直接填写一份敏感凭证、复用 DSH 供应商 Key，或使用 credentials / 环境变量引用
+- 附加多个普通请求头，例如硅基流动网页接口需要的 `x-subject-id`
+
+响应映射支持普通点路径、数组下标和 `[*]` 通配符；数组可取第一项、求和、计数、最小值或最大值，最后再应用乘数与加减偏移。例如 `$.data.wallets[*].remaining` 配合「求和」可汇总代金券列表。当前每个供应商绑定只请求一个 URL；现金与代金券若来自两个接口，需要分别选择其中一个查询，后续再考虑组合请求。
+
 ## 架构
 
 浏览器只读本地缓存，不直连上游：
@@ -286,6 +295,8 @@ dsh plugin --profile web remove dsh-balance
 
 - 将内置 `deepseek` / `opencode-go` 抽象为额度源适配器注册表
 - 支持自定义 HTTP / JSONPath 额度源：`balance` / `usage` / `metric`
+- 自定义 HTTP 支持 Cookie / Token / Basic / Header / Query / JSON / Form 鉴权、请求体与数值转换
+- 移除不可靠的硅基流动旧余额模板
 - 额度源可通过 `providerIds` / `providerPatterns` 自动匹配当前模型供应商
 - 保持 `follow`（自动匹配）/ `custom`（固定展示）/ 默认源配置
 - 设置页「额度查询」新增可视化添加/编辑/删除自定义额度源

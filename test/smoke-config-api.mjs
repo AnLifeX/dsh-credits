@@ -7,6 +7,7 @@ import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import {
   apply,
+  buildCustomHttpRequest,
   buildProviderQuotaAdapter,
   collectQuotaFields,
   matchQuotaTemplateForProvider,
@@ -110,6 +111,8 @@ const mockCtx = {
   },
 }
 
+const customRequests = []
+
 // 网络 stub: DeepSeek 返回余额, OpenCode Go 返回三个窗口用量。
 globalThis.fetch = async (url, options = {}) => {
   const target = String(url)
@@ -131,12 +134,18 @@ globalThis.fetch = async (url, options = {}) => {
     }
   }
   if (target.includes('custom.example.com')) {
+    customRequests.push({ url: target, options })
     return {
       ok: true,
       status: 200,
       json: async () => ({
         is_available: true,
-        data: { remaining: 25, total: 100, resetsAt: '2026-08-17T00:00:00.000Z' },
+        data: {
+          remaining: 25,
+          total: 100,
+          resetsAt: '2026-08-17T00:00:00.000Z',
+          wallets: [{ remaining: '2.5' }, { remaining: 4.0608 }],
+        },
       }),
     }
   }
@@ -232,7 +241,7 @@ assert.equal(resGetConfig.data.config.showPopover, true)
   assert.equal(resGetConfig.data.config.opencodeBaseUrl, 'https://opencode.ai/zen/go/v1/usage')
   assert.ok(resGetConfig.data.config.quotaTemplates.some((template) => template.id === 'kimi-coding'))
   assert.ok(resGetConfig.data.config.quotaTemplates.some((template) => template.id === 'opencode-go'))
-  assert.equal(resGetConfig.data.config.quotaTemplates.find((template) => template.id === 'siliconflow-cn-balance').autoEnable, false)
+  assert.equal(resGetConfig.data.config.quotaTemplates.some((template) => template.id.startsWith('siliconflow-')), false)
   assert.deepEqual(new Set(resGetConfig.data.config.dshProviders.map((provider) => provider.id)), new Set([
     'opencode-go', 'go-work', 'go-personal', 'siliconflow-cn', 'unsupported-route',
   ]))
@@ -240,6 +249,7 @@ assert.equal(resGetConfig.data.config.showPopover, true)
   assert.equal(resGetConfig.data.config.providerQuotas.find((binding) => binding.providerId === 'go-work').templateId, 'opencode-go')
   assert.equal(resGetConfig.data.config.providerQuotas.find((binding) => binding.providerId === 'unsupported-route').enabled, false)
   assert.equal(resGetConfig.data.config.providerQuotas.find((binding) => binding.providerId === 'siliconflow-cn').enabled, false)
+  assert.equal(resGetConfig.data.config.providerQuotas.find((binding) => binding.providerId === 'siliconflow-cn').sourceType, 'custom')
   console.log('GET /query-credits/config passed')
 
   // 2. POST /query-credits/config 修改阈值与单价
@@ -295,7 +305,6 @@ assert.equal(resGetConfig.data.config.showPopover, true)
   console.log('GET /query-credits?source=deepseek passed')
 
   // 2.6 自定义 HTTP / JSONPath 额度源
-  process.env.CUSTOM_QUOTA_KEY = 'sk-custom-mock'
   const resCustomPost = await invokeRoute('/query-credits/config', 'POST', {
     providerQuotas: [{
       providerId: 'unsupported-route',
@@ -311,9 +320,11 @@ assert.equal(resGetConfig.data.config.showPopover, true)
         request: {
           url: 'https://custom.example.com/quota',
           dshProvider: '',
-          authRef: 'CUSTOM_QUOTA_KEY',
-          authStyle: 'bearer',
-          headers: { 'X-Api-Key': 'secret-header-value' },
+          credentialMode: 'direct',
+          authRef: '',
+          authValue: '__SF_auth.session-token=session-secret',
+          authStyle: 'cookie',
+          headers: { 'x-subject-id': 'subject-123' },
         },
         response: {
           metrics: [{
@@ -323,13 +334,25 @@ assert.equal(resGetConfig.data.config.showPopover, true)
             totalPath: '$.data.total',
             unit: 'USD',
             resetsAtPath: '$.data.resetsAt',
+          }, {
+            key: 'vouchers',
+            label: '可用代金券',
+            valuePath: '$.data.wallets[*].remaining',
+            aggregate: 'sum',
+            scale: 1,
+            offset: 0,
+            unit: 'CNY',
           }],
         },
       },
     }],
   })
   assert.equal(resCustomPost.data.ok, true)
-  assert.equal(resCustomPost.data.config.providerQuotas.find((binding) => binding.providerId === 'unsupported-route').source.request.headers['X-Api-Key'], '***', 'custom header secrets must be masked')
+  const savedCustomBinding = resCustomPost.data.config.providerQuotas.find((binding) => binding.providerId === 'unsupported-route')
+  assert.equal(savedCustomBinding.source.request.authValue, '***', 'direct custom credentials must be masked')
+  assert.equal(savedCustomBinding.source.request.headers['x-subject-id'], 'subject-123')
+  assert.equal(customRequests.at(-1).options.headers.Cookie, '__SF_auth.session-token=session-secret')
+  assert.equal(customRequests.at(-1).options.headers['x-subject-id'], 'subject-123')
   console.log('POST /query-credits/config (custom-metric) passed')
 
   const resCustom = await invokeRoute('/query-credits', 'GET', null, 'source=provider%3Aunsupported-route')
@@ -338,6 +361,7 @@ assert.equal(resGetConfig.data.config.showPopover, true)
   assert.equal(resCustom.data.metrics[0].value, 25)
   assert.equal(resCustom.data.metrics[0].total, 100)
   assert.equal(resCustom.data.metrics[0].unit, 'USD')
+  assert.equal(resCustom.data.metrics[1].value, 6.5608)
   assert.equal(resCustom.data.views['provider:unsupported-route'].ok, true)
   assert.equal(resCustom.data.providerQuotaMap['unsupported-route'], 'provider:unsupported-route')
   console.log('GET /query-credits?source=provider:unsupported-route passed')
@@ -347,7 +371,10 @@ assert.equal(resGetConfig.data.config.showPopover, true)
   assert.equal(resCustomConn.status, 200)
   assert.equal(resCustomConn.data.ok, true)
   assert.equal(resCustomConn.data.metrics[0].value, 25)
+  assert.equal(resCustomConn.data.metrics[1].value, 6.5608)
+  assert.equal(customRequests.at(-1).options.headers.Cookie, '__SF_auth.session-token=session-secret', 'masked test drafts must reuse the saved credential')
   assert.ok(resCustomConn.data.availableFields.some((field) => field.path === '$.data.remaining'))
+  assert.ok(resCustomConn.data.availableFields.some((field) => field.path === '$.data.wallets[*].remaining'))
   console.log('POST /query-credits/test-connection (custom-metric) passed')
 
   // 清空显式绑定，恢复按 DSH 供应商自动识别。
@@ -390,6 +417,7 @@ assert.equal(resGetConfig.data.config.showPopover, true)
   assert.deepEqual(matchQuotaTemplateForProvider('my-kimi-route', 'https://api.kimi.com/coding/v1'), { builtin: false, id: 'kimi-coding' })
   assert.deepEqual(matchQuotaTemplateForProvider('deepseek-official'), { builtin: true, id: 'deepseek' })
   assert.deepEqual(matchQuotaTemplateForProvider('openrouter'), { builtin: false, id: 'openrouter-balance' })
+  assert.equal(matchQuotaTemplateForProvider('siliconflow-cn', 'https://api.siliconflow.cn/v1'), null)
   assert.deepEqual(matchQuotaTemplateForProvider('custom-minimax', 'https://api.minimaxi.com/v1'), { builtin: false, id: 'minimax-cn-coding' })
   const kimi = normalizeTemplateUsage('kimi-coding', {
     limits: [{ detail: { limit: 100, remaining: 75, resetTime: 1787600000000 } }],
@@ -406,6 +434,18 @@ assert.equal(resGetConfig.data.config.showPopover, true)
     metrics: [{ key: 'quota', usedPath: '$.used', totalPath: '$.total', scale: 1 }],
   })
   assert.equal(overdrawnMetrics[0].value, -20)
+  const transformedMetrics = normalizeCustomMetrics({ items: [{ amount: '2.5' }, { amount: 4.0608 }] }, {
+    metrics: [{ key: 'sum', valuePath: '$.items[*].amount', aggregate: 'sum', scale: 2, offset: 1 }],
+  })
+  assert.equal(transformedMetrics[0].value, 14.1216)
+  const bearerRequest = buildCustomHttpRequest({ url: 'https://example.com/quota', authStyle: 'token' }, 'abc')
+  assert.equal(bearerRequest.init.headers.Authorization, 'Token abc')
+  const basicRequest = buildCustomHttpRequest({ url: 'https://example.com/quota', authStyle: 'basic' }, 'user:pass')
+  assert.equal(basicRequest.init.headers.Authorization, `Basic ${Buffer.from('user:pass').toString('base64')}`)
+  const jsonRequest = buildCustomHttpRequest({
+    method: 'POST', url: 'https://example.com/quota', authStyle: 'json', authParam: 'access_token', bodyType: 'json', body: '{"page":1}',
+  }, 'json-secret')
+  assert.deepEqual(JSON.parse(jsonRequest.init.body), { page: 1, access_token: 'json-secret' })
   assert.deepEqual(collectQuotaFields({ data: { remaining: 20 }, access_token: 'must-not-leak' }), [
     { path: '$.data.remaining', value: 20, type: 'number' },
   ])

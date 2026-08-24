@@ -320,7 +320,13 @@ window.__ModuleLoader__.load({
 				".dshqb_provider_quota_source{min-width:0;color:var(--dsw-alias-label-secondary);font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
 				".dshqb_provider_quota_editor{display:flex;flex-direction:column;gap:9px;padding:10px 11px;border:1px solid color-mix(in srgb,var(--dsw-alias-brand-primary,#3b82f6) 28%,transparent);border-radius:9px;background:color-mix(in srgb,var(--dsw-alias-brand-primary,#3b82f6) 4%,transparent)}",
 				".dshqb_provider_custom,.dshqb_provider_mapping,.dshqb_provider_template_test{display:flex;flex-direction:column;gap:8px}",
+				".dshqb_textarea{min-height:88px;resize:vertical;line-height:1.45;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}",
+				".dshqb_header_list,.dshqb_metric_list{display:flex;flex-direction:column;gap:8px}",
+				".dshqb_header_row{display:grid;grid-template-columns:minmax(120px,.8fr) minmax(160px,1.2fr) auto;gap:7px;align-items:center}",
+				".dshqb_metric_editor{display:flex;flex-direction:column;gap:4px;padding:8px 10px;border:1px solid var(--dsw-alias-border-l3,rgba(128,128,128,.12));border-radius:8px;background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.035))}",
+				".dshqb_metric_editor_head{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11.5px;font-weight:600;color:var(--dsw-alias-label-secondary)}",
 				"@media (max-width:620px){.dshqb_template_grid{grid-template-columns:1fr}.dshqb_custom_source_row{grid-template-columns:minmax(0,1fr) auto}.dshqb_custom_source_row>.dshqb_btn:last-child{grid-column:2}.dshqb_source_head{flex-direction:column;align-items:stretch}.dshqb_settings_intro{gap:12px}.dshqb_settings_title_control_label{display:none}}",
+				"@media (max-width:620px){.dshqb_header_row{grid-template-columns:1fr auto}.dshqb_header_row>.dshqb_input:nth-child(2){grid-column:1}}",
 				".dshqb_confirm_mask{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;background:var(--dsw-alias-bg-mask-1,rgba(0,0,0,0.45));backdrop-filter:blur(6px)}",
 				".dshqb_confirm{width:min(380px,100%);background:var(--dsw-alias-bg-layer-1,var(--dsw-alias-bg-base,#fff));border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.18));border-radius:12px;box-shadow:var(--dsw-shadow-lv3,0 16px 40px rgba(0,0,0,0.22));padding:18px 18px 16px;display:flex;flex-direction:column;gap:8px;box-sizing:border-box}",
 				".dshqb_confirm_title{font-size:15px;font-weight:600;color:var(--dsw-alias-label-primary)}",
@@ -943,8 +949,26 @@ window.__ModuleLoader__.load({
 			"settings.providerQuota.credentialCurrent": "当前供应商：{name}",
 			"settings.providerQuota.credentialOther": "DSH 供应商：{name}",
 			"settings.providerQuota.credentialRef": "凭证引用 / 环境变量",
+			"settings.providerQuota.credentialDirect": "直接填写 Token / Cookie",
 			"settings.providerQuota.credentialNone": "无需鉴权",
 			"settings.providerQuota.endpoint": "额度接口 URL",
+			"settings.requestMethod": "请求方法",
+			"settings.directCredential": "Token / Cookie / Auth 凭证",
+			"settings.directCredentialHint": "作为敏感信息保存在本地配置中，设置接口不会回显；留空保留已经保存的值。",
+			"settings.authHeader": "鉴权请求头名称",
+			"settings.authParam": "鉴权参数名称",
+			"settings.requestHeaders": "附加请求头",
+			"settings.requestHeadersHint": "例如 x-subject-id。Cookie 请使用上面的 Cookie 鉴权，不要重复填在这里。",
+			"settings.addHeader": "添加请求头",
+			"settings.headerName": "请求头名称",
+			"settings.headerValue": "请求头值",
+			"settings.bodyType": "请求体类型",
+			"settings.body": "请求体",
+			"settings.bodyHint": "JSON 必须是对象；选择 JSON/Form 参数鉴权时，凭证会自动写入上方参数名，不要把秘密直接写进请求体。",
+			"settings.body.none": "无请求体",
+			"settings.body.json": "JSON",
+			"settings.body.form": "表单（x-www-form-urlencoded）",
+			"settings.body.raw": "原始文本",
 			"settings.providerQuota.testParsed": "连接成功，解析到 {count} 项：{details}",
 			"settings.providerQuota.testFields": "连接成功，读取到 {count} 个可选返回字段。请在下方选择需要展示的字段。",
 			"settings.providerQuota.mapping": "返回字段映射",
@@ -976,8 +1000,13 @@ window.__ModuleLoader__.load({
 			"settings.quotaAuthRefHint": "填写 DSH credentials 或环境变量中的名称，不要在这里粘贴密钥。",
 			"settings.authStyle": "鉴权方式",
 			"settings.auth.bearer": "Bearer Token",
+			"settings.auth.token": "Authorization: Token",
+			"settings.auth.basic": "Basic Auth（填写 user:password）",
 			"settings.auth.header": "直接放入请求头",
+			"settings.auth.cookie": "Cookie",
 			"settings.auth.query": "URL 查询参数",
+			"settings.auth.json": "JSON 请求体参数",
+			"settings.auth.form": "Form 请求体参数",
 			"settings.auth.none": "无需鉴权",
 			"settings.metricLabel": "指标名称",
 			"settings.metricValuePath": "剩余额度字段",
@@ -985,6 +1014,17 @@ window.__ModuleLoader__.load({
 			"settings.metricTotalPath": "总额度字段（可选）",
 			"settings.metricUnit": "单位",
 			"settings.metricResetPath": "重置时间 JSONPath",
+			"settings.metricAggregate": "数组转换",
+			"settings.metricAggregate.value": "取单值 / 第一项",
+			"settings.metricAggregate.sum": "求和",
+			"settings.metricAggregate.count": "计数",
+			"settings.metricAggregate.min": "最小值",
+			"settings.metricAggregate.max": "最大值",
+			"settings.metricScale": "乘数",
+			"settings.metricOffset": "加减偏移",
+			"settings.addMetric": "添加展示指标",
+			"settings.removeMetric": "删除指标",
+			"settings.metricItem": "指标 {index}",
 			"settings.metricValue": "数值",
 			"settings.metricTotal": "总额",
 			"settings.metricResetTime": "重置时间",
@@ -1196,8 +1236,26 @@ window.__ModuleLoader__.load({
 			"settings.providerQuota.credentialCurrent": "Current provider: {name}",
 			"settings.providerQuota.credentialOther": "DSH provider: {name}",
 			"settings.providerQuota.credentialRef": "Credential ref / environment variable",
+			"settings.providerQuota.credentialDirect": "Enter token / cookie directly",
 			"settings.providerQuota.credentialNone": "No authentication",
 			"settings.providerQuota.endpoint": "Quota endpoint URL",
+			"settings.requestMethod": "HTTP method",
+			"settings.directCredential": "Token / cookie / auth credential",
+			"settings.directCredentialHint": "Stored as a local secret and never returned by the settings API. Leave blank to keep the saved value.",
+			"settings.authHeader": "Authentication header",
+			"settings.authParam": "Authentication parameter",
+			"settings.requestHeaders": "Additional headers",
+			"settings.requestHeadersHint": "For example x-subject-id. Use Cookie authentication above instead of adding Cookie here.",
+			"settings.addHeader": "Add header",
+			"settings.headerName": "Header name",
+			"settings.headerValue": "Header value",
+			"settings.bodyType": "Request body type",
+			"settings.body": "Request body",
+			"settings.bodyHint": "JSON must be an object. JSON/Form parameter authentication injects the credential using the parameter name above; do not put secrets in the body text.",
+			"settings.body.none": "No body",
+			"settings.body.json": "JSON",
+			"settings.body.form": "Form (x-www-form-urlencoded)",
+			"settings.body.raw": "Raw text",
 			"settings.providerQuota.testParsed": "Connected. Parsed {count} item(s): {details}",
 			"settings.providerQuota.testFields": "Connected. Read {count} selectable response field(s). Choose the fields to display below.",
 			"settings.providerQuota.mapping": "Response field mapping",
@@ -1228,8 +1286,13 @@ window.__ModuleLoader__.load({
 			"settings.quotaAuthRefHint": "Name of a DSH credential or environment variable. Do not paste the secret here.",
 			"settings.authStyle": "Authentication",
 			"settings.auth.bearer": "Bearer token",
+			"settings.auth.token": "Authorization: Token",
+			"settings.auth.basic": "Basic auth (enter user:password)",
 			"settings.auth.header": "Raw header value",
+			"settings.auth.cookie": "Cookie",
 			"settings.auth.query": "URL query parameter",
+			"settings.auth.json": "JSON body parameter",
+			"settings.auth.form": "Form body parameter",
 			"settings.auth.none": "No authentication",
 			"settings.metricLabel": "Metric label",
 			"settings.metricValuePath": "Remaining field",
@@ -1237,6 +1300,17 @@ window.__ModuleLoader__.load({
 			"settings.metricTotalPath": "Total field (optional)",
 			"settings.metricUnit": "Unit",
 			"settings.metricResetPath": "Reset time JSONPath",
+			"settings.metricAggregate": "Array transform",
+			"settings.metricAggregate.value": "Single value / first item",
+			"settings.metricAggregate.sum": "Sum",
+			"settings.metricAggregate.count": "Count",
+			"settings.metricAggregate.min": "Minimum",
+			"settings.metricAggregate.max": "Maximum",
+			"settings.metricScale": "Multiplier",
+			"settings.metricOffset": "Offset",
+			"settings.addMetric": "Add display metric",
+			"settings.removeMetric": "Remove metric",
+			"settings.metricItem": "Metric {index}",
 			"settings.metricValue": "Value",
 			"settings.metricTotal": "Total",
 			"settings.metricResetTime": "Reset time",
@@ -2081,9 +2155,9 @@ window.__ModuleLoader__.load({
 				providerIds: [provider.id],
 				providerPatterns: [],
 				enabled: true,
-				request: { method: "GET", url: "", dshProvider: provider.id, authRef: "", authStyle: "bearer" },
+				request: { method: "GET", url: "", dshProvider: provider.id, credentialMode: "provider", authRef: "", authValue: "", authStyle: "bearer", authHeader: "Authorization", authParam: "api_key", headers: {}, bodyType: "none", body: "" },
 				response: {
-					metrics: [{ key: "remaining", label: "剩余额度", valuePath: "", usedPath: "", totalPath: "", unit: "", resetsAtPath: "" }],
+					metrics: [{ key: "remaining", label: "剩余额度", valuePath: "", usedPath: "", totalPath: "", unit: "", resetsAtPath: "", aggregate: "value", scale: 1, offset: 0 }],
 				},
 			});
 			const defaultProviderBinding = (provider) => ({
@@ -2159,9 +2233,9 @@ window.__ModuleLoader__.load({
 				providerIds: "",
 				providerPatterns: [],
 				enabled: true,
-				request: { method: "GET", url: "", dshProvider: "", authRef: "", authStyle: "bearer" },
+				request: { method: "GET", url: "", dshProvider: "", credentialMode: "reference", authRef: "", authValue: "", authStyle: "bearer", authHeader: "Authorization", authParam: "api_key", headers: {}, bodyType: "none", body: "" },
 				response: {
-					metrics: [{ key: "remaining", label: "剩余额度", valuePath: "", usedPath: "", totalPath: "", unit: "", resetsAtPath: "" }],
+					metrics: [{ key: "remaining", label: "剩余额度", valuePath: "", usedPath: "", totalPath: "", unit: "", resetsAtPath: "", aggregate: "value", scale: 1, offset: 0 }],
 				},
 			});
 			const sourceToDraft = (source) => ({
@@ -2420,7 +2494,9 @@ window.__ModuleLoader__.load({
 						const enabled = binding.enabled !== false;
 						const editing = editingProviderId === provider.id;
 						const source = binding.source ?? emptyProviderCustomSource(provider);
-						const metric = source.response?.metrics?.[0] ?? { key: "remaining", label: "剩余额度" };
+						const metrics = Array.isArray(source.response?.metrics) && source.response.metrics.length
+							? source.response.metrics
+							: [{ key: "remaining", label: "剩余额度", valuePath: "", usedPath: "", totalPath: "", unit: "", resetsAtPath: "", aggregate: "value", scale: 1, offset: 0 }];
 						const testState = sourceTest.providerId === provider.id ? sourceTest : { state: "idle", fields: [], message: "" };
 						const otherProviders = visibleDshProviders.filter((item) => item.id !== provider.id);
 						const sourceTypes = [
@@ -2442,15 +2518,30 @@ window.__ModuleLoader__.load({
 							const currentSource = current.source ?? emptyProviderCustomSource(provider);
 							return { source: { ...currentSource, [section]: { ...(currentSource[section] ?? {}), ...value } } };
 						});
-						const patchMetric = (field, value) => patchSource("response", { metrics: [{ ...metric, [field]: value }] });
+						const patchMetric = (index, field, value) => patchSource("response", {
+							metrics: metrics.map((metric, metricIndex) => metricIndex === index ? { ...metric, [field]: value } : metric)
+						});
+						const patchHeaders = (headers) => patchSource("request", { headers });
 						const requestDshProvider = source.request?.dshProvider;
 						const selectedTemplateId = currentSourceType === "auto"
 							? (provider.templateId || binding.templateId)
 							: binding.templateId;
 						const selectedTemplate = quotaTemplates.find((item) => item.id === selectedTemplateId);
-						const credentialChoice = requestDshProvider
+						const credentialChoice = source.request?.credentialMode === "direct" ? "__value" : source.request?.credentialMode === "none" ? "__none" : requestDshProvider
 							? requestDshProvider
-							: (source.request?.authStyle === "none" ? "__none" : "__ref");
+							: (source.request?.authValue ? "__value" : (source.request?.authStyle === "none" ? "__none" : "__ref"));
+						const authStyle = source.request?.authStyle || "bearer";
+						const hasCredential = credentialChoice !== "__none";
+						const authNeedsHeader = ["bearer", "token", "basic", "header"].includes(authStyle);
+						const authNeedsParam = ["query", "json", "form"].includes(authStyle);
+						const requestHeaders = Object.entries(source.request?.headers ?? {});
+						let nextMetricIndex = metrics.length + 1;
+						while (metrics.some((metric) => metric.key === "metric-" + nextMetricIndex)) nextMetricIndex += 1;
+						const nextMetricKey = "metric-" + nextMetricIndex;
+						const replaceHeader = (index, nextName, nextValue) => {
+							const entries = requestHeaders.map(([name, value], rowIndex) => rowIndex === index ? [nextName, nextValue] : [name, value]);
+							patchHeaders(Object.fromEntries(entries.filter(([name]) => String(name).trim())));
+						};
 						const testResult = testState.state === "ok" || testState.state === "error"
 							? react.createElement("div", {
 								className: "dshqb_source_test " + (testState.state === "ok" ? "dshqb_source_test_ok" : "dshqb_source_test_bad"),
@@ -2500,31 +2591,80 @@ window.__ModuleLoader__.load({
 									react.createElement(FieldRow, { t, key: "url", wide: true, label: t("settings.providerQuota.endpoint"), disabled: savingCard === "quota" },
 										react.createElement("input", { className: "dshqb_input", type: "text", value: source.request?.url || "", placeholder: "https://api.example.com/v1/credits", onChange: (e) => patchSource("request", { url: e.target.value }) })
 									),
+									react.createElement(FieldRow, { t, key: "method", label: t("settings.requestMethod"), disabled: savingCard === "quota" },
+										react.createElement("select", { className: "dshqb_select", value: source.request?.method || "GET", onChange: (e) => patchSource("request", { method: e.target.value }) },
+											["GET", "POST", "PUT", "PATCH", "DELETE"].map((method) => react.createElement("option", { value: method, key: method }, method)))
+									),
 									react.createElement(FieldRow, { t, key: "credential", wide: true, label: t("settings.providerQuota.credential"), disabled: savingCard === "quota" },
 										react.createElement("select", {
 											className: "dshqb_select", value: credentialChoice,
 											onChange: (e) => {
 												const choice = e.target.value;
-												if (choice === "__none") patchSource("request", { dshProvider: "", authRef: "", authStyle: "none" });
-												else if (choice === "__ref") patchSource("request", { dshProvider: "", authStyle: source.request?.authStyle === "none" ? "bearer" : (source.request?.authStyle || "bearer") });
-												else patchSource("request", { dshProvider: choice, authRef: "", authStyle: "bearer" });
+												const nextStyle = source.request?.authStyle === "none" ? "bearer" : (source.request?.authStyle || "bearer");
+												if (choice === "__none") patchSource("request", { credentialMode: "none", dshProvider: "", authRef: "", authValue: "", authStyle: "none" });
+												else if (choice === "__ref") patchSource("request", { credentialMode: "reference", dshProvider: "", authValue: "", authStyle: nextStyle });
+												else if (choice === "__value") patchSource("request", { credentialMode: "direct", dshProvider: "", authRef: "", authValue: source.request?.authValue || "", authStyle: nextStyle });
+												else patchSource("request", { credentialMode: "provider", dshProvider: choice, authRef: "", authValue: "", authStyle: nextStyle });
 											}
 										}, [
 											react.createElement("option", { value: provider.id, key: provider.id }, t("settings.providerQuota.credentialCurrent", { name: provider.name })),
 											...dshProviderDirectory.filter((item) => item.id !== provider.id && item.configured === true).map((item) => react.createElement("option", { value: item.id, key: item.id }, t("settings.providerQuota.credentialOther", { name: item.name }))),
+											react.createElement("option", { value: "__value", key: "__value" }, t("settings.providerQuota.credentialDirect")),
 											react.createElement("option", { value: "__ref", key: "__ref" }, t("settings.providerQuota.credentialRef")),
 											react.createElement("option", { value: "__none", key: "__none" }, t("settings.providerQuota.credentialNone")),
 										])
 									),
+									credentialChoice === "__value" ? react.createElement(FieldRow, { t, key: "auth_value", label: t("settings.directCredential"), hint: t("settings.directCredentialHint"), disabled: savingCard === "quota" },
+										react.createElement("input", { className: "dshqb_input", type: "password", autoComplete: "off", value: source.request?.authValue === "***" ? "" : (source.request?.authValue || ""), placeholder: source.request?.authValue === "***" ? "••••••••" : "", onChange: (e) => patchSource("request", { authValue: e.target.value }) })
+									) : null,
 									credentialChoice === "__ref" ? react.createElement(FieldRow, { t, key: "auth_ref", label: t("settings.quotaAuthRef"), hint: t("settings.quotaAuthRefHint"), disabled: savingCard === "quota" },
 										react.createElement("input", { className: "dshqb_input", type: "text", value: source.request?.authRef || "", onChange: (e) => patchSource("request", { authRef: e.target.value }) })
 									) : null,
-									credentialChoice === "__ref" ? react.createElement(FieldRow, { t, key: "auth_style", label: t("settings.authStyle"), disabled: savingCard === "quota" },
-										react.createElement("select", { className: "dshqb_select", value: source.request?.authStyle || "bearer", onChange: (e) => patchSource("request", { authStyle: e.target.value }) }, [
+									hasCredential ? react.createElement(FieldRow, { t, key: "auth_style", label: t("settings.authStyle"), disabled: savingCard === "quota" },
+										react.createElement("select", { className: "dshqb_select", value: authStyle, onChange: (e) => {
+											const nextStyle = e.target.value;
+											patchSource("request", { authStyle: nextStyle, ...(nextStyle === "json" || nextStyle === "form" ? { bodyType: nextStyle, method: ["GET", "HEAD"].includes(source.request?.method || "GET") ? "POST" : source.request.method } : {}) });
+										} }, [
 											react.createElement("option", { value: "bearer", key: "bearer" }, t("settings.auth.bearer")),
+											react.createElement("option", { value: "token", key: "token" }, t("settings.auth.token")),
+											react.createElement("option", { value: "basic", key: "basic" }, t("settings.auth.basic")),
 											react.createElement("option", { value: "header", key: "header" }, t("settings.auth.header")),
+											react.createElement("option", { value: "cookie", key: "cookie" }, t("settings.auth.cookie")),
 											react.createElement("option", { value: "query", key: "query" }, t("settings.auth.query")),
+											react.createElement("option", { value: "json", key: "json" }, t("settings.auth.json")),
+											react.createElement("option", { value: "form", key: "form" }, t("settings.auth.form")),
 										])
+									) : null,
+									hasCredential && authNeedsHeader ? react.createElement(FieldRow, { t, key: "auth_header", label: t("settings.authHeader"), disabled: savingCard === "quota" },
+										react.createElement("input", { className: "dshqb_input", value: source.request?.authHeader || "Authorization", onChange: (e) => patchSource("request", { authHeader: e.target.value }) })
+									) : null,
+									hasCredential && authNeedsParam ? react.createElement(FieldRow, { t, key: "auth_param", label: t("settings.authParam"), disabled: savingCard === "quota" },
+										react.createElement("input", { className: "dshqb_input", value: source.request?.authParam || "api_key", onChange: (e) => patchSource("request", { authParam: e.target.value }) })
+									) : null,
+								]),
+								react.createElement("div", { className: "dshqb_provider_mapping", key: "headers" }, [
+									react.createElement("span", { className: "dshqb_template_group_title", key: "title" }, t("settings.requestHeaders")),
+									react.createElement("span", { className: "dshqb_hint", key: "hint" }, t("settings.requestHeadersHint")),
+									react.createElement("div", { className: "dshqb_header_list", key: "list" }, requestHeaders.map(([name, value], index) =>
+										react.createElement("div", { className: "dshqb_header_row", key: name + index }, [
+											react.createElement("input", { className: "dshqb_input", value: name, placeholder: t("settings.headerName"), onChange: (e) => replaceHeader(index, e.target.value, value), key: "name" }),
+											react.createElement("input", { className: "dshqb_input", value: value === "***" ? "" : value, placeholder: value === "***" ? "••••••••" : t("settings.headerValue"), onChange: (e) => replaceHeader(index, name, e.target.value), key: "value" }),
+											react.createElement("button", { type: "button", className: "dshqb_btn dshqb_btn_outline", onClick: () => patchHeaders(Object.fromEntries(requestHeaders.filter((_, rowIndex) => rowIndex !== index))), key: "remove" }, "×")
+										])
+									)),
+									react.createElement("div", { className: "dshqb_source_actions", key: "add" }, react.createElement("button", { type: "button", className: "dshqb_btn dshqb_btn_outline", onClick: () => patchHeaders({ ...(source.request?.headers ?? {}), ["X-Header-" + (requestHeaders.length + 1)]: "" }) }, t("settings.addHeader")))
+								]),
+								react.createElement(FieldGrid, { key: "body_grid" }, [
+									react.createElement(FieldRow, { t, key: "body_type", label: t("settings.bodyType"), disabled: savingCard === "quota" },
+										react.createElement("select", { className: "dshqb_select", value: source.request?.bodyType || "none", onChange: (e) => patchSource("request", { bodyType: e.target.value }) }, [
+											react.createElement("option", { value: "none", key: "none" }, t("settings.body.none")),
+											react.createElement("option", { value: "json", key: "json" }, t("settings.body.json")),
+											react.createElement("option", { value: "form", key: "form" }, t("settings.body.form")),
+											react.createElement("option", { value: "raw", key: "raw" }, t("settings.body.raw")),
+										])
+									),
+									(source.request?.bodyType || "none") !== "none" ? react.createElement(FieldRow, { t, key: "body", wide: true, label: t("settings.body"), hint: t("settings.bodyHint"), disabled: savingCard === "quota" },
+										react.createElement("textarea", { className: "dshqb_input dshqb_textarea", value: source.request?.body || "", placeholder: source.request?.bodyType === "json" ? "{\n  \"pageSize\": 100\n}" : "key=value", onChange: (e) => patchSource("request", { body: e.target.value }) })
 									) : null,
 								]),
 								react.createElement("div", { className: "dshqb_source_actions", key: "test_actions" },
@@ -2533,13 +2673,34 @@ window.__ModuleLoader__.load({
 								testResult,
 								react.createElement("div", { className: "dshqb_provider_mapping", key: "mapping" }, [
 									react.createElement("span", { className: "dshqb_template_group_title", key: "title" }, t("settings.providerQuota.mapping")),
-									react.createElement(FieldGrid, { key: "mapping_grid" }, [
-										react.createElement(FieldRow, { t, key: "label", label: t("settings.metricLabel"), disabled: savingCard === "quota" }, react.createElement("input", { className: "dshqb_input", value: metric.label || "", onChange: (e) => patchMetric("label", e.target.value) })),
-										react.createElement(FieldRow, { t, key: "unit", label: t("settings.metricUnit"), disabled: savingCard === "quota" }, react.createElement("input", { className: "dshqb_input", value: metric.unit || "", placeholder: "CNY / USD / 次", onChange: (e) => patchMetric("unit", e.target.value) })),
-										...[["valuePath", "settings.metricValuePath"], ["usedPath", "settings.metricUsedPath"], ["totalPath", "settings.metricTotalPath"], ["resetsAtPath", "settings.metricResetPath"]].map(([field, label]) =>
-											react.createElement(FieldRow, { t, key: field, label: t(label), disabled: savingCard === "quota" }, react.createElement("select", { className: "dshqb_select", value: metric[field] || "", onChange: (e) => patchMetric(field, e.target.value) }, providerFieldOptions(metric[field]).map(([value, text]) => react.createElement("option", { value, key: value }, text))))
-										),
-									])
+									react.createElement("div", { className: "dshqb_metric_list", key: "metric_list" }, metrics.map((metric, metricIndex) => {
+										const listId = "dshqb-fields-" + provider.id.replace(/[^a-z0-9_-]/gi, "-") + "-" + metricIndex;
+										const fieldInput = (field, label) => {
+											const fieldListId = listId + "-" + field;
+											return react.createElement(FieldRow, { t, key: field, label: t(label), disabled: savingCard === "quota" }, [
+												react.createElement("input", { className: "dshqb_input", list: fieldListId, value: metric[field] || "", placeholder: "$.data.value", onChange: (e) => patchMetric(metricIndex, field, e.target.value), key: "input" }),
+												react.createElement("datalist", { id: fieldListId, key: "list" }, providerFieldOptions(metric[field]).filter(([value]) => value).map(([value, text]) => react.createElement("option", { value, label: text, key: value })))
+											]);
+										};
+										return react.createElement("div", { className: "dshqb_metric_editor", key: metric.key || metricIndex }, [
+											react.createElement("div", { className: "dshqb_metric_editor_head", key: "head" }, [
+												react.createElement("span", { key: "label" }, t("settings.metricItem", { index: metricIndex + 1 })),
+												metrics.length > 1 ? react.createElement("button", { type: "button", className: "dshqb_btn dshqb_btn_outline", onClick: () => patchSource("response", { metrics: metrics.filter((_, index) => index !== metricIndex) }), key: "remove" }, t("settings.removeMetric")) : null,
+											]),
+											react.createElement(FieldGrid, { key: "grid" }, [
+												react.createElement(FieldRow, { t, key: "label", label: t("settings.metricLabel"), disabled: savingCard === "quota" }, react.createElement("input", { className: "dshqb_input", value: metric.label || "", onChange: (e) => patchMetric(metricIndex, "label", e.target.value) })),
+												react.createElement(FieldRow, { t, key: "unit", label: t("settings.metricUnit"), disabled: savingCard === "quota" }, react.createElement("input", { className: "dshqb_input", value: metric.unit || "", placeholder: "CNY / USD / 次", onChange: (e) => patchMetric(metricIndex, "unit", e.target.value) })),
+												fieldInput("valuePath", "settings.metricValuePath"),
+												fieldInput("usedPath", "settings.metricUsedPath"),
+												fieldInput("totalPath", "settings.metricTotalPath"),
+												fieldInput("resetsAtPath", "settings.metricResetPath"),
+												react.createElement(FieldRow, { t, key: "aggregate", label: t("settings.metricAggregate"), disabled: savingCard === "quota" }, react.createElement("select", { className: "dshqb_select", value: metric.aggregate || "value", onChange: (e) => patchMetric(metricIndex, "aggregate", e.target.value) }, ["value", "sum", "count", "min", "max"].map((value) => react.createElement("option", { value, key: value }, t("settings.metricAggregate." + value))))),
+												react.createElement(FieldRow, { t, key: "scale", label: t("settings.metricScale"), disabled: savingCard === "quota" }, react.createElement("input", { className: "dshqb_input", type: "number", step: "any", value: metric.scale ?? 1, onChange: (e) => patchMetric(metricIndex, "scale", Number(e.target.value)) })),
+												react.createElement(FieldRow, { t, key: "offset", label: t("settings.metricOffset"), disabled: savingCard === "quota" }, react.createElement("input", { className: "dshqb_input", type: "number", step: "any", value: metric.offset ?? 0, onChange: (e) => patchMetric(metricIndex, "offset", Number(e.target.value)) })),
+											])
+										]);
+									})),
+									react.createElement("div", { className: "dshqb_source_actions", key: "add_metric" }, react.createElement("button", { type: "button", className: "dshqb_btn dshqb_btn_outline", onClick: () => patchSource("response", { metrics: [...metrics, { key: nextMetricKey, label: "额度 " + nextMetricIndex, valuePath: "", usedPath: "", totalPath: "", resetsAtPath: "", unit: "", aggregate: "value", scale: 1, offset: 0 }] }) }, t("settings.addMetric")))
 								])
 							]) : react.createElement("div", { className: "dshqb_provider_template_test", key: "template_test" }, [
 								selectedTemplate?.autoEnable === false && selectedTemplate.description

@@ -99,31 +99,6 @@ export const QUOTA_SOURCE_TEMPLATES = [
     },
   },
   {
-    id: 'siliconflow-cn-balance',
-    category: 'balance',
-    name: '硅基流动 API 余额（国内，不含代金券）',
-    description: '仅查询 /user/info 的旧余额字段；硅基流动未通过公开 API 返回代金券，且网页余额可能与接口不同，因此默认不自动开启。',
-    autoEnable: false,
-    source: {
-      id: 'siliconflow-cn', name: '硅基流动 API 余额（不含代金券）', kind: 'metric', providerIds: ['siliconflow', 'siliconflow-cn'],
-      request: { url: 'https://api.siliconflow.cn/v1/user/info', authRef: 'SILICONFLOW_API_KEY', authStyle: 'bearer' },
-      // totalBalance 在现行接口上可能为负数或与网页不一致；CC Switch 也已改为读取 balance。
-      response: { metrics: [{ key: 'balance', label: 'API 余额（不含代金券）', valuePath: '$.data.balance', unit: 'CNY' }] },
-    },
-  },
-  {
-    id: 'siliconflow-en-balance',
-    category: 'balance',
-    name: 'SiliconFlow API 余额（国际，不含代金券）',
-    description: '仅查询 /user/info 的旧余额字段；不包含代金券，且 api.siliconflow.com 已被官方列为逐步下线端点，因此默认不自动开启。',
-    autoEnable: false,
-    source: {
-      id: 'siliconflow-en', name: 'SiliconFlow API Balance (vouchers excluded)', kind: 'metric', providerIds: ['siliconflow-en'],
-      request: { url: 'https://api.siliconflow.com/v1/user/info', authRef: 'SILICONFLOW_API_KEY', authStyle: 'bearer' },
-      response: { metrics: [{ key: 'balance', label: 'API balance (vouchers excluded)', valuePath: '$.data.balance', unit: 'USD' }] },
-    },
-  },
-  {
     id: 'openrouter-balance',
     category: 'balance',
     name: 'OpenRouter 余额',
@@ -211,8 +186,6 @@ export const matchQuotaTemplateForProvider = (provider, baseURL = '') => {
   if (direct) return { builtin: false, id: direct.id }
   const byUrl = [
     ['api.stepfun.', 'stepfun-balance'],
-    ['api.siliconflow.cn', 'siliconflow-cn-balance'],
-    ['api.siliconflow.com', 'siliconflow-en-balance'],
     ['openrouter.ai', 'openrouter-balance'],
     ['api.novita.ai', 'novita-balance'],
     ['api.kimi.com/coding', 'kimi-coding'],
@@ -256,6 +229,18 @@ const normalizeQuotaSourceConfig = (source) => {
   let parsed
   try { parsed = new URL(rawUrl) } catch { throw new Error('quota-url-invalid') }
   if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('quota-url-invalid')
+  const authStyle = String(merged.request?.authStyle ?? 'none').trim().toLowerCase()
+  if (!['bearer', 'token', 'basic', 'header', 'cookie', 'query', 'json', 'form', 'none'].includes(authStyle)) {
+    throw new Error('quota-auth-style-invalid')
+  }
+  const bodyType = String(merged.request?.bodyType ?? 'none').trim().toLowerCase()
+  if (!['none', 'json', 'form', 'raw'].includes(bodyType)) throw new Error('quota-body-type-invalid')
+  const headers = merged.request?.headers && typeof merged.request.headers === 'object' && !Array.isArray(merged.request.headers)
+    ? Object.fromEntries(Object.entries(merged.request.headers).map(([key, value]) => [String(key).trim(), String(value)]).filter(([key]) => key))
+    : {}
+  const credentialMode = ['provider', 'reference', 'direct', 'none'].includes(merged.request?.credentialMode)
+    ? merged.request.credentialMode
+    : (merged.request?.dshProvider ? 'provider' : (merged.request?.authValue ? 'direct' : (authStyle === 'none' ? 'none' : 'reference')))
   const normalized = {
     ...merged,
     id,
@@ -268,11 +253,43 @@ const normalizeQuotaSourceConfig = (source) => {
       ? merged.providerPatterns.map((value) => String(value).trim()).filter(Boolean)
       : [],
     enabled: merged.enabled !== false,
-    request: { ...(merged.request ?? {}) },
+    request: {
+      ...(merged.request ?? {}),
+      method: String(merged.request?.method || 'GET').trim().toUpperCase(),
+      url: rawUrl,
+      dshProvider: String(merged.request?.dshProvider ?? '').trim(),
+      credentialMode,
+      authRef: String(merged.request?.authRef ?? '').trim(),
+      authValue: String(merged.request?.authValue ?? ''),
+      authStyle,
+      authHeader: String(merged.request?.authHeader || 'Authorization').trim() || 'Authorization',
+      authParam: String(merged.request?.authParam || 'api_key').trim() || 'api_key',
+      headers,
+      bodyType,
+      body: String(merged.request?.body ?? ''),
+    },
     response: { ...(merged.response ?? {}) },
   }
   delete normalized.manual
   return normalized
+}
+
+const isSensitiveHeader = (name) => /authorization|proxy-authorization|token|api[-_]?key|secret|cookie|set-cookie|session/i.test(String(name))
+
+/** POST/测试时将前端回传的 `***` 恢复成服务端已保存值。 */
+const mergeMaskedQuotaRequest = (previous = {}, incoming = {}) => {
+  const headers = Object.hasOwn(incoming, 'headers') ? {} : { ...(previous.headers ?? {}) }
+  for (const [key, value] of Object.entries(incoming.headers ?? {})) {
+    const previousKey = Object.keys(previous.headers ?? {}).find((name) => name.toLowerCase() === key.toLowerCase())
+    headers[key] = value === '***' && previousKey !== undefined ? previous.headers[previousKey] : value
+  }
+  return {
+    ...incoming,
+    authValue: !Object.hasOwn(incoming, 'authValue')
+      ? (previous.authValue ?? '')
+      : (incoming.authValue === '***' ? (previous.authValue ?? '') : (incoming.authValue ?? '')),
+    headers,
+  }
 }
 
 export const providerQuotaAdapterId = (providerId) => `provider:${String(providerId ?? '').trim()}`
@@ -448,11 +465,16 @@ const QuotaRequest = Schema.object({
   url: Schema.string().default(''),
   /** 复用 DSH 模型供应商已有凭证；存在时优先于 authRef。 */
   dshProvider: Schema.string().default(''),
+  credentialMode: Schema.union(['provider', 'reference', 'direct', 'none']).default('reference'),
   authRef: Schema.string().default(''),
-  authStyle: Schema.union(['bearer', 'header', 'query', 'none']).default('none'),
+  /** 直接凭证值；设置接口始终脱敏，优先于 DSH 供应商和 authRef。 */
+  authValue: Schema.string().default(''),
+  authStyle: Schema.union(['bearer', 'token', 'basic', 'header', 'cookie', 'query', 'json', 'form', 'none']).default('none'),
   authHeader: Schema.string().default('Authorization'),
   authParam: Schema.string().default('api_key'),
   headers: Schema.dict(Schema.string()).default({}),
+  bodyType: Schema.union(['none', 'json', 'form', 'raw']).default('none'),
+  body: Schema.string().default(''),
 })
 
 /** 自定义额度源单条指标映射。 */
@@ -464,7 +486,9 @@ const QuotaMetric = Schema.object({
   totalPath: Schema.string().default(''),
   resetsAtPath: Schema.string().default(''),
   unit: Schema.string().default(''),
+  aggregate: Schema.union(['value', 'sum', 'count', 'min', 'max']).default('value'),
   scale: Schema.number().default(1),
+  offset: Schema.number().default(0),
 })
 
 /** 自定义订阅用量窗口映射。 */
@@ -568,23 +592,104 @@ const toAmount = (value) => {
   return Number.isFinite(n) ? n : 0
 }
 
-/** 简单 JSONPath 取值：支持 `$`, `.` 路径与 `[index]`。 */
+/**
+ * 轻量 JSONPath 取值：支持 `$`、点路径、数组下标、引号属性与 `[*]`。
+ * 含通配符时返回所有命中的数组；普通路径保持旧版的单值返回行为。
+ */
+const jsonPathTokens = (path) => {
+  const source = String(path ?? '').trim().replace(/^\$\.?/, '')
+  if (!source) return []
+  const tokens = []
+  const matcher = /(?:^|\.)([^.[\]]+)|\[(?:(\d+)|"([^"]+)"|'([^']+)'|(\*))\]/g
+  for (const match of source.matchAll(matcher)) {
+    if (match[1] !== undefined) tokens.push(match[1])
+    else if (match[2] !== undefined) tokens.push(Number(match[2]))
+    else if (match[3] !== undefined) tokens.push(match[3])
+    else if (match[4] !== undefined) tokens.push(match[4])
+    else if (match[5] !== undefined) tokens.push('*')
+  }
+  return tokens
+}
+
 export const getByPath = (obj, path) => {
   if (obj === null || obj === undefined || typeof path !== 'string' || path.trim() === '') return obj
-  const clean = path.trim().replace(/^\$\.?/, '')
-  if (clean === '') return obj
-  return clean.split('.').reduce((acc, seg) => {
-    if (acc === null || acc === undefined) return undefined
-    if (seg === '') return acc
-    const bracket = /\[(\d+)\]/g
-    let current = acc
-    const name = seg.split('[', 1)[0]
-    if (name !== '') current = current[name]
-    for (const m of seg.matchAll(bracket)) {
-      current = current?.[Number(m[1])]
+  const tokens = jsonPathTokens(path)
+  if (tokens.length === 0) return obj
+  const wildcard = tokens.includes('*')
+  let values = [obj]
+  for (const token of tokens) {
+    const next = []
+    for (const value of values) {
+      if (value === null || value === undefined) continue
+      if (token === '*') {
+        if (Array.isArray(value)) next.push(...value)
+        else if (typeof value === 'object') next.push(...Object.values(value))
+        continue
+      }
+      const hit = value?.[token]
+      if (hit !== undefined) next.push(hit)
     }
-    return current
-  }, obj)
+    values = next
+  }
+  return wildcard ? values : values[0]
+}
+
+const hasHeader = (headers, name) => Object.keys(headers).some((key) => key.toLowerCase() === name.toLowerCase())
+const setHeader = (headers, name, value) => {
+  const current = Object.keys(headers).find((key) => key.toLowerCase() === name.toLowerCase())
+  headers[current || name] = value
+}
+
+/** 将通用鉴权配置物化为 fetch URL / init，供运行时和测试共同使用。 */
+export const buildCustomHttpRequest = (request = {}, credential = '') => {
+  let url = String(request.url ?? '').trim()
+  if (!url) throw new Error('quota-url-missing')
+  const method = String(request.method || 'GET').trim().toUpperCase()
+  const style = normalizeProvider(request.authStyle ?? 'none')
+  const authHeader = String(request.authHeader || 'Authorization').trim() || 'Authorization'
+  const authParam = String(request.authParam || 'api_key').trim() || 'api_key'
+  const headers = { Accept: 'application/json', ...(request.headers ?? {}) }
+
+  if (credential) {
+    if (style === 'bearer') setHeader(headers, authHeader, `Bearer ${credential}`)
+    else if (style === 'token') setHeader(headers, authHeader, `Token ${credential}`)
+    else if (style === 'basic') setHeader(headers, authHeader, `Basic ${Buffer.from(credential, 'utf8').toString('base64')}`)
+    else if (style === 'header') setHeader(headers, authHeader, credential)
+    else if (style === 'cookie') setHeader(headers, 'Cookie', credential)
+    else if (style === 'query') {
+      const parsed = new URL(url)
+      parsed.searchParams.set(authParam, credential)
+      url = parsed.toString()
+    }
+  }
+
+  let body
+  const permitsBody = method !== 'GET' && method !== 'HEAD'
+  let bodyType = normalizeProvider(request.bodyType ?? 'none')
+  if (style === 'json') bodyType = 'json'
+  if (style === 'form') bodyType = 'form'
+  if (!permitsBody && (style === 'json' || style === 'form' || (bodyType !== 'none' && String(request.body ?? '') !== ''))) {
+    throw new Error('quota-request-body-method-invalid')
+  }
+  if (permitsBody && bodyType === 'json') {
+    let parsed = {}
+    if (String(request.body ?? '').trim()) {
+      try { parsed = JSON.parse(request.body) } catch { throw new Error('quota-request-json-invalid') }
+    }
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) throw new Error('quota-request-json-object-required')
+    if (style === 'json' && credential) parsed[authParam] = credential
+    body = JSON.stringify(parsed)
+    if (!hasHeader(headers, 'Content-Type')) setHeader(headers, 'Content-Type', 'application/json')
+  } else if (permitsBody && bodyType === 'form') {
+    const form = new URLSearchParams(String(request.body ?? ''))
+    if (style === 'form' && credential) form.set(authParam, credential)
+    body = form.toString()
+    if (!hasHeader(headers, 'Content-Type')) setHeader(headers, 'Content-Type', 'application/x-www-form-urlencoded')
+  } else if (permitsBody && bodyType === 'raw' && String(request.body ?? '') !== '') {
+    body = String(request.body)
+  }
+
+  return { url, init: { method, headers, ...(body === undefined ? {} : { body }) } }
 }
 
 /** 归一化 `/user/balance` 响应体。 */
@@ -661,11 +766,25 @@ export const normalizeCustomMetrics = (data, response = {}) => {
   const metrics = response.metrics ?? []
   return metrics.map((metric) => {
     const scale = Number.isFinite(Number(metric.scale)) ? Number(metric.scale) : 1
-    const total = metric.totalPath ? toAmount(getByPath(data, metric.totalPath)) * scale : 0
-    const used = metric.usedPath ? toAmount(getByPath(data, metric.usedPath)) * scale : 0
+    const offset = Number.isFinite(Number(metric.offset)) ? Number(metric.offset) : 0
+    const aggregate = ['sum', 'count', 'min', 'max'].includes(metric.aggregate) ? metric.aggregate : 'value'
+    const readAmount = (path) => {
+      if (!path) return 0
+      const raw = getByPath(data, path)
+      const values = Array.isArray(raw) ? raw : [raw]
+      if (aggregate === 'count') return values.filter((value) => value !== null && value !== undefined).length
+      const numbers = values.map(Number).filter(Number.isFinite)
+      if (numbers.length === 0) return 0
+      if (aggregate === 'sum') return numbers.reduce((sum, value) => sum + value, 0)
+      if (aggregate === 'min') return Math.min(...numbers)
+      if (aggregate === 'max') return Math.max(...numbers)
+      return numbers[0]
+    }
+    const total = metric.totalPath ? readAmount(metric.totalPath) * scale : 0
+    const used = metric.usedPath ? readAmount(metric.usedPath) * scale : 0
     const value = metric.valuePath
-      ? toAmount(getByPath(data, metric.valuePath)) * scale
-      : (metric.usedPath && metric.totalPath ? total - used : 0)
+      ? readAmount(metric.valuePath) * scale + offset
+      : (metric.usedPath && metric.totalPath ? total - used + offset : offset)
     return {
       key: metric.key,
       label: metric.label || metric.key || '额度',
@@ -767,10 +886,11 @@ export const normalizeTemplateUsage = (templateId, data) => {
  */
 export const collectQuotaFields = (data, maxFields = 80) => {
   const fields = []
-  const secretKey = /password|secret|token|api[-_]?key|authorization|credential/i
+  const secretKey = /password|secret|token|api[-_]?key|authorization|credential|cookie|session/i
   const visit = (value, path, depth) => {
     if (fields.length >= maxFields || depth > 6 || value === null || value === undefined) return
     if (Array.isArray(value)) {
+      if (value.length > 0) visit(value[0], `${path}[*]`, depth + 1)
       value.slice(0, 5).forEach((entry, index) => visit(entry, `${path}[${index}]`, depth + 1))
       return
     }
@@ -1388,13 +1508,24 @@ export function apply(ctx, config) {
     const bindings = []
     for (const provider of directory) {
       const key = normalizeProvider(provider.id)
-      const binding = explicit.get(key) ?? legacy.get(key) ?? {
+      let binding = explicit.get(key) ?? legacy.get(key) ?? {
         providerId: provider.id,
         enabled: provider.configured === true && provider.quotaSupported === true && provider.quotaAutoEnabled !== false,
-        sourceType: 'auto',
+        sourceType: provider.quotaSupported === true ? 'auto' : 'custom',
         templateId: provider.templateId || '',
         sourceProviderId: '',
         implicit: true,
+      }
+      const staleTemplate = binding.sourceType === 'template' && !getQuotaSourceTemplate(binding.templateId)
+      if ((binding.sourceType === 'auto' && provider.quotaSupported !== true) || staleTemplate) {
+        binding = {
+          ...binding,
+          enabled: false,
+          sourceType: 'custom',
+          templateId: '',
+          sourceProviderId: '',
+          staleTemplate: true,
+        }
       }
       bindings.push({ ...binding, providerId: provider.id, provider })
       explicit.delete(key)
@@ -1543,40 +1674,23 @@ export function apply(ctx, config) {
     if (!consecutiveFailures.has(id)) consecutiveFailures.set(id, 0)
   }
 
-  const applyCustomAuth = (headers, request, key) => {
-    const style = normalizeProvider(request.authStyle ?? 'none')
-    const headerName = request.authHeader || 'Authorization'
-    if (style === 'bearer') headers[headerName] = `Bearer ${key}`
-    else if (style === 'header') headers[headerName] = key
-  }
-
-  const buildCustomUrl = (request, key) => {
-    let url = String(request.url ?? '').trim()
-    if (!url) throw new Error('quota-url-missing')
-    if (normalizeProvider(request.authStyle ?? 'none') === 'query' && key) {
-      url += (url.includes('?') ? '&' : '?') + `${encodeURIComponent(request.authParam || 'api_key')}=${encodeURIComponent(key)}`
-    }
-    return url
-  }
-
   const fetchCustomQuota = async (adapter, options = {}) => {
     const request = adapter.request ?? {}
     const url = String(request.url ?? '').trim()
     if (!url) throw new Error('quota-url-missing')
-    let key = ''
-    if (request.dshProvider) key = await resolveDshProviderCredential(request.dshProvider)
+    let key = request.authValue && request.authValue !== '***' ? String(request.authValue) : ''
+    if (!key && request.dshProvider) key = await resolveDshProviderCredential(request.dshProvider)
     if (request.authRef) {
       key ||= await resolveCredential(request.authRef)
     }
-    if ((request.dshProvider || request.authRef) && key === '') throw new Error('api-key-missing')
-    const headers = { Accept: 'application/json', ...(request.headers ?? {}) }
-    if (key) applyCustomAuth(headers, request, key)
+    const authStyle = normalizeProvider(request.authStyle ?? 'none')
+    if (authStyle !== 'none' && key === '') throw new Error('quota-credential-missing')
+    const customRequest = buildCustomHttpRequest(request, key)
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), runtimeConfig.timeoutMs)
     try {
-      const res = await fetch(buildCustomUrl(request, key), {
-        method: String(request.method || 'GET').toUpperCase(),
-        headers,
+      const res = await fetch(customRequest.url, {
+        ...customRequest.init,
         signal: controller.signal,
       })
       if (!res.ok) throw new Error(`${adapter.name || adapter.id} API HTTP ${res.status}`)
@@ -1746,9 +1860,10 @@ export function apply(ctx, config) {
       ...source,
       request: {
         ...(source.request ?? {}),
+        authValue: source.request?.authValue ? '***' : '',
         headers: Object.fromEntries(
           Object.entries(source.request?.headers ?? {})
-            .map(([k, v]) => [k, /authorization|token|api[-_]?key|secret/i.test(k) ? '***' : v]),
+            .map(([k, v]) => [k, isSensitiveHeader(k) ? '***' : v]),
         ),
       },
     }
@@ -1985,12 +2100,10 @@ export function apply(ctx, config) {
                 const nextSources = body.quotaSources.map((s) => {
                   const prev = prevSources.find((p) => p.id === s.id)
                   if (!prev) return normalizeQuotaSourceConfig(s)
-                  const nextHeaders = { ...(prev.request?.headers ?? {}) }
-                  for (const [k, v] of Object.entries(s.request?.headers ?? {})) {
-                    if (v === '***' && prev.request?.headers?.[k] !== undefined) nextHeaders[k] = prev.request.headers[k]
-                    else nextHeaders[k] = v
-                  }
-                  return normalizeQuotaSourceConfig({ ...s, request: { ...(s.request ?? {}), headers: nextHeaders } })
+                  return normalizeQuotaSourceConfig({
+                    ...s,
+                    request: mergeMaskedQuotaRequest(prev.request, s.request),
+                  })
                 })
                 if (new Set(nextSources.map((source) => source.id)).size !== nextSources.length) {
                   throw new Error('quota-source-id-duplicate')
@@ -2004,16 +2117,11 @@ export function apply(ctx, config) {
                   if (rawBinding?.sourceType !== 'custom' || !rawBinding.source || !prev?.source) {
                     return normalizeProviderQuotaConfig(rawBinding)
                   }
-                  const nextHeaders = { ...(prev.source.request?.headers ?? {}) }
-                  for (const [key, value] of Object.entries(rawBinding.source.request?.headers ?? {})) {
-                    if (value === '***' && prev.source.request?.headers?.[key] !== undefined) nextHeaders[key] = prev.source.request.headers[key]
-                    else nextHeaders[key] = value
-                  }
                   return normalizeProviderQuotaConfig({
                     ...rawBinding,
                     source: {
                       ...rawBinding.source,
-                      request: { ...(rawBinding.source.request ?? {}), headers: nextHeaders },
+                      request: mergeMaskedQuotaRequest(prev.source.request, rawBinding.source.request),
                     },
                   })
                 })
@@ -2074,9 +2182,21 @@ export function apply(ctx, config) {
         }
         try {
           const body = await readJsonBody(req)
-          const draftBinding = body.binding && typeof body.binding === 'object'
-            ? normalizeProviderQuotaConfig(body.binding)
-            : null
+          let rawDraftBinding = body.binding && typeof body.binding === 'object' ? body.binding : null
+          if (rawDraftBinding?.sourceType === 'custom' && rawDraftBinding.source?.request) {
+            const saved = (runtimeConfig.providerQuotas ?? []).find((binding) =>
+              normalizeProvider(binding?.providerId) === normalizeProvider(rawDraftBinding.providerId))
+            if (saved?.source?.request) {
+              rawDraftBinding = {
+                ...rawDraftBinding,
+                source: {
+                  ...rawDraftBinding.source,
+                  request: mergeMaskedQuotaRequest(saved.source.request, rawDraftBinding.source.request),
+                },
+              }
+            }
+          }
+          const draftBinding = rawDraftBinding ? normalizeProviderQuotaConfig(rawDraftBinding) : null
           const bindingProvider = draftBinding
             ? (getDshProviders().find((provider) => normalizeProvider(provider.id) === normalizeProvider(draftBinding.providerId)) ?? {
                 id: draftBinding.providerId,
@@ -2085,10 +2205,15 @@ export function apply(ctx, config) {
                 templateId: draftBinding.templateId || '',
               })
             : null
+          let rawDraftSource = body.source && typeof body.source === 'object' ? body.source : null
+          if (rawDraftSource?.request) {
+            const saved = (runtimeConfig.quotaSources ?? []).find((source) => source?.id === rawDraftSource.id)
+            if (saved?.request) rawDraftSource = { ...rawDraftSource, request: mergeMaskedQuotaRequest(saved.request, rawDraftSource.request) }
+          }
           const draftAdapter = draftBinding
             ? buildProviderQuotaAdapter(bindingProvider, draftBinding)
-            : (body.source && typeof body.source === 'object'
-                ? { ...normalizeQuotaSourceConfig(body.source), builtin: false }
+            : (rawDraftSource
+                ? { ...normalizeQuotaSourceConfig(rawDraftSource), builtin: false }
                 : null)
           const adapter = draftAdapter ?? (typeof body.provider === 'string' && getQuotaAdapter(body.provider)
             ? getQuotaAdapter(body.provider)
