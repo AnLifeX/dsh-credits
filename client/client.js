@@ -869,12 +869,21 @@ window.__ModuleLoader__.load({
 			"settings.noCustomSources": "暂无自定义额度源。",
 			"settings.addCustomSource": "➕ 添加额度源",
 			"settings.editCustomSource": "编辑自定义额度源",
+			"settings.customSourceHint": "先填写 ID 和名称，再选择类型。providerIds 用于自动匹配当前模型供应商；勾选“默认展示源”后，未匹配到其它源时才会展示它。",
 			"settings.edit": "编辑",
 			"settings.remove": "移除",
+			"settings.id": "ID / 标识",
 			"settings.name": "名称",
 			"settings.kind": "类型",
+			"settings.kind.metric": "额度指标（HTTP 接口）",
+			"settings.kind.manual": "手动额度（不请求接口）",
+			"settings.kind.usage": "订阅用量（多窗口）",
+			"settings.kind.balance": "余额（多币种）",
 			"settings.providerIds": "匹配供应商 ID（逗号分隔）",
+			"settings.providerIdsHint": "填写当前模型供应商的 id，例如 deepseek / opencode-go / openai / anthropic。多个用逗号分隔。",
 			"settings.providerPatterns": "匹配供应商正则（逗号分隔）",
+			"settings.providerPatternsHint": "可选。支持正则，例如 my-provider-.*。",
+
 			"settings.defaultSource": "默认展示源",
 			"settings.quotaUrl": "接口 URL",
 			"settings.quotaAuthRef": "凭证引用名",
@@ -1055,12 +1064,20 @@ window.__ModuleLoader__.load({
 			"settings.noCustomSources": "No custom quota sources yet.",
 			"settings.addCustomSource": "➕ Add Source",
 			"settings.editCustomSource": "Edit Custom Quota Source",
+			"settings.customSourceHint": "Set an ID and name first, then choose a kind. providerIds are used to auto-match the current model provider; a default source is only used when no other source matches.",
 			"settings.edit": "Edit",
 			"settings.remove": "Remove",
+			"settings.id": "ID",
 			"settings.name": "Name",
 			"settings.kind": "Kind",
+			"settings.kind.metric": "Metric (HTTP endpoint)",
+			"settings.kind.manual": "Manual quota (no request)",
+			"settings.kind.usage": "Usage (multi-window)",
+			"settings.kind.balance": "Balance (multi-currency)",
 			"settings.providerIds": "Provider IDs (comma separated)",
+			"settings.providerIdsHint": "Model provider ids to match, e.g. deepseek / opencode-go / openai / anthropic. Comma separated.",
 			"settings.providerPatterns": "Provider patterns (comma separated)",
+			"settings.providerPatternsHint": "Optional regex patterns, e.g. my-provider-.*",
 			"settings.defaultSource": "Default source",
 			"settings.quotaUrl": "API URL",
 			"settings.quotaAuthRef": "Credential ref",
@@ -1867,8 +1884,13 @@ window.__ModuleLoader__.load({
 					{ id: "opencode-go", name: "OpenCode Go 订阅用量", kind: "usage" },
 				];
 			const selectedQuotaSource = quotaSourceOptions.find((s) => s.id === view.provider) ?? null;
+			const quotaSourceLabel = (source) => source?.id === "deepseek"
+				? t("settings.provider.deepseek")
+				: source?.id === "opencode-go"
+					? t("settings.provider.opencode")
+					: (source?.name || source?.id || "");
 			const percentMode = selectedQuotaSource?.kind === "usage" || view.provider === "opencode-go";
-			const showOpencode = view.quotaMode === "follow" || selectedQuotaSource?.kind === "usage";
+			const showOpencode = selectedQuotaSource?.id === "opencode-go" && (view.provider === "opencode-go" || selectedQuotaSource?.kind === "usage");
 			const currency = view.currency ?? "CNY";
 
 			const emptyCustomSourceDraft = () => ({
@@ -2057,7 +2079,7 @@ window.__ModuleLoader__.load({
 						value: view.provider,
 						onChange: (e) => patchCard("quota", { provider: e.target.value })
 					}, quotaSourceOptions.map((source) =>
-						react.createElement("option", { value: source.id, key: source.id }, source.name || source.id)
+						react.createElement("option", { value: source.id, key: source.id }, quotaSourceLabel(source))
 					))),
 					react.createElement(FieldRow, {
 						t,
@@ -2123,12 +2145,13 @@ window.__ModuleLoader__.load({
 				(() => {
 					const customSources = quotaSourceOptions.filter((s) => !builtinSourceIds.includes(s.id));
 					const draft = customSourceDraft;
+					const sourceKindLabel = (kind) => t("settings.kind." + (kind || "metric"));
 					const customList = customSources.length > 0
 						? customSources.map((source) => react.createElement("div", { className: "dshqb_custom_source_row", key: source.id }, [
-							react.createElement("span", { className: "dshqb_custom_source_name", key: "name" }, (source.name || source.id) + " · " + (source.kind || "metric")),
+							react.createElement("span", { className: "dshqb_custom_source_name", key: "name" }, (source.name || source.id) + " · " + sourceKindLabel(source.kind)),
 							react.createElement("span", { className: "dshqb_custom_source_meta", key: "meta" }, [
 								(source.providerIds ?? []).join(", ") || "—",
-								source.default ? " · default" : "",
+								source.default ? " · " + t("settings.defaultSource") : "",
 							]),
 							react.createElement("button", {
 								type: "button",
@@ -2144,10 +2167,11 @@ window.__ModuleLoader__.load({
 							}, t("settings.remove"))
 						]))
 						: react.createElement("div", { className: "dshqb_form_hint", key: "empty" }, t("settings.noCustomSources"));
-					const input = (key, label, value, onChange, type = "text") => react.createElement(FieldRow, {
+					const input = (key, label, value, onChange, type = "text", hint = null) => react.createElement(FieldRow, {
 						t,
 						key,
 						label,
+						hint,
 						wide: true,
 						disabled: savingCard === "quota"
 					}, react.createElement("input", {
@@ -2172,19 +2196,18 @@ window.__ModuleLoader__.load({
 					const form = draft
 						? react.createElement("div", { className: "dshqb_custom_source_form", key: "form" }, [
 							react.createElement("div", { className: "dshqb_card_sub", key: "title" }, t(editingSourceId ? "settings.editCustomSource" : "settings.addCustomSource")),
+							react.createElement("div", { className: "dshqb_form_hint", key: "hint" }, t("settings.customSourceHint")),
 							react.createElement(FieldGrid, { key: "fields" }, [
-								draft.kind === "metric" || draft.kind === "usage" || draft.kind === "balance"
-									? input("src_id", "ID", draft.id, (v) => patchCustomDraft("id", v))
-									: input("src_id", "ID", draft.id, (v) => patchCustomDraft("id", v)),
+								input("src_id", t("settings.id"), draft.id, (v) => patchCustomDraft("id", v)),
 								input("src_name", t("settings.name"), draft.name, (v) => patchCustomDraft("name", v)),
 								select("src_kind", t("settings.kind"), draft.kind, [
-									["metric", "Metric"],
-									["manual", "Manual"],
-									["usage", "Usage"],
-									["balance", "Balance"],
+									["metric", t("settings.kind.metric")],
+									["manual", t("settings.kind.manual")],
+									["usage", t("settings.kind.usage")],
+									["balance", t("settings.kind.balance")],
 								], (v) => patchCustomDraft("kind", v)),
-								input("src_providers", t("settings.providerIds"), draft.providerIds, (v) => patchCustomDraft("providerIds", v)),
-								input("src_patterns", t("settings.providerPatterns"), draft.providerPatterns, (v) => patchCustomDraft("providerPatterns", v)),
+								input("src_providers", t("settings.providerIds"), draft.providerIds, (v) => patchCustomDraft("providerIds", v), "text", t("settings.providerIdsHint")),
+								input("src_patterns", t("settings.providerPatterns"), draft.providerPatterns, (v) => patchCustomDraft("providerPatterns", v), "text", t("settings.providerPatternsHint")),
 								react.createElement(FieldRow, {
 									t,
 									key: "src_default",

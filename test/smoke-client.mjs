@@ -463,7 +463,7 @@ function loadClientFactory() {
     showCapsule: true,
     showPopover: true,
     showTps: false,
-    provider: 'deepseek',
+    provider: 'opencode-go',
     currency: 'CNY',
     warningThreshold: 10,
     dangerThreshold: 5,
