@@ -299,6 +299,7 @@ window.__ModuleLoader__.load({
 				".dshqb_source_form_head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}",
 				".dshqb_source_test{display:flex;align-items:flex-start;gap:8px;padding:9px 10px;border-radius:8px;font-size:11.5px;line-height:1.45}",
 				".dshqb_source_test_ok{background:rgba(16,185,129,.1);color:var(--dsw-alias-state-success-primary,#10b981)}",
+				".dshqb_source_test_warn{background:rgba(245,158,11,.1);color:var(--dsw-alias-state-warning-primary,#d97706)}",
 				".dshqb_source_test_bad{background:rgba(239,68,68,.1);color:var(--dsw-alias-state-error-primary,#ef4444)}",
 				".dshqb_source_actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding-top:2px}",
 				".dshqb_source_advanced{border-top:1px solid var(--dsw-alias-border-l3,rgba(128,128,128,.12));padding-top:8px}",
@@ -2087,7 +2088,7 @@ window.__ModuleLoader__.load({
 			});
 			const defaultProviderBinding = (provider) => ({
 				providerId: provider.id,
-				enabled: provider.quotaSupported === true,
+				enabled: provider.quotaSupported === true && provider.quotaAutoEnabled !== false,
 				sourceType: provider.quotaSupported === true ? "auto" : "custom",
 				templateId: provider.templateId || "",
 				sourceProviderId: "",
@@ -2443,6 +2444,10 @@ window.__ModuleLoader__.load({
 						});
 						const patchMetric = (field, value) => patchSource("response", { metrics: [{ ...metric, [field]: value }] });
 						const requestDshProvider = source.request?.dshProvider;
+						const selectedTemplateId = currentSourceType === "auto"
+							? (provider.templateId || binding.templateId)
+							: binding.templateId;
+						const selectedTemplate = quotaTemplates.find((item) => item.id === selectedTemplateId);
 						const credentialChoice = requestDshProvider
 							? requestDshProvider
 							: (source.request?.authStyle === "none" ? "__none" : "__ref");
@@ -2473,7 +2478,7 @@ window.__ModuleLoader__.load({
 								}, sourceTypes.map(([value, label]) => react.createElement("option", { value, key: value }, label))))
 							]),
 							currentSourceType === "template" ? react.createElement(FieldGrid, { key: "template_grid" }, [
-								react.createElement(FieldRow, { t, key: "template", wide: true, label: t("settings.providerQuota.templateSelect"), disabled: savingCard === "quota" },
+								react.createElement(FieldRow, { t, key: "template", wide: true, label: t("settings.providerQuota.templateSelect"), hint: selectedTemplate?.description || "", disabled: savingCard === "quota" },
 									react.createElement("select", {
 										className: "dshqb_select", value: binding.templateId || quotaTemplates[0]?.id || "",
 										onChange: (e) => updateProviderBinding(provider, { templateId: e.target.value, sourceType: "template", enabled: true })
@@ -2537,6 +2542,9 @@ window.__ModuleLoader__.load({
 									])
 								])
 							]) : react.createElement("div", { className: "dshqb_provider_template_test", key: "template_test" }, [
+								selectedTemplate?.autoEnable === false && selectedTemplate.description
+									? react.createElement("div", { className: "dshqb_source_test dshqb_source_test_warn", key: "template_notice" }, selectedTemplate.description)
+									: null,
 								react.createElement("div", { className: "dshqb_source_actions", key: "actions" }, react.createElement("button", {
 									type: "button", className: "dshqb_btn dshqb_btn_outline", disabled: currentSourceType === "provider" || testState.state === "testing" || savingCard === "quota",
 									onClick: () => { void testProviderBinding(provider, {

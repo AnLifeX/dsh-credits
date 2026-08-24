@@ -101,23 +101,26 @@ export const QUOTA_SOURCE_TEMPLATES = [
   {
     id: 'siliconflow-cn-balance',
     category: 'balance',
-    name: '硅基流动余额（国内）',
-    description: '查询 SiliconFlow 国内站账户余额（CNY）',
+    name: '硅基流动 API 余额（国内，不含代金券）',
+    description: '仅查询 /user/info 的旧余额字段；硅基流动未通过公开 API 返回代金券，且网页余额可能与接口不同，因此默认不自动开启。',
+    autoEnable: false,
     source: {
-      id: 'siliconflow-cn', name: '硅基流动余额', kind: 'metric', providerIds: ['siliconflow', 'siliconflow-cn'],
+      id: 'siliconflow-cn', name: '硅基流动 API 余额（不含代金券）', kind: 'metric', providerIds: ['siliconflow', 'siliconflow-cn'],
       request: { url: 'https://api.siliconflow.cn/v1/user/info', authRef: 'SILICONFLOW_API_KEY', authStyle: 'bearer' },
-      response: { metrics: [{ key: 'balance', label: '账户余额', valuePath: '$.data.totalBalance', unit: 'CNY' }] },
+      // totalBalance 在现行接口上可能为负数或与网页不一致；CC Switch 也已改为读取 balance。
+      response: { metrics: [{ key: 'balance', label: 'API 余额（不含代金券）', valuePath: '$.data.balance', unit: 'CNY' }] },
     },
   },
   {
     id: 'siliconflow-en-balance',
     category: 'balance',
-    name: 'SiliconFlow 余额（国际）',
-    description: '查询 SiliconFlow 国际站账户余额（USD）',
+    name: 'SiliconFlow API 余额（国际，不含代金券）',
+    description: '仅查询 /user/info 的旧余额字段；不包含代金券，且 api.siliconflow.com 已被官方列为逐步下线端点，因此默认不自动开启。',
+    autoEnable: false,
     source: {
-      id: 'siliconflow-en', name: 'SiliconFlow Balance', kind: 'metric', providerIds: ['siliconflow-en'],
+      id: 'siliconflow-en', name: 'SiliconFlow API Balance (vouchers excluded)', kind: 'metric', providerIds: ['siliconflow-en'],
       request: { url: 'https://api.siliconflow.com/v1/user/info', authRef: 'SILICONFLOW_API_KEY', authStyle: 'bearer' },
-      response: { metrics: [{ key: 'balance', label: 'Account balance', valuePath: '$.data.totalBalance', unit: 'USD' }] },
+      response: { metrics: [{ key: 'balance', label: 'API balance (vouchers excluded)', valuePath: '$.data.balance', unit: 'USD' }] },
     },
   },
   {
@@ -1297,6 +1300,7 @@ export function apply(ctx, config) {
       const profile = readPath(section, entry.settingsPath) ?? {}
       const baseURL = typeof profile?.baseURL === 'string' ? profile.baseURL : ''
       const template = matchQuotaTemplateForProvider(entry.provider, baseURL)
+      const quotaTemplate = template ? getQuotaSourceTemplate(template.id) : null
       rows.set(entry.provider, {
         id: entry.provider,
         name: live.get(entry.provider)?.name || entry.displayName || profile?.displayName || entry.provider,
@@ -1308,11 +1312,13 @@ export function apply(ctx, config) {
         templateId: template?.id ?? '',
         builtin: template?.builtin === true,
         quotaSupported: template !== null,
+        quotaAutoEnabled: quotaTemplate?.autoEnable !== false,
       })
     }
     for (const provider of live.values()) {
       if (rows.has(provider.id)) continue
       const template = matchQuotaTemplateForProvider(provider.id)
+      const quotaTemplate = template ? getQuotaSourceTemplate(template.id) : null
       rows.set(provider.id, {
         id: provider.id,
         name: provider.name || provider.id,
@@ -1324,6 +1330,7 @@ export function apply(ctx, config) {
         templateId: template?.id ?? '',
         builtin: template?.builtin === true,
         quotaSupported: template !== null,
+        quotaAutoEnabled: quotaTemplate?.autoEnable !== false,
       })
     }
     const deepseek = settings?.get?.('llm-deepseek')
@@ -1339,6 +1346,7 @@ export function apply(ctx, config) {
         templateId: 'deepseek',
         builtin: true,
         quotaSupported: true,
+        quotaAutoEnabled: true,
       })
     }
     return [...rows.values()].sort((a, b) => Number(b.configured) - Number(a.configured) || a.name.localeCompare(b.name))
@@ -1382,7 +1390,7 @@ export function apply(ctx, config) {
       const key = normalizeProvider(provider.id)
       const binding = explicit.get(key) ?? legacy.get(key) ?? {
         providerId: provider.id,
-        enabled: provider.configured === true && provider.quotaSupported === true,
+        enabled: provider.configured === true && provider.quotaSupported === true && provider.quotaAutoEnabled !== false,
         sourceType: 'auto',
         templateId: provider.templateId || '',
         sourceProviderId: '',
@@ -1796,6 +1804,7 @@ export function apply(ctx, config) {
         category: template.category,
         name: template.name,
         description: template.description,
+        autoEnable: template.autoEnable !== false,
         source: mergeQuotaSourceTemplate({ template: template.id }),
       })),
       dshProviders: getDshProviders(),

@@ -73,7 +73,9 @@ OpenCode Go 模式下，卡片改成三个窗口的用量百分比与重置时�
 除 DeepSeek 和 OpenCode Go 外，设置页内置了以下模板：
 
 - 订阅套餐：Kimi For Coding、智谱 GLM Coding / Z.AI、MiniMax Coding Plan（国内 / 国际）
-- 账户余额：StepFun、硅基流动 / SiliconFlow、OpenRouter、Novita AI
+- 账户余额：StepFun、OpenRouter、Novita AI
+
+硅基流动仍保留一个可手动选择的旧 `/user/info` 模板，但不会自动开启。自 2025-11 起硅基流动将活动额度迁移为代金券，而公开 API 不返回代金券；实测网页余额也可能与该接口的 `balance` / `chargeBalance` / `totalBalance` 全部不一致。因此模板名称和测试结果会明确标为「API 余额（不含代金券）」，不能把它当作官网总可用额度。
 
 高级 YAML 的每个 `providerQuotas` 绑定可以使用三种数据形态：
 

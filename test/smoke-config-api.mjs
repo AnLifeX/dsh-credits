@@ -42,12 +42,14 @@ const mockCtx = {
           { id: 'opencode-go', name: 'OpenCode Go' },
           { id: 'go-work', name: 'Work Go' },
           { id: 'go-personal', name: 'Personal Go' },
+          { id: 'siliconflow-cn', name: 'SiliconFlow CN' },
           { id: 'unsupported-route', name: 'Unsupported Route' },
         ],
         listConfigurableProviders: () => [
           { provider: 'opencode-go', displayName: 'OpenCode Go', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'opencode-go'] },
           { provider: 'go-work', displayName: 'Work Go', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'go-work'] },
           { provider: 'go-personal', displayName: 'Personal Go', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'go-personal'] },
+          { provider: 'siliconflow-cn', displayName: 'SiliconFlow CN', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'siliconflow-cn'] },
           { provider: 'unsupported-route', displayName: 'Unsupported Route', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'unsupported-route'] },
         ],
       }
@@ -59,6 +61,7 @@ const mockCtx = {
             'opencode-go': { baseURL: 'https://opencode.ai/zen/go/v1' },
             'go-work': { baseURL: 'https://opencode.ai/zen/go/v1' },
             'go-personal': { baseURL: 'https://opencode.ai/zen/go/v1' },
+            'siliconflow-cn': { baseURL: 'https://api.siliconflow.cn/v1' },
             'unsupported-route': { baseURL: 'https://example.invalid/v1' },
           } }
           return undefined
@@ -229,12 +232,14 @@ assert.equal(resGetConfig.data.config.showPopover, true)
   assert.equal(resGetConfig.data.config.opencodeBaseUrl, 'https://opencode.ai/zen/go/v1/usage')
   assert.ok(resGetConfig.data.config.quotaTemplates.some((template) => template.id === 'kimi-coding'))
   assert.ok(resGetConfig.data.config.quotaTemplates.some((template) => template.id === 'opencode-go'))
+  assert.equal(resGetConfig.data.config.quotaTemplates.find((template) => template.id === 'siliconflow-cn-balance').autoEnable, false)
   assert.deepEqual(new Set(resGetConfig.data.config.dshProviders.map((provider) => provider.id)), new Set([
-    'opencode-go', 'go-work', 'go-personal', 'unsupported-route',
+    'opencode-go', 'go-work', 'go-personal', 'siliconflow-cn', 'unsupported-route',
   ]))
   assert.equal(resGetConfig.data.config.dshProviders.find((provider) => provider.id === 'opencode-go').credentialMode, 'record')
   assert.equal(resGetConfig.data.config.providerQuotas.find((binding) => binding.providerId === 'go-work').templateId, 'opencode-go')
   assert.equal(resGetConfig.data.config.providerQuotas.find((binding) => binding.providerId === 'unsupported-route').enabled, false)
+  assert.equal(resGetConfig.data.config.providerQuotas.find((binding) => binding.providerId === 'siliconflow-cn').enabled, false)
   console.log('GET /query-credits/config passed')
 
   // 2. POST /query-credits/config 修改阈值与单价
