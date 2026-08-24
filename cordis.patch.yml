@@ -1,22 +1,24 @@
 # dsh-credits bundle 层。
 # 安装: dsh plugin --profile web add <本目录>
 #
-# 额度模式:
-#   quotaMode: follow   # 跟随当前对话模型 (Go → 套餐额度, 其他 → 官方余额)
-#   quotaMode: custom   # 固定使用下方 provider
+# 额度按 DSH 供应商分别绑定。能从供应商 ID / Base URL 识别的可使用 sourceType: auto。
 # 展示开关: showDock / dockLayout(own 独立换行 | shared 共用一行) / showCapsule / showPopover
 - insert:
     - id: dsh-credits
       name: dsh-credits
       config:
-        quotaMode: follow
         showDock: true
         dockLayout: own
         showCapsule: true
         showPopover: true
-        provider: opencode-go
-        opencodeApiKeyRef: OPENCODE_GO_API_KEY
-        opencodeBaseUrl: https://opencode.ai/zen/go/v1/usage
+        providerQuotas:
+          - providerId: opencode-go
+            enabled: true
+            sourceType: auto
+          # DSH 中额外添加的 Go 账号也可独立绑定；它会复用该供应商自己的地址和 Key。
+          # - providerId: go-personal
+          #   enabled: true
+          #   sourceType: auto
         warningThreshold: 10          # OpenCode Go: 剩余额度 < 10% 黄灯
         dangerThreshold: 5            # OpenCode Go: 剩余额度 < 5% 红灯
         refreshIntervalMs: 300000

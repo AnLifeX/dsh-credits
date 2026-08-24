@@ -54,12 +54,12 @@ OpenCode Go 模式下，卡片改成三个窗口的用量百分比与重置时�
 
 在「设置 → 额度 → 额度查询」中：
 
-1. 保持「跟随当前模型供应商」，切换模型时会自动匹配。
-2. 先看「DSH 已配置，可直接复用」。点对应供应商后，插件会复用 DSH 保存的 API 地址和凭据，不用再填 Key。
-3. DSH 没有自动识别时，从「订阅套餐」或「账户余额」选一个官方模板，只需确认凭据引用。
-4. 最后才用「自定义接口」：填 URL 和凭据引用，点「测试并读取字段」，再从下拉列表选「剩余」，或选「已用 + 总额」。不需要手写 JSONPath。
+1. 页面以 DSH 已启用的供应商为列表，每个供应商独立开启或关闭额度展示。
+2. 能识别的供应商默认用「自动识别」：复用这个供应商在 DSH 保存的 Base URL 和 Key，并选择匹配的解析模板。
+3. 也可以明确选择一个「内置模板」，或让两个模型供应商「复用另一供应商的额度」。
+4. 最后才用「自定义 HTTP 接口」：填 URL、选择当前/其它 DSH 供应商凭证，点「测试并读取字段」，再从下拉列表选「剩余」，或选「已用 + 总额」。不需要手写 JSONPath。
 
-额度源的「供应商 ID」决定自动匹配；「未匹配时展示」是全局回退。如果选「固定展示」，则无论当前模型是谁都显示指定额度源。添加、修改或删除额度源会立即作用于当前 `dsh web` 进程；需要跨重启保留时，请再从 YAML 导出卡片复制到 profile 配置。
+切换模型时只查看当前 DSH 供应商自己的绑定；没有配置或已关闭的供应商不显示额度，也不会回退到无关账户。每个绑定有独立缓存，因此可以在 DSH 里用多个自定义供应商添加多个 OpenCode Go 账号，它们会分别查询和展示。设置修改会立即作用于当前 `dsh web` 进程；需要跨重启保留时，请再从 YAML 导出卡片复制到 profile 配置。
 
 ### 内置与官方模板
 
@@ -75,27 +75,20 @@ OpenCode Go 模式下，卡片改成三个窗口的用量百分比与重置时�
 - 订阅套餐：Kimi For Coding、智谱 GLM Coding / Z.AI、MiniMax Coding Plan（国内 / 国际）
 - 账户余额：StepFun、硅基流动 / SiliconFlow、OpenRouter、Novita AI
 
-高级 YAML 还支持 `quotaSources` 配置，有三种数据形态：
+高级 YAML 的每个 `providerQuotas` 绑定可以使用三种数据形态：
 
 - `balance`：DeepSeek 风格多币种余额
 - `usage`：OpenCode Go 风格多窗口用量
 - `metric`：任意单指标/多指标剩余额度（HTTP + JSONPath）
 
-服务端会缓存所有已启用额度源；切模型时底部直接换展示，不必再等一轮查询。
+服务端会按 DSH 供应商分别缓存所有已启用额度源；切模型时底部直接换展示，不必再等一轮查询。
 
 | 当前对话模型的供应商 | 底部展示 |
 | :--- | :--- |
-| `opencode-go` | OpenCode Go 订阅用量（5 小时 / 周 / 月） |
-| `deepseek` | DeepSeek 官方余额 |
-| 与某个 `quotaSources` 的 `providerIds`/`providerPatterns` 匹配 | 对应自定义额度源 |
-| 其他（Anthropic、OpenAI、OpenCode Zen 等） | 设置中「未匹配时展示」指定的额度源 |
-
-`quotaMode` 决定选择逻辑：
-
-- `follow`：当前对话模型供应商 → 自动匹配额度源；没命中再用 `provider` 指定的回退源
-- `custom`：固定展示 `provider` 指定的额度源，忽略当前模型
-
-配置项 `provider`（以及设置里的「额度数据源」）在 follow 模式下作为“模型未知时的回退/默认源”，在 custom 模式下作为固定源。默认回退是 `deepseek`。
+| 绑定为 OpenCode Go 模板的供应商 | 该账号的订阅用量（5 小时 / 周 / 月） |
+| 绑定为 DeepSeek 模板的供应商 | 该账号的官方余额 |
+| 绑定为余额/套餐模板或自定义 HTTP 的供应商 | 该供应商自己的解析结果 |
+| 未配置或单独关闭的供应商 | 不显示额度；本会话消耗与 TPS 仍可正常显示 |
 
 OpenCode Go 密钥解析顺序：`opencodeApiKey` → `OPENCODE_GO_API_KEY`（credentials / 环境变量）→ `~/.local/share/opencode/auth.json`。
 
@@ -143,7 +136,7 @@ dsh plugin --profile web remove dsh-balance
 
 | 配置 | 默认 | 说明 |
 | :--- | :--- | :--- |
-| `quotaMode` | `follow` | `follow` 跟随当前对话模型；`custom` 固定用下面的 `provider` |
+| `providerQuotas` | `[]` | 每个 DSH 供应商独立的额度来源绑定；设置页会为能识别的已启用供应商自动生成推荐项 |
 | `showDock` | `true` | 是否显示底部额度读数 |
 | `dockLayout` | `own` | `own` 独立换行；`shared` 与底部已有统计共用一行 |
 | `showCapsule` | `true` | 右下角累计消耗胶囊 |
@@ -151,20 +144,23 @@ dsh plugin --profile web remove dsh-balance
 | `showTps` | `true` | 是否显示实时 TPS |
 | `enabled` | `true` | 额度功能总开关；关闭后隐藏相关 UI、停止轮询，并锁定展示、额度查询、阈值与刷新；不影响模型单价和 YAML 导出 |
 
-### OpenCode Go 回退
+### 多个 OpenCode Go 账号
 
 ```yaml
 - id: dsh-credits
   config:
-    quotaMode: follow
     showDock: true
     dockLayout: own
     showCapsule: true
     showPopover: true
-    provider: opencode-go
-    opencodeApiKeyRef: OPENCODE_GO_API_KEY
-    opencodeBaseUrl: https://opencode.ai/zen/go/v1/usage
-    warningThreshold: 10          # 无法识别模型时的默认回退; 选了 Go 模型会改看剩余额度 %
+    providerQuotas:
+      - providerId: opencode-go
+        enabled: true
+        sourceType: auto
+      - providerId: go-personal  # DSH 中另一个自定义供应商，使用另一份 Key
+        enabled: true
+        sourceType: auto
+    warningThreshold: 10          # Go 套餐剩余额度 < 10% 黄灯
     dangerThreshold: 5            # 剩余额度 < 5% 红灯
     refreshIntervalMs: 300000
     clientPollIntervalMs: 30000
@@ -172,16 +168,17 @@ dsh plugin --profile web remove dsh-balance
     currency: USD
 ```
 
-这段 `provider: opencode-go` 只决定「还没选模型 / 识别失败」时先看哪一套。真正切到 Go 模型后才会用三个窗口的用量百分比与重置时间；状态灯按「剩余最少」的窗口判定。套餐没有固定美元上限可展示。
+两个 DSH 供应商需要分别保存自己的 Key；插件会产生 `provider:opencode-go` 和 `provider:go-personal` 两个适配器及缓存。切到哪个供应商，就显示哪个账号的三个用量窗口。状态灯按「剩余最少」的窗口判定；套餐没有固定美元上限可展示。
 
 ### DeepSeek 人民币账户
 
 ```yaml
 - id: dsh-credits
   config:
-    provider: deepseek
-    apiKeyRef: DEEPSEEK_API_KEY
-    baseUrl: https://api.deepseek.com
+    providerQuotas:
+      - providerId: deepseek-official
+        enabled: true
+        sourceType: auto
     warningThreshold: 10
     dangerThreshold: 5
     refreshIntervalMs: 300000
@@ -240,28 +237,27 @@ dsh plugin --profile web remove dsh-balance
 ```yaml
 - id: dsh-credits
   config:
-    quotaMode: follow
-    provider: custom-metric
-    quotaSources:
-      - id: custom-metric
-        name: My Plan
-        kind: metric                 # balance / usage / metric
-        providerIds: [my-provider]  # 自动匹配当前模型供应商
-        providerPatterns: ["my-.*"] # 可选正则匹配
-        default: true
-        request:
-          method: GET
-          url: https://example.com/quota
-          authRef: MY_PLAN_KEY
-          authStyle: bearer
-        response:
-          metrics:
-            - key: remaining
-              label: 剩余额度
-              valuePath: $.data.remaining
-              totalPath: $.data.total
-              unit: USD
-              resetsAtPath: $.data.resetsAt
+    providerQuotas:
+      - providerId: my-provider
+        enabled: true
+        sourceType: custom
+        source:
+          id: quota-my-provider
+          name: My Plan
+          kind: metric
+          request:
+            method: GET
+            url: https://example.com/quota
+            dshProvider: my-provider  # 复用这个 DSH 供应商的 Key
+            authStyle: bearer
+          response:
+            metrics:
+              - key: remaining
+                label: 剩余额度
+                valuePath: $.data.remaining
+                totalPath: $.data.total
+                unit: USD
+                resetsAtPath: $.data.resetsAt
 ```
 
 自定义 HTTP 支持直接取「剩余」，也支持用「总额 - 已用」计算剩余。OpenRouter 已是内置模板，不需要再写代理脚本。
@@ -369,7 +365,7 @@ A: 优先复用 DSH 供应商已保存的 credential ref / API-key record，不�
 A: DeepSeek 按余额金额对比 `warningThreshold` / `dangerThreshold`。OpenCode Go 按剩余额度百分比对比同一组阈值。🟢 ≥ 预警线；🟡 告急线～预警线；🔴 < 告急线或接口不可用。
 
 **Q: 切模型后底部读数会跟着变吗？**  
-A: 会。`quotaMode: follow` 时按当前模型的 DSH 供应商 ID 匹配内置源、官方模板或自定义源；没命中时回退到 `provider` 指定的源。`quotaMode: custom` 则固定显示该源。
+A: 会。插件按当前模型的 DSH 供应商 ID 读取它自己的 `providerQuotas` 绑定；没配置或单独关闭时不显示额度，不会回退到其它账号。
 
 **Q: 8 月 17 日峰谷价会自动切吗？**  
 A: 会。北京时间 2026-08-17 00:00 之后，V4 Flash / Pro 按 09:00–12:00、14:00–18:00 高峰价；谷时段是 00:00–09:00、12:00–14:00、18:00–24:00，其余时段半价。
