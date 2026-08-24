@@ -780,7 +780,7 @@ if (!htmlCustom.includes('Go 额度 月 6% · 周 12% · 5h 9%')) throw new Erro
 if (htmlCustom.includes('余额 ¥100.23')) throw new Error('custom Go source should not show DeepSeek balance')
 console.log('CUSTOM QUOTA MODE CLIENT SMOKE TEST PASSED')
 
-// ---------- 自定义 metric/manual 额度源 ----------
+// ---------- 自定义 metric 额度源 ----------
 installFetch(() => ({
   ok: true,
   quotaMode: 'custom',
@@ -812,6 +812,7 @@ installFetch(() => ({
       fetchedAt: Date.now(),
       metrics: [
         { key: 'remaining', label: '剩余额度', value: 25, total: 100, unit: '%', resetsAt: '2026-08-17T00:00:00.000Z' },
+        { key: 'balance', label: '账户余额', value: 0, total: 0, unit: 'CNY', resetsAt: null },
       ],
     },
   },
@@ -863,8 +864,11 @@ renderToStaticMarkup(ReactMock.createElement(CustomMetricComp, customMetricProps
 await new Promise((r) => setTimeout(r, 400))
 const htmlCustomMetric = renderToStaticMarkup(ReactMock.createElement(CustomMetricComp, customMetricProps))
 if (!htmlCustomMetric.includes('剩余额度 25%')) throw new Error('custom metric readout missing')
-if (!htmlCustomMetric.includes('🎯 额度用量')) throw new Error('custom metric card title missing')
-if (!htmlCustomMetric.includes('剩余 25%')) throw new Error('custom metric remaining badge missing')
+if (!htmlCustomMetric.includes('Custom Metric · 剩余额度 25%')) throw new Error('custom metric source name missing from readout')
+if (!htmlCustomMetric.includes('🎯 Custom Metric')) throw new Error('custom metric source name missing from card title')
+if (!htmlCustomMetric.includes('账户余额 0 CNY')) throw new Error('zero scalar metric must remain visible')
+if (htmlCustomMetric.includes('额度用量不可用')) throw new Error('zero scalar metric must not be marked unavailable')
+if (!htmlCustomMetric.includes('● 告急')) throw new Error('zero scalar metric should render a critical status badge')
 if (!htmlCustomMetric.includes('dshqb_quota_rows')) throw new Error('custom metric quota rows missing')
 if (!htmlCustomMetric.includes('2026/8/17 08:00:00 重置') && !htmlCustomMetric.includes('2026/8/17 00:00:00 重置')) throw new Error('custom metric reset time missing')
 if (htmlCustomMetric.includes('dshqb_pricing_wrap')) throw new Error('DeepSeek pricing must be hidden for custom metric')

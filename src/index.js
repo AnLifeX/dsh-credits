@@ -1,11 +1,10 @@
 /**
  * dsh-credits — server half.
  *
- * 1. 额度服务: 按 `refreshIntervalMs` 并行缓存 DeepSeek 官方余额与 OpenCode Go
- *    订阅用量, 通过 HTTP 路由 `/query-credits` 提供给浏览器(浏览器只读缓存,
- *    不打上游 API)。底部读数跟随当前对话模型供应商: 仅 `opencode-go` 显示订阅
- *    用量, 其余供应商(含 DeepSeek 官方)显示官方余额。配置里的 `provider` 只在
- *    无法识别当前模型时作为默认。
+ * 1. 额度服务: 按 `refreshIntervalMs` 并行缓存已启用的余额 / 订阅额度源，
+ *    通过 HTTP 路由 `/query-credits` 提供给浏览器（浏览器只读缓存）。底部读数
+ *    优先按当前对话模型的 DSH 供应商自动匹配；未命中时使用 `provider`
+ *    指定的回退源，也可切换为固定展示。
  *    DeepSeek 密钥优先取 `apiKey`, 否则经 credentials 解析 `apiKeyRef`; OpenCode Go
  *    密钥优先取 `opencodeApiKey`, 再经 credentials/环境变量解析 `opencodeApiKeyRef`,
  *    最后回退读取 OpenCode CLI 的 `~/.local/share/opencode/auth.json`。
@@ -45,7 +44,7 @@ export const BUILTIN_QUOTA_ADAPTERS = [
     id: 'deepseek',
     kind: 'balance',
     name: 'DeepSeek 官方余额',
-    providerIds: ['deepseek'],
+    providerIds: ['deepseek', 'deepseek-official'],
     default: true,
   },
   {
@@ -57,6 +56,198 @@ export const BUILTIN_QUOTA_ADAPTERS = [
   },
 ]
 export const QUOTA_ADAPTER_IDS = BUILTIN_QUOTA_ADAPTERS.map((adapter) => adapter.id)
+
+/**
+ * 可在设置页一键创建的额度源模板。
+ *
+ * 模板只保存公开的接口形状，不保存密钥；`authRef` 指向 DSH credentials 或环境变量。
+ * 套餐接口的响应结构不适合让用户手写 JSONPath，因此由 `template` 对应的解析器处理。
+ */
+export const QUOTA_SOURCE_TEMPLATES = [
+  {
+    id: 'stepfun-balance',
+    category: 'balance',
+    name: 'StepFun 余额',
+    description: '查询阶跃星辰账户余额（CNY）',
+    source: {
+      id: 'stepfun', name: 'StepFun 余额', kind: 'metric', providerIds: ['stepfun'],
+      request: { url: 'https://api.stepfun.com/v1/accounts', authRef: 'STEPFUN_API_KEY', authStyle: 'bearer' },
+      response: { metrics: [{ key: 'balance', label: '账户余额', valuePath: '$.balance', unit: 'CNY' }] },
+    },
+  },
+  {
+    id: 'siliconflow-cn-balance',
+    category: 'balance',
+    name: '硅基流动余额（国内）',
+    description: '查询 SiliconFlow 国内站账户余额（CNY）',
+    source: {
+      id: 'siliconflow-cn', name: '硅基流动余额', kind: 'metric', providerIds: ['siliconflow', 'siliconflow-cn'],
+      request: { url: 'https://api.siliconflow.cn/v1/user/info', authRef: 'SILICONFLOW_API_KEY', authStyle: 'bearer' },
+      response: { metrics: [{ key: 'balance', label: '账户余额', valuePath: '$.data.totalBalance', unit: 'CNY' }] },
+    },
+  },
+  {
+    id: 'siliconflow-en-balance',
+    category: 'balance',
+    name: 'SiliconFlow 余额（国际）',
+    description: '查询 SiliconFlow 国际站账户余额（USD）',
+    source: {
+      id: 'siliconflow-en', name: 'SiliconFlow Balance', kind: 'metric', providerIds: ['siliconflow-en'],
+      request: { url: 'https://api.siliconflow.com/v1/user/info', authRef: 'SILICONFLOW_API_KEY', authStyle: 'bearer' },
+      response: { metrics: [{ key: 'balance', label: 'Account balance', valuePath: '$.data.totalBalance', unit: 'USD' }] },
+    },
+  },
+  {
+    id: 'openrouter-balance',
+    category: 'balance',
+    name: 'OpenRouter 余额',
+    description: '用总充值减去总用量得到可用余额（USD）',
+    source: {
+      id: 'openrouter', name: 'OpenRouter 余额', kind: 'metric', providerIds: ['openrouter'],
+      request: { url: 'https://openrouter.ai/api/v1/credits', authRef: 'OPENROUTER_API_KEY', authStyle: 'bearer' },
+      response: { metrics: [{ key: 'credits', label: '可用余额', usedPath: '$.data.total_usage', totalPath: '$.data.total_credits', unit: 'USD' }] },
+    },
+  },
+  {
+    id: 'novita-balance',
+    category: 'balance',
+    name: 'Novita AI 余额',
+    description: '查询 Novita AI 可用余额（USD）',
+    source: {
+      id: 'novita', name: 'Novita AI 余额', kind: 'metric', providerIds: ['novita', 'novita-ai'],
+      request: { url: 'https://api.novita.ai/v3/user/balance', authRef: 'NOVITA_API_KEY', authStyle: 'bearer' },
+      response: { metrics: [{ key: 'balance', label: '可用余额', valuePath: '$.availableBalance', scale: 0.0001, unit: 'USD' }] },
+    },
+  },
+  {
+    id: 'kimi-coding',
+    category: 'subscription',
+    name: 'Kimi For Coding',
+    description: '自动解析 5 小时与周用量窗口',
+    source: {
+      id: 'kimi-coding', name: 'Kimi For Coding 套餐', kind: 'usage', providerIds: ['kimi', 'kimi-coding'],
+      request: { url: 'https://api.kimi.com/coding/v1/usages', authRef: 'KIMI_API_KEY', authStyle: 'bearer' },
+    },
+  },
+  {
+    id: 'zhipu-cn-coding',
+    category: 'subscription',
+    name: '智谱 GLM Coding',
+    description: '解析国内站 5 小时与周用量窗口',
+    source: {
+      id: 'zhipu-coding', name: '智谱 GLM Coding 套餐', kind: 'usage', providerIds: ['zhipu', 'glm', 'bigmodel'],
+      request: { url: 'https://open.bigmodel.cn/api/monitor/usage/quota/limit', authRef: 'ZHIPU_API_KEY', authStyle: 'header', authHeader: 'Authorization' },
+    },
+  },
+  {
+    id: 'zhipu-en-coding',
+    category: 'subscription',
+    name: 'Z.AI Coding Plan',
+    description: '解析国际站 5 小时与周用量窗口',
+    source: {
+      id: 'zai-coding', name: 'Z.AI Coding Plan', kind: 'usage', providerIds: ['zai', 'z.ai'],
+      request: { url: 'https://api.z.ai/api/monitor/usage/quota/limit', authRef: 'ZAI_API_KEY', authStyle: 'header', authHeader: 'Authorization' },
+    },
+  },
+  {
+    id: 'minimax-cn-coding',
+    category: 'subscription',
+    name: 'MiniMax Coding Plan（国内）',
+    description: '解析国内站 5 小时与周用量窗口',
+    source: {
+      id: 'minimax-coding', name: 'MiniMax Coding Plan', kind: 'usage', providerIds: ['minimax', 'minimaxi'],
+      request: { url: 'https://api.minimaxi.com/v1/api/openplatform/coding_plan/remains', authRef: 'MINIMAX_API_KEY', authStyle: 'bearer' },
+    },
+  },
+  {
+    id: 'minimax-en-coding',
+    category: 'subscription',
+    name: 'MiniMax Coding Plan（国际）',
+    description: '解析国际站 5 小时与周用量窗口',
+    source: {
+      id: 'minimax-en-coding', name: 'MiniMax Coding Plan', kind: 'usage', providerIds: ['minimax-en'],
+      request: { url: 'https://api.minimax.io/v1/api/openplatform/coding_plan/remains', authRef: 'MINIMAX_API_KEY', authStyle: 'bearer' },
+    },
+  },
+]
+
+export const getQuotaSourceTemplate = (id) =>
+  QUOTA_SOURCE_TEMPLATES.find((template) => template.id === id) ?? null
+
+/** DSH 供应商路由 / Base URL → 本插件额度模板。 */
+export const matchQuotaTemplateForProvider = (provider, baseURL = '') => {
+  const id = normalizeProvider(provider)
+  const url = String(baseURL ?? '').trim().toLowerCase()
+  if (id === 'deepseek' || id === 'deepseek-official' || url.includes('api.deepseek.com')) return { builtin: true, id: 'deepseek' }
+  if (id === 'opencode-go' || url.includes('opencode.ai/zen/go')) return { builtin: true, id: 'opencode-go' }
+  const direct = QUOTA_SOURCE_TEMPLATES.find((template) =>
+    (template.source.providerIds ?? []).some((candidate) => normalizeProvider(candidate) === id))
+  if (direct) return { builtin: false, id: direct.id }
+  const byUrl = [
+    ['api.stepfun.', 'stepfun-balance'],
+    ['api.siliconflow.cn', 'siliconflow-cn-balance'],
+    ['api.siliconflow.com', 'siliconflow-en-balance'],
+    ['openrouter.ai', 'openrouter-balance'],
+    ['api.novita.ai', 'novita-balance'],
+    ['api.kimi.com/coding', 'kimi-coding'],
+    ['open.bigmodel.cn', 'zhipu-cn-coding'],
+    ['bigmodel.cn', 'zhipu-cn-coding'],
+    ['api.z.ai', 'zhipu-en-coding'],
+    ['api.minimaxi.com', 'minimax-cn-coding'],
+    ['api.minimax.io', 'minimax-en-coding'],
+  ].find(([needle]) => url.includes(needle))
+  return byUrl ? { builtin: false, id: byUrl[1] } : null
+}
+
+const mergeQuotaSourceTemplate = (source = {}) => {
+  const template = getQuotaSourceTemplate(source.template)
+  if (!template) return source
+  const defaults = template.source
+  return {
+    ...defaults,
+    ...source,
+    template: template.id,
+    providerIds: source.providerIds ?? defaults.providerIds ?? [],
+    providerPatterns: source.providerPatterns ?? defaults.providerPatterns ?? [],
+    request: { ...(defaults.request ?? {}), ...(source.request ?? {}) },
+    response: {
+      ...(defaults.response ?? {}),
+      ...(source.response ?? {}),
+      metrics: source.response?.metrics ?? defaults.response?.metrics ?? [],
+      windows: source.response?.windows ?? defaults.response?.windows ?? [],
+    },
+  }
+}
+
+const normalizeQuotaSourceConfig = (source) => {
+  if (!source || typeof source !== 'object') throw new Error('quota-source-invalid')
+  const merged = mergeQuotaSourceTemplate(source)
+  const id = String(merged.id ?? '').trim()
+  if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$/.test(id)) throw new Error('quota-source-id-invalid')
+  const kind = String(merged.kind ?? '').trim().toLowerCase()
+  if (!['balance', 'usage', 'metric'].includes(kind)) throw new Error('quota-source-kind-invalid')
+  const rawUrl = String(merged.request?.url ?? '').trim()
+  let parsed
+  try { parsed = new URL(rawUrl) } catch { throw new Error('quota-url-invalid') }
+  if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('quota-url-invalid')
+  const normalized = {
+    ...merged,
+    id,
+    name: String(merged.name || id).trim(),
+    kind,
+    providerIds: Array.isArray(merged.providerIds)
+      ? merged.providerIds.map((value) => String(value).trim()).filter(Boolean)
+      : [],
+    providerPatterns: Array.isArray(merged.providerPatterns)
+      ? merged.providerPatterns.map((value) => String(value).trim()).filter(Boolean)
+      : [],
+    enabled: merged.enabled !== false,
+    request: { ...(merged.request ?? {}) },
+    response: { ...(merged.response ?? {}) },
+  }
+  delete normalized.manual
+  return normalized
+}
 
 /** 按适配器 id 查内置适配器。 */
 export const getBuiltinQuotaAdapter = (id) =>
@@ -100,7 +291,10 @@ export const resolveQuotaSource = (modelProvider, config = {}, adapters = BUILTI
     return matchQuotaAdapter(config.provider, adapters)?.id ?? quotaSourceFromProvider(config.provider)
   }
   if (modelProvider !== null && modelProvider !== undefined && normalizeProvider(modelProvider) !== '') {
-    return matchQuotaAdapter(modelProvider, adapters)?.id ?? defaultQuotaAdapter(adapters)?.id ?? 'deepseek'
+    return matchQuotaAdapter(modelProvider, adapters)?.id
+      ?? matchQuotaAdapter(config.provider, adapters)?.id
+      ?? defaultQuotaAdapter(adapters)?.id
+      ?? 'deepseek'
   }
   return matchQuotaAdapter(config.provider, adapters)?.id ?? defaultQuotaAdapter(adapters)?.id ?? 'deepseek'
 }
@@ -130,6 +324,8 @@ const ModelPrice = Schema.object({
 const QuotaRequest = Schema.object({
   method: Schema.string().default('GET'),
   url: Schema.string().default(''),
+  /** 复用 DSH 模型供应商已有凭证；存在时优先于 authRef。 */
+  dshProvider: Schema.string().default(''),
   authRef: Schema.string().default(''),
   authStyle: Schema.union(['bearer', 'header', 'query', 'none']).default('none'),
   authHeader: Schema.string().default('Authorization'),
@@ -142,9 +338,11 @@ const QuotaMetric = Schema.object({
   key: Schema.string(),
   label: Schema.string().default(''),
   valuePath: Schema.string().default(''),
+  usedPath: Schema.string().default(''),
   totalPath: Schema.string().default(''),
   resetsAtPath: Schema.string().default(''),
   unit: Schema.string().default(''),
+  scale: Schema.number().default(1),
 })
 
 /** 自定义订阅用量窗口映射。 */
@@ -171,21 +369,15 @@ const QuotaResponse = Schema.object({
 /** 自定义额度源适配器。 */
 const QuotaSource = Schema.object({
   id: Schema.string().min(1),
+  template: Schema.string().default(''),
   name: Schema.string().default(''),
-  kind: Schema.union(['balance', 'usage', 'metric', 'manual']),
+  kind: Schema.union(['balance', 'usage', 'metric']),
   providerIds: Schema.array(Schema.string()).default([]),
   providerPatterns: Schema.array(Schema.string()).default([]),
   default: Schema.boolean().default(false),
   enabled: Schema.boolean().default(true),
   request: QuotaRequest.default({}),
   response: QuotaResponse.default({}),
-  manual: Schema.object({
-    value: Schema.number().default(0),
-    total: Schema.number().default(0),
-    label: Schema.string().default(''),
-    unit: Schema.string().default(''),
-    resetsAt: Schema.string().default(''),
-  }).default({}),
 })
 
 export const Config = Schema.object({
@@ -333,25 +525,134 @@ export const normalizeCustomUsage = (data, response = {}) => {
 /** 归一化自定义单值/多指标额度响应。 */
 export const normalizeCustomMetrics = (data, response = {}) => {
   const metrics = response.metrics ?? []
-  return metrics.map((metric) => ({
-    key: metric.key,
-    label: metric.label || metric.key || '额度',
-    value: toAmount(getByPath(data, metric.valuePath)),
-    total: metric.totalPath ? toAmount(getByPath(data, metric.totalPath)) : 0,
-    unit: metric.unit || '',
-    resetsAt: metric.resetsAtPath ? (getByPath(data, metric.resetsAtPath) || null) : null,
-  }))
+  return metrics.map((metric) => {
+    const scale = Number.isFinite(Number(metric.scale)) ? Number(metric.scale) : 1
+    const total = metric.totalPath ? toAmount(getByPath(data, metric.totalPath)) * scale : 0
+    const used = metric.usedPath ? toAmount(getByPath(data, metric.usedPath)) * scale : 0
+    const value = metric.valuePath
+      ? toAmount(getByPath(data, metric.valuePath)) * scale
+      : (metric.usedPath && metric.totalPath ? Math.max(0, total - used) : 0)
+    return {
+      key: metric.key,
+      label: metric.label || metric.key || '额度',
+      value,
+      used,
+      total,
+      unit: metric.unit || '',
+      resetsAt: metric.resetsAtPath ? (getByPath(data, metric.resetsAtPath) || null) : null,
+    }
+  })
 }
 
-/** 手动/静态额度源。 */
-export const normalizeManualMetrics = (manual = {}) => [{
-  key: 'manual',
-  label: manual.label || '额度',
-  value: toAmount(manual.value),
-  total: toAmount(manual.total),
-  unit: manual.unit || '',
-  resetsAt: manual.resetsAt || null,
-}]
+const clampPercent = (value) => {
+  const n = Number(value)
+  return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : null
+}
+
+const normalizeResetTime = (value) => {
+  if (typeof value === 'string' && value.trim()) {
+    const numeric = Number(value)
+    if (!Number.isFinite(numeric)) return value
+    value = numeric
+  }
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return null
+  const millis = value < 1e12 ? value * 1000 : value
+  const date = new Date(millis)
+  return Number.isNaN(date.getTime()) ? null : date.toISOString()
+}
+
+const usageWindow = (percent, resetsAt = null, status = null) => ({
+  status: typeof status === 'string' && status ? status : null,
+  percent: clampPercent(percent),
+  resetsAt: normalizeResetTime(resetsAt),
+})
+
+/** 解析内置订阅模板，输出与 OpenCode Go 相同的动态窗口结构。 */
+export const normalizeTemplateUsage = (templateId, data) => {
+  if (templateId === 'kimi-coding') {
+    const windows = {}
+    const detail = Array.isArray(data?.limits)
+      ? data.limits.map((item) => item?.detail).find((item) => item && typeof item === 'object')
+      : null
+    if (detail) {
+      const limit = toAmount(detail.limit)
+      const remaining = toAmount(detail.remaining)
+      windows.rolling = usageWindow(limit > 0 ? ((limit - remaining) / limit) * 100 : 0, detail.resetTime)
+    }
+    if (data?.usage && typeof data.usage === 'object') {
+      const limit = toAmount(data.usage.limit)
+      const remaining = toAmount(data.usage.remaining)
+      windows.weekly = usageWindow(limit > 0 ? ((limit - remaining) / limit) * 100 : 0, data.usage.resetTime)
+    }
+    return windows
+  }
+
+  if (templateId === 'zhipu-cn-coding' || templateId === 'zhipu-en-coding') {
+    const limits = Array.isArray(data?.data?.limits) ? data.data.limits.filter((item) => {
+      const type = String(item?.type ?? '').toUpperCase()
+      return type === 'TOKENS_LIMIT' || type === 'CREDIT_LIMIT'
+    }) : []
+    const windows = {}
+    const unclassified = []
+    for (const item of limits) {
+      const window = usageWindow(item?.percentage, item?.nextResetTime)
+      if (Number(item?.unit) === 3 && !windows.rolling) windows.rolling = window
+      else if (Number(item?.unit) === 6 && !windows.weekly) windows.weekly = window
+      else unclassified.push({ item, window })
+    }
+    unclassified.sort((a, b) => toAmount(a.item?.nextResetTime) - toAmount(b.item?.nextResetTime))
+    for (const entry of unclassified) {
+      if (!windows.rolling) windows.rolling = entry.window
+      else if (!windows.weekly) windows.weekly = entry.window
+    }
+    return windows
+  }
+
+  if (templateId === 'minimax-cn-coding' || templateId === 'minimax-en-coding') {
+    const item = Array.isArray(data?.model_remains)
+      ? data.model_remains.find((entry) => entry?.model_name === 'general')
+      : null
+    if (!item) return {}
+    const windows = {}
+    if (Number.isFinite(Number(item.current_interval_remaining_percent))) {
+      windows.rolling = usageWindow(100 - Number(item.current_interval_remaining_percent), item.end_time)
+    }
+    if (Number(item.current_weekly_status) === 1 && Number.isFinite(Number(item.current_weekly_remaining_percent))) {
+      windows.weekly = usageWindow(100 - Number(item.current_weekly_remaining_percent), item.weekly_end_time)
+    }
+    return windows
+  }
+
+  return normalizeCustomUsage(data, {})
+}
+
+/**
+ * 测试自定义接口时只回传可映射的叶子字段，避免把整个上游响应（可能含隐私）送到浏览器。
+ */
+export const collectQuotaFields = (data, maxFields = 80) => {
+  const fields = []
+  const secretKey = /password|secret|token|api[-_]?key|authorization|credential/i
+  const visit = (value, path, depth) => {
+    if (fields.length >= maxFields || depth > 6 || value === null || value === undefined) return
+    if (Array.isArray(value)) {
+      value.slice(0, 5).forEach((entry, index) => visit(entry, `${path}[${index}]`, depth + 1))
+      return
+    }
+    if (typeof value === 'object') {
+      for (const [key, entry] of Object.entries(value)) {
+        if (secretKey.test(key)) continue
+        visit(entry, `${path}.${key}`, depth + 1)
+      }
+      return
+    }
+    if (typeof value === 'number' || typeof value === 'string' || typeof value === 'boolean') {
+      const preview = typeof value === 'string' && value.length > 80 ? `${value.slice(0, 77)}…` : value
+      fields.push({ path, value: preview, type: typeof value })
+    }
+  }
+  visit(data, '$', 0)
+  return fields
+}
 
 /** 构造会话花费投影单元。样本带事件时间, view 按当时峰谷价计价。 */
 export const makeCostProjection = (configOrGetter) => {
@@ -846,6 +1147,68 @@ export function apply(ctx, config) {
     }, 'dsh-credits: spend backfill')
   })
 
+  const readPath = (value, path = []) => path.reduce((current, key) => current?.[key], value)
+
+  /**
+   * 读取 DSH 自己的供应商目录与设置。这里仅返回路由、地址和凭证引用，不读取密钥值。
+   */
+  const getDshProviders = () => {
+    const llm = ctx.get('llm')
+    const settings = ctx.get('settings')
+    const live = new Map((llm?.listProviders?.() ?? []).map((provider) => [provider.id, provider]))
+    const directory = llm?.listConfigurableProviders?.() ?? []
+    const rows = new Map()
+    for (const entry of directory) {
+      const section = settings?.get?.(entry.settingsNs)
+      const profile = readPath(section, entry.settingsPath) ?? {}
+      const baseURL = typeof profile?.baseURL === 'string' ? profile.baseURL : ''
+      const template = matchQuotaTemplateForProvider(entry.provider, baseURL)
+      if (!template) continue
+      rows.set(entry.provider, {
+        id: entry.provider,
+        name: live.get(entry.provider)?.name || entry.displayName || profile?.displayName || entry.provider,
+        configured: live.has(entry.provider),
+        settingsNs: entry.settingsNs,
+        baseURL,
+        authRef: typeof profile?.apiKeyEnv === 'string' ? profile.apiKeyEnv : '',
+        credentialMode: typeof profile?.apiKeyEnv === 'string' ? 'reference' : 'record',
+        templateId: template.id,
+        builtin: template.builtin === true,
+      })
+    }
+    for (const provider of live.values()) {
+      if (rows.has(provider.id)) continue
+      const template = matchQuotaTemplateForProvider(provider.id)
+      if (!template) continue
+      rows.set(provider.id, {
+        id: provider.id,
+        name: provider.name || provider.id,
+        configured: true,
+        settingsNs: '',
+        baseURL: '',
+        authRef: '',
+        credentialMode: 'record',
+        templateId: template.id,
+        builtin: template.builtin === true,
+      })
+    }
+    const deepseek = settings?.get?.('llm-deepseek')
+    if (deepseek && typeof deepseek === 'object') {
+      rows.set('deepseek-official', {
+        id: 'deepseek-official',
+        name: live.get('deepseek-official')?.name || 'DeepSeek Official',
+        configured: live.has('deepseek-official'),
+        settingsNs: 'llm-deepseek',
+        baseURL: typeof deepseek.baseURL === 'string' ? deepseek.baseURL : 'https://api.deepseek.com',
+        authRef: typeof deepseek.apiKeyEnv === 'string' ? deepseek.apiKeyEnv : 'DEEPSEEK_API_KEY',
+        credentialMode: 'reference',
+        templateId: 'deepseek',
+        builtin: true,
+      })
+    }
+    return [...rows.values()].sort((a, b) => Number(b.configured) - Number(a.configured) || a.name.localeCompare(b.name))
+  }
+
   /** 经 credentials seam / 环境变量解析一个密钥引用。 */
   const resolveCredential = async (ref) => {
     const credentials = ctx.get('credentials')
@@ -860,17 +1223,44 @@ export function apply(ctx, config) {
     return process.env[ref] ?? ''
   }
 
+  /** 复用 DSH 供应商已保存的 credential-ref 或 llm-pi-ai API-key record。 */
+  const resolveDshProviderCredential = async (providerId) => {
+    const id = String(providerId ?? '').trim()
+    if (!id) return ''
+    const profile = getDshProviders().find((provider) => provider.id === id)
+    if (profile?.authRef) {
+      const byRef = await resolveCredential(profile.authRef)
+      if (byRef) return byRef
+    }
+    const credentials = ctx.get('credentials')
+    if (credentials?.readRecord) {
+      try {
+        const record = await credentials.readRecord(`llm-pi-ai/${id}`)
+        if (record?.kind === 'api-key' && typeof record.key === 'string' && record.key) return record.key
+        const payload = record?.kind === 'grant' ? record.payload : null
+        const access = payload?.access ?? payload?.access_token ?? payload?.token
+        if (typeof access === 'string' && access) return access
+      } catch {
+        /* 不是可寻址的 DSH record，继续走模板自己的 authRef */
+      }
+    }
+    return ''
+  }
+
   /** 解析 DeepSeek 余额密钥。 */
   const resolveKey = async (overrideKey = null) => {
     if (typeof overrideKey === 'string' && overrideKey !== '') return overrideKey
     if (runtimeConfig.apiKey !== '') return runtimeConfig.apiKey
-    return resolveCredential(runtimeConfig.apiKeyRef)
+    const fromDsh = await resolveDshProviderCredential('deepseek-official') || await resolveDshProviderCredential('deepseek')
+    return fromDsh || resolveCredential(runtimeConfig.apiKeyRef)
   }
 
   /** 解析 OpenCode Go 订阅密钥(含 auth.json 回退, 覆盖 Windows 相对目录)。 */
   const resolveOpencodeKey = async (overrideKey = null) => {
     if (typeof overrideKey === 'string' && overrideKey !== '') return overrideKey
     if (runtimeConfig.opencodeApiKey !== '') return runtimeConfig.opencodeApiKey
+    const fromDsh = await resolveDshProviderCredential('opencode-go')
+    if (fromDsh !== '') return fromDsh
     const fromCredential = await resolveCredential(runtimeConfig.opencodeApiKeyRef)
     if (fromCredential !== '') return fromCredential
     try {
@@ -893,7 +1283,12 @@ export function apply(ctx, config) {
         merged.delete(source.id)
         continue
       }
-      merged.set(source.id, { ...source, builtin: false })
+      try {
+        const normalized = normalizeQuotaSourceConfig(source)
+        merged.set(normalized.id, { ...normalized, builtin: false })
+      } catch (error) {
+        ctx.logger.warn(`[dsh-credits] ignored invalid quota source (${source.id}): ${error instanceof Error ? error.message : String(error)}`)
+      }
     }
     return [...merged.values()]
   }
@@ -928,22 +1323,16 @@ export function apply(ctx, config) {
     return url
   }
 
-  const fetchCustomQuota = async (adapter) => {
-    if (adapter.kind === 'manual') {
-      return {
-        provider: adapter.id,
-        kind: 'manual',
-        metrics: normalizeManualMetrics(adapter.manual),
-      }
-    }
+  const fetchCustomQuota = async (adapter, options = {}) => {
     const request = adapter.request ?? {}
     const url = String(request.url ?? '').trim()
     if (!url) throw new Error('quota-url-missing')
     let key = ''
+    if (request.dshProvider) key = await resolveDshProviderCredential(request.dshProvider)
     if (request.authRef) {
-      key = await resolveCredential(request.authRef)
-      if (key === '') throw new Error('api-key-missing')
+      key ||= await resolveCredential(request.authRef)
     }
+    if ((request.dshProvider || request.authRef) && key === '') throw new Error('api-key-missing')
     const headers = { Accept: 'application/json', ...(request.headers ?? {}) }
     if (key) applyCustomAuth(headers, request, key)
     const controller = new AbortController()
@@ -956,19 +1345,24 @@ export function apply(ctx, config) {
       })
       if (!res.ok) throw new Error(`${adapter.name || adapter.id} API HTTP ${res.status}`)
       const data = await res.json()
+      const preview = options.includePreview === true ? { availableFields: collectQuotaFields(data) } : {}
       if (adapter.kind === 'balance') {
         return {
           provider: adapter.id,
           kind: 'balance',
           isAvailable: data?.is_available === true,
           balances: normalizeCustomBalances(data, adapter.response),
+          ...preview,
         }
       }
       if (adapter.kind === 'usage') {
         return {
           provider: adapter.id,
           kind: 'usage',
-          usage: normalizeCustomUsage(data, adapter.response),
+          usage: adapter.template
+            ? normalizeTemplateUsage(adapter.template, data)
+            : normalizeCustomUsage(data, adapter.response),
+          ...preview,
         }
       }
       if (adapter.kind === 'metric') {
@@ -976,9 +1370,10 @@ export function apply(ctx, config) {
           provider: adapter.id,
           kind: 'metric',
           metrics: normalizeCustomMetrics(data, adapter.response),
+          ...preview,
         }
       }
-      return { provider: adapter.id, kind: adapter.kind || 'metric' }
+      return { provider: adapter.id, kind: adapter.kind || 'metric', ...preview }
     } finally {
       clearTimeout(timer)
     }
@@ -1100,17 +1495,19 @@ export function apply(ctx, config) {
     return k.slice(0, 4) + '****' + k.slice(-4)
   }
 
-  const sanitizeCustomQuotaSources = () => (runtimeConfig.quotaSources ?? []).map((source) => ({
-    ...source,
-    request: {
-      ...(source.request ?? {}),
-      headers: Object.fromEntries(
-        Object.entries(source.request?.headers ?? {})
-          .map(([k, v]) => [k, /authorization|token|api[-_]?key|secret/i.test(k) ? '***' : v]),
-      ),
-    },
-    manual: { ...(source.manual ?? {}) },
-  }))
+  const sanitizeCustomQuotaSources = () => (runtimeConfig.quotaSources ?? []).map((rawSource) => {
+    const source = mergeQuotaSourceTemplate(rawSource)
+    return {
+      ...source,
+      request: {
+        ...(source.request ?? {}),
+        headers: Object.fromEntries(
+          Object.entries(source.request?.headers ?? {})
+            .map(([k, v]) => [k, /authorization|token|api[-_]?key|secret/i.test(k) ? '***' : v]),
+        ),
+      },
+    }
+  })
 
   const getSanitizedConfig = () => {
     return {
@@ -1139,6 +1536,14 @@ export function apply(ctx, config) {
       prices: { ...runtimeConfig.prices },
       defaultPrices: { ...runtimeConfig.defaultPrices },
       quotaSources: sanitizeCustomQuotaSources(),
+      quotaTemplates: QUOTA_SOURCE_TEMPLATES.map((template) => ({
+        id: template.id,
+        category: template.category,
+        name: template.name,
+        description: template.description,
+        source: mergeQuotaSourceTemplate({ template: template.id }),
+      })),
+      dshProviders: getDshProviders(),
     }
   }
 
@@ -1310,16 +1715,20 @@ export function apply(ctx, config) {
               if (typeof body.opencodeBaseUrl === 'string' && body.opencodeBaseUrl.trim()) runtimeConfig.opencodeBaseUrl = body.opencodeBaseUrl.trim()
               if (Array.isArray(body.quotaSources)) {
                 const prevSources = runtimeConfig.quotaSources ?? []
-                runtimeConfig.quotaSources = body.quotaSources.map((s) => {
+                const nextSources = body.quotaSources.map((s) => {
                   const prev = prevSources.find((p) => p.id === s.id)
-                  if (!prev) return { ...s }
+                  if (!prev) return normalizeQuotaSourceConfig(s)
                   const nextHeaders = { ...(prev.request?.headers ?? {}) }
                   for (const [k, v] of Object.entries(s.request?.headers ?? {})) {
                     if (v === '***' && prev.request?.headers?.[k] !== undefined) nextHeaders[k] = prev.request.headers[k]
                     else nextHeaders[k] = v
                   }
-                  return { ...s, request: { ...(s.request ?? {}), headers: nextHeaders } }
+                  return normalizeQuotaSourceConfig({ ...s, request: { ...(s.request ?? {}), headers: nextHeaders } })
                 })
+                if (new Set(nextSources.map((source) => source.id)).size !== nextSources.length) {
+                  throw new Error('quota-source-id-duplicate')
+                }
+                runtimeConfig.quotaSources = nextSources
               }
               if (typeof body.warningThreshold === 'number' && body.warningThreshold >= 0) runtimeConfig.warningThreshold = body.warningThreshold
               if (typeof body.dangerThreshold === 'number' && body.dangerThreshold >= 0) runtimeConfig.dangerThreshold = body.dangerThreshold
@@ -1372,15 +1781,18 @@ export function apply(ctx, config) {
         }
         try {
           const body = await readJsonBody(req)
-          const adapter = typeof body.provider === 'string' && getQuotaAdapter(body.provider)
+          const draftAdapter = body.source && typeof body.source === 'object'
+            ? { ...normalizeQuotaSourceConfig(body.source), builtin: false }
+            : null
+          const adapter = draftAdapter ?? (typeof body.provider === 'string' && getQuotaAdapter(body.provider)
             ? getQuotaAdapter(body.provider)
-            : (getQuotaAdapter(runtimeConfig.provider) ?? defaultQuotaAdapter(getRuntimeAdapters()))
+            : (getQuotaAdapter(runtimeConfig.provider) ?? defaultQuotaAdapter(getRuntimeAdapters())))
           if (!adapter) {
             sendJson(res, 400, { ok: false, error: 'quota-source-not-found' })
             return
           }
           if (adapter.builtin === false) {
-            const payload = await fetchCustomQuota(adapter)
+            const payload = await fetchCustomQuota(adapter, { includePreview: true })
             sendJson(res, 200, { ok: true, provider: adapter.id, kind: adapter.kind, ...payload })
             return
           }

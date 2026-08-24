@@ -5,7 +5,15 @@
  */
 import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
-import { apply, quotaSourceFromProvider, resolveQuotaSource } from '../src/index.js'
+import {
+  apply,
+  collectQuotaFields,
+  matchQuotaTemplateForProvider,
+  normalizeCustomMetrics,
+  normalizeTemplateUsage,
+  quotaSourceFromProvider,
+  resolveQuotaSource,
+} from '../src/index.js'
 
 // 模拟 webServer 上下文与注册表
 const routes = new Map()
@@ -16,6 +24,26 @@ const mockCtx = {
       return {
         async resolve(ref) {
           if (ref === 'DEEPSEEK_API_KEY') return { value: 'sk-mock-key-from-credentials' }
+          return undefined
+        },
+        async readRecord(key) {
+          if (key === 'llm-pi-ai/opencode-go') return { kind: 'api-key', key: 'sk-mock-opencode-record' }
+          return undefined
+        },
+      }
+    }
+    if (key === 'llm') {
+      return {
+        listProviders: () => [{ id: 'opencode-go', name: 'OpenCode Go' }],
+        listConfigurableProviders: () => [{
+          provider: 'opencode-go', displayName: 'OpenCode Go', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'opencode-go'],
+        }],
+      }
+    }
+    if (key === 'settings') {
+      return {
+        get(ns) {
+          if (ns === 'llm-pi-ai') return { providers: { 'opencode-go': { baseURL: 'https://opencode.ai/zen/go/v1' } } }
           return undefined
         },
       }
@@ -176,8 +204,11 @@ async function runTests() {
   assert.equal(resGetConfig.data.config.dockLayout, 'own')
 assert.equal(resGetConfig.data.config.showCapsule, true)
 assert.equal(resGetConfig.data.config.showPopover, true)
-assert.equal(resGetConfig.data.config.showTps, true)
+  assert.equal(resGetConfig.data.config.showTps, true)
   assert.equal(resGetConfig.data.config.opencodeBaseUrl, 'https://opencode.ai/zen/go/v1/usage')
+  assert.ok(resGetConfig.data.config.quotaTemplates.some((template) => template.id === 'kimi-coding'))
+  assert.deepEqual(resGetConfig.data.config.dshProviders.map((provider) => provider.id), ['opencode-go'])
+  assert.equal(resGetConfig.data.config.dshProviders[0].credentialMode, 'record')
   console.log('GET /query-credits/config passed')
 
   // 2. POST /query-credits/config 修改阈值与单价
@@ -281,30 +312,8 @@ assert.equal(resGetConfig.data.config.showTps, true)
   assert.equal(resCustomConn.status, 200)
   assert.equal(resCustomConn.data.ok, true)
   assert.equal(resCustomConn.data.metrics[0].value, 25)
+  assert.ok(resCustomConn.data.availableFields.some((field) => field.path === '$.data.remaining'))
   console.log('POST /query-credits/test-connection (custom-metric) passed')
-
-  // 2.7 手动/静态额度源
-  const resManual = await invokeRoute('/query-credits/config', 'POST', {
-    provider: 'manual-source',
-    quotaMode: 'custom',
-    quotaSources: [{
-      id: 'manual-source',
-      name: 'Manual Quota',
-      kind: 'manual',
-      providerIds: ['manual-provider'],
-      default: false,
-      enabled: true,
-      manual: { value: 33, total: 100, label: '手动额度', unit: '%', resetsAt: '2026-09-01T00:00:00.000Z' },
-    }],
-  })
-  assert.equal(resManual.data.ok, true)
-  assert.equal(resManual.data.config.provider, 'manual-source')
-  const resManualQuota = await invokeRoute('/query-credits', 'GET', null, 'source=manual-source')
-  assert.equal(resManualQuota.data.provider, 'manual-source')
-  assert.equal(resManualQuota.data.kind, 'manual')
-  assert.equal(resManualQuota.data.metrics[0].value, 33)
-  assert.equal(resManualQuota.data.metrics[0].total, 100)
-  console.log('manual quota source passed')
 
   // 回到内置源 + follow，保证后续 disable 测试与旧行为一致
   const resResetConfig = await invokeRoute('/query-credits/config', 'POST', {
@@ -323,10 +332,30 @@ assert.equal(resGetConfig.data.config.showTps, true)
   assert.equal(quotaSourceFromProvider('openai'), 'deepseek')
   assert.equal(quotaSourceFromProvider('opencode'), 'deepseek')
   assert.equal(resolveQuotaSource('opencode-go', { quotaMode: 'follow', provider: 'deepseek' }), 'opencode-go')
-  assert.equal(resolveQuotaSource('anthropic', { quotaMode: 'follow', provider: 'opencode-go' }), 'deepseek')
+  assert.equal(resolveQuotaSource('anthropic', { quotaMode: 'follow', provider: 'opencode-go' }), 'opencode-go')
   assert.equal(resolveQuotaSource('anthropic', { quotaMode: 'custom', provider: 'opencode-go' }), 'opencode-go')
   assert.equal(resolveQuotaSource('opencode-go', { quotaMode: 'custom', provider: 'deepseek' }), 'deepseek')
   console.log('quotaSourceFromProvider / resolveQuotaSource mapping passed')
+
+  assert.deepEqual(matchQuotaTemplateForProvider('my-kimi-route', 'https://api.kimi.com/coding/v1'), { builtin: false, id: 'kimi-coding' })
+  assert.deepEqual(matchQuotaTemplateForProvider('deepseek-official'), { builtin: true, id: 'deepseek' })
+  assert.deepEqual(matchQuotaTemplateForProvider('openrouter'), { builtin: false, id: 'openrouter-balance' })
+  assert.deepEqual(matchQuotaTemplateForProvider('custom-minimax', 'https://api.minimaxi.com/v1'), { builtin: false, id: 'minimax-cn-coding' })
+  const kimi = normalizeTemplateUsage('kimi-coding', {
+    limits: [{ detail: { limit: 100, remaining: 75, resetTime: 1787600000000 } }],
+    usage: { limit: 1000, remaining: 900, resetTime: 1787800000000 },
+  })
+  assert.equal(kimi.rolling.percent, 25)
+  assert.equal(kimi.weekly.percent, 10)
+  const metrics = normalizeCustomMetrics({ used: 35, total: 100 }, {
+    metrics: [{ key: 'quota', usedPath: '$.used', totalPath: '$.total', scale: 1 }],
+  })
+  assert.equal(metrics[0].value, 65)
+  assert.equal(metrics[0].used, 35)
+  assert.deepEqual(collectQuotaFields({ data: { remaining: 20 }, access_token: 'must-not-leak' }), [
+    { path: '$.data.remaining', value: 20, type: 'number' },
+  ])
+  console.log('quota template parsing / safe field preview passed')
 
   const resQuotaMode = await invokeRoute('/query-credits/config', 'POST', {
     enabled: false,
