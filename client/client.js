@@ -208,8 +208,11 @@ window.__ModuleLoader__.load({
 				".dshqb_unsaved{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:500;line-height:16px;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,0.1));border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.16));flex-shrink:0;white-space:nowrap}",
 				".dshqb_toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--dsw-alias-state-success-primary,#10b981);color:#ffffff;padding:8px 18px;border-radius:999px;box-shadow:var(--dsw-shadow-lv3,0 8px 24px rgba(0,0,0,0.3));font-size:12.5px;font-weight:500;z-index:100000;animation:dshqb-toast-in .2s ease-out;display:flex;align-items:center;gap:6px}",
 				".dshqb_settings_page{position:relative;display:flex;flex-direction:column;gap:12px;min-width:0;width:100%;max-width:760px;box-sizing:border-box;white-space:normal}",
-				".dshqb_settings_intro{display:flex;flex-direction:column;gap:4px;padding:0 2px}",
+				".dshqb_settings_intro{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:0 2px}",
+				".dshqb_settings_intro_copy{display:flex;flex-direction:column;gap:4px;min-width:0}",
 				".dshqb_settings_intro_title{font-size:15px;font-weight:600;color:var(--dsw-alias-label-primary)}",
+				".dshqb_settings_title_control{display:flex;align-items:center;justify-content:flex-end;gap:9px;min-height:25px;flex:0 0 auto}",
+				".dshqb_settings_title_control_label{font-size:12.5px;font-weight:500;line-height:1.4;color:var(--dsw-alias-label-secondary);white-space:nowrap}",
 				".dshqb_pcard_list{display:flex;flex-direction:column;gap:12px;margin:0;padding:0;list-style:none}",
 				".dshqb_pcard{border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.16));background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-1,#fff));border-radius:12px;list-style:none;overflow:hidden;transition:border-color .16s,background .16s}",
 				".dshqb_pcard:hover{border-color:var(--dsw-alias-label-dimmed,rgba(128,128,128,0.45))}",
@@ -271,11 +274,6 @@ window.__ModuleLoader__.load({
 				".dshqb_layout_choice_selected .dshqb_layout_choice_mark{border-color:var(--dsw-alias-brand-primary,#3b82f6);opacity:1}",
 				".dshqb_layout_choice_selected .dshqb_layout_choice_mark:after{content:'';position:absolute;inset:3px;border-radius:50%;background:var(--dsw-alias-brand-primary,#3b82f6)}",
 				".dshqb_layout_choice_label{min-width:0;font-size:12.5px;font-weight:500;line-height:1.4}",
-				".dshqb_settings_global{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:14px 16px;border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.18));border-radius:12px;background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,0.04))}",
-				".dshqb_settings_global_copy{display:flex;flex-direction:column;gap:3px;min-width:0}",
-				".dshqb_settings_global_head{display:flex;align-items:center;gap:8px;min-width:0;flex-wrap:wrap}",
-				".dshqb_settings_global_title{font-size:13px;font-weight:600;color:var(--dsw-alias-label-primary)}",
-				".dshqb_settings_global_hint{font-size:11.5px;line-height:1.45;color:var(--dsw-alias-label-tertiary);white-space:normal}",
 				".dshqb_settings_locked{opacity:.5;pointer-events:none;user-select:none;filter:grayscale(.2)}",
 				".dshqb_settings_fieldset{display:block;min-width:0;margin:0;padding:0;border:0}",
 				".dshqb_settings_cards{display:flex;flex-direction:column;gap:12px}",
@@ -306,7 +304,7 @@ window.__ModuleLoader__.load({
 				".dshqb_source_advanced{border-top:1px solid var(--dsw-alias-border-l3,rgba(128,128,128,.12));padding-top:8px}",
 				".dshqb_source_advanced>summary{cursor:pointer;color:var(--dsw-alias-label-secondary);font-size:12px;user-select:none}",
 				".dshqb_source_advanced[open]>summary{margin-bottom:6px}",
-				"@media (max-width:620px){.dshqb_template_grid{grid-template-columns:1fr}.dshqb_custom_source_row{grid-template-columns:minmax(0,1fr) auto}.dshqb_custom_source_row>.dshqb_btn:last-child{grid-column:2}.dshqb_source_head{flex-direction:column;align-items:stretch}}",
+				"@media (max-width:620px){.dshqb_template_grid{grid-template-columns:1fr}.dshqb_custom_source_row{grid-template-columns:minmax(0,1fr) auto}.dshqb_custom_source_row>.dshqb_btn:last-child{grid-column:2}.dshqb_source_head{flex-direction:column;align-items:stretch}.dshqb_settings_intro{gap:12px}.dshqb_settings_title_control_label{display:none}}",
 				".dshqb_confirm_mask{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;background:var(--dsw-alias-bg-mask-1,rgba(0,0,0,0.45));backdrop-filter:blur(6px)}",
 				".dshqb_confirm{width:min(380px,100%);background:var(--dsw-alias-bg-layer-1,var(--dsw-alias-bg-base,#fff));border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.18));border-radius:12px;box-shadow:var(--dsw-shadow-lv3,0 16px 40px rgba(0,0,0,0.22));padding:18px 18px 16px;display:flex;flex-direction:column;gap:8px;box-sizing:border-box}",
 				".dshqb_confirm_title{font-size:15px;font-weight:600;color:var(--dsw-alias-label-primary)}",
@@ -2937,14 +2935,17 @@ window.__ModuleLoader__.load({
 			const enabledOverridden = isSchemaOverridden("enabled", view.enabled, currency);
 			return react.createElement("div", { className: "dshqb_settings_page" }, [
 				react.createElement("div", { className: "dshqb_settings_intro", key: "intro" }, [
-					react.createElement("span", { className: "dshqb_settings_intro_title", key: "title" }, t("settings.title")),
-					react.createElement("span", { className: "dshqb_settings_desc", key: "desc" }, t("settings.desc"))
-				]),
-				react.createElement("div", { className: "dshqb_settings_global", key: "global" }, [
-					react.createElement("span", { className: "dshqb_settings_global_copy", key: "copy" }, [
-						react.createElement("span", { className: "dshqb_settings_global_head", key: "head" }, [
-							react.createElement("span", { className: "dshqb_settings_global_title", key: "title" }, t("settings.enabled")),
-							enabledOverridden ? react.createElement("span", { className: "dshqb_field_badges", key: "badges" }, [
+					react.createElement("span", { className: "dshqb_settings_intro_copy", key: "copy" }, [
+						react.createElement("span", { className: "dshqb_settings_intro_title", key: "title" }, t("settings.title")),
+						react.createElement("span", { className: "dshqb_settings_desc", key: "desc" }, t("settings.desc"))
+					]),
+					react.createElement("span", {
+						className: "dshqb_settings_title_control",
+						title: t("settings.enabledHint"),
+						key: "global"
+					}, [
+						react.createElement("span", { className: "dshqb_settings_title_control_label", key: "label" }, t("settings.enabled")),
+						enabledOverridden ? react.createElement("span", { className: "dshqb_field_badges", key: "badges" }, [
 							react.createElement("span", { className: "dshqb_field_badge", key: "ov" }, t("settings.overridden")),
 							react.createElement("button", {
 								type: "button",
@@ -2952,19 +2953,17 @@ window.__ModuleLoader__.load({
 								disabled: savingEnabled,
 								onClick: () => { void setGlobalEnabled(schemaDefault("enabled", currency)); },
 								key: "reset"
-								}, t("settings.resetField"))
-							]) : null
-						]),
-						react.createElement("span", { className: "dshqb_settings_global_hint", key: "hint" }, t("settings.enabledHint"))
-					]),
-					react.createElement(SwitchControl, {
-						checked: quotaEnabled,
-						disabled: savingEnabled,
-						onChange: (e) => { void setGlobalEnabled(e.target.checked); },
-						label: t("settings.enabled"),
-						large: true,
-						key: "switch"
-					})
+							}, t("settings.resetField"))
+						]) : null,
+						react.createElement(SwitchControl, {
+							checked: quotaEnabled,
+							disabled: savingEnabled,
+							onChange: (e) => { void setGlobalEnabled(e.target.checked); },
+							label: t("settings.enabled"),
+							large: true,
+							key: "switch"
+						})
+					])
 				]),
 				react.createElement("div", { className: "dshqb_settings_cards", key: "cards" }, [
 					react.createElement("fieldset", {
@@ -3023,10 +3022,10 @@ window.__ModuleLoader__.load({
 			const total = Number(metric?.total);
 			const value = Number(metric?.value);
 			if (Number.isFinite(total) && total > 0 && Number.isFinite(value)) {
-				return Math.max(0, Math.min(100, value / total * 100));
+				return value / total * 100;
 			}
 			const direct = Number(metric?.percent);
-			return Number.isFinite(direct) ? Math.max(0, Math.min(100, direct)) : null;
+			return Number.isFinite(direct) ? direct : null;
 		}
 		/** 通用 metric 列表 → 剩余额度状态（取最小剩余）。 */
 		function metricsQuotaStatus(metrics, thresholds) {

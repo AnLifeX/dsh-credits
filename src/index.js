@@ -531,7 +531,7 @@ export const normalizeCustomMetrics = (data, response = {}) => {
     const used = metric.usedPath ? toAmount(getByPath(data, metric.usedPath)) * scale : 0
     const value = metric.valuePath
       ? toAmount(getByPath(data, metric.valuePath)) * scale
-      : (metric.usedPath && metric.totalPath ? Math.max(0, total - used) : 0)
+      : (metric.usedPath && metric.totalPath ? total - used : 0)
     return {
       key: metric.key,
       label: metric.label || metric.key || '额度',

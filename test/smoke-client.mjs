@@ -391,6 +391,8 @@ if (!htmlSettings.includes('底部额度、累计消耗与模型单价。')) thr
 if (!htmlSettings.includes('dshqb_pcard')) throw new Error('settings cards missing')
 if (!htmlSettings.includes('展示')) throw new Error('display card title missing')
 if (!htmlSettings.includes('启用额度功能')) throw new Error('global quota enable switch missing from settings')
+if (!htmlSettings.includes('dshqb_settings_title_control')) throw new Error('global quota enable switch should live in the title bar')
+if (htmlSettings.includes('dshqb_settings_global')) throw new Error('global quota enable switch should not render as a separate card')
 if (!code.includes('displayCheck("showTps", "settings.showTps", "settings.showTpsHint")')) throw new Error('TPS display toggle wiring missing')
 if (!code.includes('dshqb_switch')) throw new Error('settings switches should use slider controls')
 if (!code.includes('dshqb_toggle_list')) throw new Error('display switches should be grouped together')
@@ -813,6 +815,7 @@ installFetch(() => ({
       metrics: [
         { key: 'remaining', label: '剩余额度', value: 25, total: 100, unit: '%', resetsAt: '2026-08-17T00:00:00.000Z' },
         { key: 'balance', label: '账户余额', value: 0, total: 0, unit: 'CNY', resetsAt: null },
+        { key: 'overdrawn', label: '透支额度', value: -20, total: 100, unit: 'CNY', resetsAt: null },
       ],
     },
   },
@@ -867,6 +870,8 @@ if (!htmlCustomMetric.includes('剩余额度 25%')) throw new Error('custom metr
 if (!htmlCustomMetric.includes('Custom Metric · 剩余额度 25%')) throw new Error('custom metric source name missing from readout')
 if (!htmlCustomMetric.includes('🎯 Custom Metric')) throw new Error('custom metric source name missing from card title')
 if (!htmlCustomMetric.includes('账户余额 0 CNY')) throw new Error('zero scalar metric must remain visible')
+if (!htmlCustomMetric.includes('透支额度 -20%')) throw new Error('negative metric percentage must not be clamped to zero')
+if (htmlCustomMetric.includes('透支额度 0%')) throw new Error('negative metric percentage must not render as zero')
 if (htmlCustomMetric.includes('额度用量不可用')) throw new Error('zero scalar metric must not be marked unavailable')
 if (!htmlCustomMetric.includes('● 告急')) throw new Error('zero scalar metric should render a critical status badge')
 if (!htmlCustomMetric.includes('dshqb_quota_rows')) throw new Error('custom metric quota rows missing')

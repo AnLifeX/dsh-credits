@@ -352,6 +352,10 @@ assert.equal(resGetConfig.data.config.showPopover, true)
   })
   assert.equal(metrics[0].value, 65)
   assert.equal(metrics[0].used, 35)
+  const overdrawnMetrics = normalizeCustomMetrics({ used: 120, total: 100 }, {
+    metrics: [{ key: 'quota', usedPath: '$.used', totalPath: '$.total', scale: 1 }],
+  })
+  assert.equal(overdrawnMetrics[0].value, -20)
   assert.deepEqual(collectQuotaFields({ data: { remaining: 20 }, access_token: 'must-not-leak' }), [
     { path: '$.data.remaining', value: 20, type: 'number' },
   ])
