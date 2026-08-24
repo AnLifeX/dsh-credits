@@ -430,7 +430,10 @@ if (code.includes('"settings.exportDesc"')) throw new Error('duplicate YAML expo
 if (code.includes('"settings.opencodeBaseUrlHint"')) throw new Error('opencodeBaseUrlHint should be removed')
 if (code.includes('"settings.pricingDesc"')) throw new Error('pricing body hint should be removed')
 if (!code.includes('dshqb_field_full')) throw new Error('full-width field span missing for long inputs')
-if (!code.includes('display_bar') || !code.includes('quota_fields')) throw new Error('display/quota fields should use two-column grids')
+if (!code.includes('display_bar')) throw new Error('display fields should use a two-column grid')
+if (!code.includes('dshqb_provider_quota_list') || !code.includes('providerQuotas')) throw new Error('provider-centric quota configuration missing')
+if (!code.includes('settings.providerQuota.reuse') || !code.includes('settings.providerQuota.custom')) throw new Error('provider quota reuse/custom modes missing')
+if (code.includes('key: "quotaMode"') || code.includes('key: "provider",\n\t\t\t\t\t\tlabel: t("settings.provider")')) throw new Error('legacy global quota mode/fallback controls should not render')
 console.log('SETTINGS SECTION SMOKE TEST PASSED')
 
 function loadClientFactory() {
@@ -477,6 +480,9 @@ function loadClientFactory() {
     opencodeApiKeyRef: 'OPENCODE_GO_API_KEY',
     opencodeApiKey: '',
     opencodeBaseUrl: 'https://opencode.ai/zen/go/v1/usage',
+    providerQuotas: [{ providerId: 'go-work', enabled: true, sourceType: 'auto', templateId: 'opencode-go', sourceProviderId: '' }],
+    quotaTemplates: [{ id: 'opencode-go', category: 'subscription', name: 'OpenCode Go 订阅用量', description: 'test' }],
+    dshProviders: [{ id: 'go-work', name: 'Go 工作套餐', configured: true, quotaSupported: true, templateId: 'opencode-go' }],
     prices: { 'deepseek-v4-flash': { cacheHit: 0.02, cacheMiss: 1, output: 2 } },
     defaultPrices: { cacheHit: 0.1, cacheMiss: 1, output: 2 },
   }
@@ -498,7 +504,7 @@ if (!htmlDraft.includes('放弃修改')) throw new Error('dirty draft should sho
   if (!htmlDraft.includes('dshqb_layout_choice dshqb_layout_choice_selected')) throw new Error('dirty draft should restore the selected dock layout card')
   if (!htmlDraft.includes('dshqb_switch')) throw new Error('display settings should render slider switches')
   if (!htmlDraft.includes('dshqb_field_grid')) throw new Error('threshold fields should use two-column grid')
-  if (!htmlDraft.includes('dshqb_field_full')) throw new Error('long quota URL should span both columns')
+  if (!htmlDraft.includes('dshqb_provider_quota_item') || !htmlDraft.includes('Go 工作套餐')) throw new Error('quota card should be centered on DSH provider rows')
   if (htmlDraft.includes('settings.exportDesc') || htmlDraft.includes('复制下方片段')) throw new Error('YAML body should not repeat the card description')
   if (!htmlDraft.includes('dshqb_code_copy') || !htmlDraft.includes('dshqb_copy_icon')) throw new Error('YAML code block should contain an icon-only copy button')
   globalThis.sessionStorage = prevSession
@@ -783,6 +789,7 @@ if (htmlCustom.includes('余额 ¥100.23')) throw new Error('custom Go source sh
 console.log('CUSTOM QUOTA MODE CLIENT SMOKE TEST PASSED')
 
 // ---------- 自定义 metric 额度源 ----------
+dirSnap.current = { provider: 'my-provider', model: 'my-model' }
 installFetch(() => ({
   ok: true,
   quotaMode: 'custom',
@@ -797,6 +804,7 @@ installFetch(() => ({
     { id: 'deepseek', kind: 'balance', name: 'DeepSeek 官方余额', providerIds: ['deepseek'], default: true },
     { id: 'custom-metric', kind: 'metric', name: 'Custom Metric', providerIds: ['my-provider'], default: false },
   ],
+  providerQuotaMap: { 'my-provider': 'provider:my-provider', deepseek: null },
   views: {
     deepseek: {
       ok: true,
@@ -806,9 +814,10 @@ installFetch(() => ({
       fetchedAt: Date.now(),
       balances: [{ currency: 'CNY', total: 100.23, granted: 0, toppedUp: 100.23 }],
     },
-    'custom-metric': {
+    'provider:my-provider': {
       ok: true,
-      provider: 'custom-metric',
+      provider: 'provider:my-provider',
+      providerId: 'my-provider',
       kind: 'metric',
       name: 'Custom Metric',
       fetchedAt: Date.now(),
@@ -877,6 +886,9 @@ if (!htmlCustomMetric.includes('● 告急')) throw new Error('zero scalar metri
 if (!htmlCustomMetric.includes('dshqb_quota_rows')) throw new Error('custom metric quota rows missing')
 if (!htmlCustomMetric.includes('2026/8/17 08:00:00 重置') && !htmlCustomMetric.includes('2026/8/17 00:00:00 重置')) throw new Error('custom metric reset time missing')
 if (htmlCustomMetric.includes('dshqb_pricing_wrap')) throw new Error('DeepSeek pricing must be hidden for custom metric')
+dirSnap.current = { provider: 'unconfigured-provider', model: 'other-model' }
+const htmlUnconfiguredProvider = renderToStaticMarkup(ReactMock.createElement(CustomMetricComp, customMetricProps))
+if (htmlUnconfiguredProvider.includes('Custom Metric') || htmlUnconfiguredProvider.includes('账户余额 0 CNY')) throw new Error('unconfigured provider must not fall back to another provider quota')
 console.log('CUSTOM METRIC CLIENT SMOKE TEST PASSED')
 
 // ---------- 展示开关 ----------

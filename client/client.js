@@ -8,7 +8,7 @@
  *   - 设置: 注册一级 `settings.section`(展示 / 额度查询 / 阈值 / 单价 / YAML 多张可折叠卡片)。
  *     每张独立「未保存 / 放弃修改 / 保存」，字段有「已覆盖 / 恢复默认」；关掉再回来草稿仍在。
  *
- * 额度模式: follow 跟随当前对话模型供应商; custom 固定官方余额或 Go 套餐额度。
+ * 额度按 DSH 供应商独立绑定；切换当前模型供应商时读取对应的 providerQuotaMap。
  */
 window.__ModuleLoader__.load({
 	id: "dsh-credits",
@@ -304,6 +304,21 @@ window.__ModuleLoader__.load({
 				".dshqb_source_advanced{border-top:1px solid var(--dsw-alias-border-l3,rgba(128,128,128,.12));padding-top:8px}",
 				".dshqb_source_advanced>summary{cursor:pointer;color:var(--dsw-alias-label-secondary);font-size:12px;user-select:none}",
 				".dshqb_source_advanced[open]>summary{margin-bottom:6px}",
+				".dshqb_provider_quota_intro{margin:10px 0 2px;padding:10px 12px;border-radius:8px;background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.04));color:var(--dsw-alias-label-tertiary);font-size:11.5px;line-height:1.5}",
+				".dshqb_provider_quota_empty{margin:10px 0 2px;padding:18px 14px;border:1px dashed var(--dsw-alias-border-l2,rgba(128,128,128,.2));border-radius:9px;color:var(--dsw-alias-label-tertiary);font-size:12px;text-align:center}",
+				".dshqb_provider_quota_list{display:flex;flex-direction:column;gap:9px;padding:10px 0 2px}",
+				".dshqb_provider_quota_item{display:flex;flex-direction:column;gap:9px;padding:12px;border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,.16));border-radius:10px;background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-1,#fff));transition:border-color .15s ease,opacity .15s ease}",
+				".dshqb_provider_quota_item:hover{border-color:var(--dsw-alias-label-dimmed,rgba(128,128,128,.4))}",
+				".dshqb_provider_quota_item_off{opacity:.72}",
+				".dshqb_provider_quota_head,.dshqb_provider_quota_summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}",
+				".dshqb_provider_quota_identity{display:flex;flex-direction:column;gap:1px;min-width:0}",
+				".dshqb_provider_quota_name{font-size:13px;font-weight:600;color:var(--dsw-alias-label-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+				".dshqb_provider_quota_id{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:10.5px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+				".dshqb_provider_quota_badges{display:inline-flex;align-items:center;justify-content:flex-end;gap:9px;flex:0 0 auto}",
+				".dshqb_provider_quota_summary{padding-top:8px;border-top:1px solid var(--dsw-alias-border-l3,rgba(128,128,128,.1))}",
+				".dshqb_provider_quota_source{min-width:0;color:var(--dsw-alias-label-secondary);font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
+				".dshqb_provider_quota_editor{display:flex;flex-direction:column;gap:9px;padding:10px 11px;border:1px solid color-mix(in srgb,var(--dsw-alias-brand-primary,#3b82f6) 28%,transparent);border-radius:9px;background:color-mix(in srgb,var(--dsw-alias-brand-primary,#3b82f6) 4%,transparent)}",
+				".dshqb_provider_custom,.dshqb_provider_mapping,.dshqb_provider_template_test{display:flex;flex-direction:column;gap:8px}",
 				"@media (max-width:620px){.dshqb_template_grid{grid-template-columns:1fr}.dshqb_custom_source_row{grid-template-columns:minmax(0,1fr) auto}.dshqb_custom_source_row>.dshqb_btn:last-child{grid-column:2}.dshqb_source_head{flex-direction:column;align-items:stretch}.dshqb_settings_intro{gap:12px}.dshqb_settings_title_control_label{display:none}}",
 				".dshqb_confirm_mask{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;background:var(--dsw-alias-bg-mask-1,rgba(0,0,0,0.45));backdrop-filter:blur(6px)}",
 				".dshqb_confirm{width:min(380px,100%);background:var(--dsw-alias-bg-layer-1,var(--dsw-alias-bg-base,#fff));border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.18));border-radius:12px;box-shadow:var(--dsw-shadow-lv3,0 16px 40px rgba(0,0,0,0.22));padding:18px 18px 16px;display:flex;flex-direction:column;gap:8px;box-sizing:border-box}",
@@ -781,6 +796,7 @@ window.__ModuleLoader__.load({
 		const NS = "queryBalance";
 		const zh = {
 			"balance": "余额 {amount}",
+			"balance.readoutCustom": "{name} · 余额 {amount}",
 			"balanceError": "余额不可用",
 			"balanceMissing": "未配置 API Key",
 			"status.sufficient": "充足",
@@ -851,7 +867,7 @@ window.__ModuleLoader__.load({
 			"settings.card.display": "展示",
 			"settings.card.displayDesc": "底部条、累计胶囊与悬停卡片。",
 			"settings.card.quota": "额度查询",
-			"settings.card.quotaDesc": "数据源、货币与凭证。",
+			"settings.card.quotaDesc": "按 DSH 供应商分别选择额度来源；切换模型供应商时自动展示对应额度。",
 			"settings.card.thresholds": "阈值与刷新",
 			"settings.card.thresholdsDesc": "状态灯阈值与后台查询频率。",
 			"settings.card.pricing": "模型单价",
@@ -904,6 +920,33 @@ window.__ModuleLoader__.load({
 			"settings.dshNotReady": "DSH 内置，尚未启用；可先添加模板 · {template}",
 			"settings.dshCredential": "凭证来自 DSH 供应商：",
 			"settings.dshCredentialPending": "该 DSH 供应商尚未启用；启用后会自动复用凭证，也可在高级设置填凭证引用：",
+			"settings.providerQuota.intro": "这里只列出已启用或已配置过额度的 DSH 供应商。每个供应商独立查询，多个 OpenCode Go 账号也不会共用额度缓存。",
+			"settings.providerQuota.empty": "DSH 中还没有已启用的供应商。请先在供应商设置中添加并启用一个供应商。",
+			"settings.providerQuota.enabled": "展示该供应商额度",
+			"settings.providerQuota.hidden": "不展示额度",
+			"settings.providerQuota.configured": "DSH 已启用",
+			"settings.providerQuota.source": "额度信息来源",
+			"settings.providerQuota.auto": "自动识别（推荐）",
+			"settings.providerQuota.template": "使用内置模板",
+			"settings.providerQuota.reuse": "复用另一供应商的额度",
+			"settings.providerQuota.custom": "自定义 HTTP 接口",
+			"settings.providerQuota.autoSummary": "自动识别 · {template}",
+			"settings.providerQuota.reuseSummary": "复用 · {name}",
+			"settings.providerQuota.autoHint": "按供应商 ID 和 Base URL 识别模板，并直接复用该供应商在 DSH 保存的地址与 Key。",
+			"settings.providerQuota.templateHint": "模板自带官方查询地址和解析规则，凭证直接复用当前 DSH 供应商。",
+			"settings.providerQuota.reuseHint": "两个模型供应商实际使用同一账号时，可直接展示另一供应商已经查到的额度。",
+			"settings.providerQuota.customHint": "只需填写接口地址、选择凭证来源，再测试并选择返回字段。",
+			"settings.providerQuota.templateSelect": "内置模板",
+			"settings.providerQuota.reuseSelect": "额度来自",
+			"settings.providerQuota.credential": "请求凭证",
+			"settings.providerQuota.credentialCurrent": "当前供应商：{name}",
+			"settings.providerQuota.credentialOther": "DSH 供应商：{name}",
+			"settings.providerQuota.credentialRef": "凭证引用 / 环境变量",
+			"settings.providerQuota.credentialNone": "无需鉴权",
+			"settings.providerQuota.endpoint": "额度接口 URL",
+			"settings.providerQuota.testParsed": "连接成功，解析到 {count} 项：{details}",
+			"settings.providerQuota.testFields": "连接成功，读取到 {count} 个可选返回字段。请在下方选择需要展示的字段。",
+			"settings.providerQuota.mapping": "返回字段映射",
 			"settings.template.balance": "余额查询",
 			"settings.template.subscription": "订阅套餐",
 			"settings.template.add": "添加",
@@ -1006,6 +1049,7 @@ window.__ModuleLoader__.load({
 		};
 		const en = {
 			"balance": "Balance {amount}",
+			"balance.readoutCustom": "{name} · Balance {amount}",
 			"balanceError": "Balance unavailable",
 			"balanceMissing": "API key not configured",
 			"status.sufficient": "Sufficient",
@@ -1076,7 +1120,7 @@ window.__ModuleLoader__.load({
 			"settings.card.display": "Display",
 			"settings.card.displayDesc": "Bottom bar, spend capsule, and hover card.",
 			"settings.card.quota": "Quota source",
-			"settings.card.quotaDesc": "Data source, currency, and credentials.",
+			"settings.card.quotaDesc": "Choose a quota source for each DSH provider; switching model providers shows its matching quota automatically.",
 			"settings.card.thresholds": "Thresholds & refresh",
 			"settings.card.thresholdsDesc": "Status-light thresholds and backend poll interval.",
 			"settings.card.pricing": "Model pricing",
@@ -1129,6 +1173,33 @@ window.__ModuleLoader__.load({
 			"settings.dshNotReady": "Built into DSH but not enabled; add the template first · {template}",
 			"settings.dshCredential": "Credentials come from DSH provider:",
 			"settings.dshCredentialPending": "This DSH provider is not enabled yet. Credentials will be reused after enabling it, or set a credential reference under Advanced:",
+			"settings.providerQuota.intro": "Only enabled DSH providers and providers with an existing quota configuration are listed. Each provider is queried independently, so multiple OpenCode Go accounts never share a quota cache.",
+			"settings.providerQuota.empty": "No DSH provider is enabled yet. Add and enable one in provider settings first.",
+			"settings.providerQuota.enabled": "Show quota for this provider",
+			"settings.providerQuota.hidden": "Quota hidden",
+			"settings.providerQuota.configured": "Enabled in DSH",
+			"settings.providerQuota.source": "Quota source",
+			"settings.providerQuota.auto": "Auto detect (recommended)",
+			"settings.providerQuota.template": "Built-in template",
+			"settings.providerQuota.reuse": "Reuse another provider quota",
+			"settings.providerQuota.custom": "Custom HTTP endpoint",
+			"settings.providerQuota.autoSummary": "Auto · {template}",
+			"settings.providerQuota.reuseSummary": "Reuse · {name}",
+			"settings.providerQuota.autoHint": "Detect a template from provider ID and Base URL, then reuse the URL and key already saved in DSH.",
+			"settings.providerQuota.templateHint": "The template owns the official endpoint and parser; credentials come from this DSH provider.",
+			"settings.providerQuota.reuseHint": "Use this when two model providers actually share the same account and quota.",
+			"settings.providerQuota.customHint": "Enter an endpoint, choose credentials, test it, then select response fields.",
+			"settings.providerQuota.templateSelect": "Built-in template",
+			"settings.providerQuota.reuseSelect": "Quota comes from",
+			"settings.providerQuota.credential": "Request credentials",
+			"settings.providerQuota.credentialCurrent": "Current provider: {name}",
+			"settings.providerQuota.credentialOther": "DSH provider: {name}",
+			"settings.providerQuota.credentialRef": "Credential ref / environment variable",
+			"settings.providerQuota.credentialNone": "No authentication",
+			"settings.providerQuota.endpoint": "Quota endpoint URL",
+			"settings.providerQuota.testParsed": "Connected. Parsed {count} item(s): {details}",
+			"settings.providerQuota.testFields": "Connected. Read {count} selectable response field(s). Choose the fields to display below.",
+			"settings.providerQuota.mapping": "Response field mapping",
 			"settings.template.balance": "Balance queries",
 			"settings.template.subscription": "Subscription plans",
 			"settings.template.add": "Add",
@@ -1277,25 +1348,33 @@ window.__ModuleLoader__.load({
 			prices: { ...DEFAULT_PRICES },
 			defaultPrices: officialDefaultPrices("CNY"),
 			quotaSources: [],
+			providerQuotas: [],
 			quotaTemplates: [],
 			dshProviders: []
 		};
 
 		function generateYaml(config) {
-			const isOpencode = config.provider === "opencode-go";
+			const providerQuotas = Array.isArray(config.providerQuotas) ? config.providerQuotas
+				.filter((binding) => binding.implicit !== true || binding._edited === true)
+				.map((binding) => {
+					const clean = cloneSettings(binding);
+					delete clean.adapterId;
+					delete clean.implicit;
+					delete clean.migrated;
+					delete clean._edited;
+					return clean;
+				}) : [];
 			const lines = [
 				"- id: dsh-credits",
 				"  config:",
 				`    enabled: ${config.enabled !== false}`,
-				`    quotaMode: ${config.quotaMode === "custom" ? "custom" : "follow"}`,
 				`    showDock: ${config.showDock !== false}`,
 				`    dockLayout: ${normalizeDockLayout(config.dockLayout)}`,
 				`    showCapsule: ${config.showCapsule !== false}`,
 				`    showPopover: ${config.showPopover !== false}`,
 				`    showTps: ${config.showTps !== false}`,
-				`    provider: ${config.provider}`,
-				...(Array.isArray(config.quotaSources) && config.quotaSources.length > 0
-					? [`    quotaSources: ${JSON.stringify(config.quotaSources)}`]
+				...(providerQuotas.length > 0
+					? [`    providerQuotas: ${JSON.stringify(providerQuotas)}`]
 					: []),
 				`    dangerThreshold: ${config.dangerThreshold}`,
 				`    warningThreshold: ${config.warningThreshold}`,
@@ -1303,13 +1382,6 @@ window.__ModuleLoader__.load({
 				`    clientPollIntervalMs: ${config.clientPollIntervalMs}`,
 				`    currency: ${config.currency}`
 			];
-			if (isOpencode) {
-				lines.push(`    opencodeApiKeyRef: ${config.opencodeApiKeyRef}`);
-				lines.push(`    opencodeBaseUrl: ${config.opencodeBaseUrl}`);
-			} else {
-				lines.push("    apiKeyRef: DEEPSEEK_API_KEY");
-				lines.push(`    baseUrl: ${config.baseUrl}`);
-			}
 			lines.push("    prices:");
 			for (const [m, p] of Object.entries(config.prices || {})) {
 				if (hasTariffTiers(p)) {
@@ -1471,6 +1543,7 @@ window.__ModuleLoader__.load({
 				prices: hydratePrices(loadedPrices, c.currency ?? "CNY"),
 				defaultPrices: c.defaultPrices ?? officialDefaultPrices(c.currency ?? "CNY"),
 				quotaSources: Array.isArray(c.quotaSources) ? c.quotaSources.map((s) => cloneSettings(s)) : [],
+				providerQuotas: Array.isArray(c.providerQuotas) ? c.providerQuotas.map((binding) => cloneSettings(binding)) : [],
 				quotaTemplates: Array.isArray(c.quotaTemplates) ? c.quotaTemplates.map((item) => cloneSettings(item)) : [],
 				dshProviders: Array.isArray(c.dshProviders) ? c.dshProviders.map((item) => cloneSettings(item)) : []
 			};
@@ -1479,9 +1552,9 @@ window.__ModuleLoader__.load({
 		const CARD_IDS = ["display", "quota", "thresholds", "pricing"];
 		const CARD_KEYS = {
 			display: ["showDock", "dockLayout", "showCapsule", "showPopover", "showTps"],
-			quota: ["quotaMode", "provider", "currency", "opencodeApiKeyRef", "opencodeApiKey", "opencodeBaseUrl", "quotaSources"],
+			quota: ["providerQuotas"],
 			thresholds: ["warningThreshold", "dangerThreshold", "refreshIntervalMs", "clientPollIntervalMs", "timeoutMs"],
-			pricing: ["prices", "defaultPrices"]
+			pricing: ["currency", "prices", "defaultPrices"]
 		};
 		const SECRET_FIELDS = ["apiKey", "opencodeApiKey"];
 		const SETTINGS_DRAFT_PREFIX = "dsh-credits.settingsDraft.";
@@ -1541,6 +1614,23 @@ window.__ModuleLoader__.load({
 								.map(([k, v]) => [k, /authorization|token|api[-_]?key|secret/i.test(k) ? "***" : v]),
 						),
 					},
+				}));
+			}
+			if (Array.isArray(next.providerQuotas)) {
+				next.providerQuotas = next.providerQuotas.map((binding) => ({
+					...binding,
+					...(binding?.source ? {
+						source: {
+							...binding.source,
+							request: {
+								...(binding.source.request ?? {}),
+								headers: Object.fromEntries(
+									Object.entries(binding.source.request?.headers ?? {})
+										.map(([k, v]) => [k, /authorization|token|api[-_]?key|secret/i.test(k) ? "***" : v]),
+								),
+							},
+						},
+					} : {}),
 				}));
 			}
 			return next;
@@ -1764,6 +1854,7 @@ window.__ModuleLoader__.load({
 			const [newModelMultiplier, setNewModelMultiplier] = react.useState(1);
 			const [customSourceDraft, setCustomSourceDraft] = react.useState(null);
 			const [editingSourceId, setEditingSourceId] = react.useState(null);
+			const [editingProviderId, setEditingProviderId] = react.useState(null);
 			const [customSourceError, setCustomSourceError] = react.useState("");
 			const [sourceTest, setSourceTest] = react.useState({ state: "idle", fields: [], message: "" });
 
@@ -1898,23 +1989,16 @@ window.__ModuleLoader__.load({
 						payload.showPopover = merged.showPopover !== false;
 						payload.showTps = merged.showTps !== false;
 					} else if (cardId === "quota") {
-						payload.quotaMode = merged.quotaMode === "custom" ? "custom" : "follow";
-						payload.provider = String(merged.provider ?? "deepseek").trim();
-						payload.currency = String(merged.currency ?? "CNY").trim().toUpperCase();
-						payload.opencodeApiKeyRef = String(merged.opencodeApiKeyRef ?? "").trim();
-						payload.opencodeBaseUrl = String(merged.opencodeBaseUrl ?? "").trim();
-						if (drafts.quota && Object.prototype.hasOwnProperty.call(drafts.quota, "quotaSources")) {
-							payload.quotaSources = Array.isArray(merged.quotaSources)
-								? merged.quotaSources.map((s) => cloneSettings(s))
-								: [];
-						}
-						if (String(merged.opencodeApiKey ?? "").trim() !== "") payload.opencodeApiKey = String(merged.opencodeApiKey).trim();
-						if (payload.currency !== String(baseline.currency ?? "").toUpperCase() && !isCardDirty("pricing", drafts.pricing, baseline)) {
-							const overlayPrices = { ...(baseline.prices || {}) };
-							for (const [model, p] of Object.entries(officialPricesFor(payload.currency))) overlayPrices[model] = p;
-							payload.prices = overlayPrices;
-							payload.defaultPrices = officialDefaultPrices(payload.currency);
-						}
+						payload.providerQuotas = Array.isArray(merged.providerQuotas)
+							? merged.providerQuotas.filter((binding) => binding.implicit !== true || binding._edited === true).map((binding) => {
+								const clean = cloneSettings(binding);
+								delete clean.adapterId;
+								delete clean.implicit;
+								delete clean.migrated;
+								delete clean._edited;
+								return clean;
+							})
+							: [];
 					} else if (cardId === "thresholds") {
 						payload.warningThreshold = Number(merged.warningThreshold);
 						payload.dangerThreshold = Number(merged.dangerThreshold);
@@ -1922,6 +2006,7 @@ window.__ModuleLoader__.load({
 						payload.clientPollIntervalMs = Number(merged.clientPollIntervalMs);
 						payload.timeoutMs = Number(merged.timeoutMs);
 					} else if (cardId === "pricing") {
+						payload.currency = String(merged.currency ?? "CNY").trim().toUpperCase();
 						payload.prices = { ...(merged.prices || {}) };
 						payload.defaultPrices = { ...(merged.defaultPrices || officialDefaultPrices(merged.currency)) };
 					}
@@ -1936,9 +2021,6 @@ window.__ModuleLoader__.load({
 						for (const [key, value] of Object.entries(payload)) {
 							if (SECRET_FIELDS.includes(key)) continue;
 							nextBase[key] = value;
-						}
-						if (cardId === "quota") {
-							nextBase.opencodeApiKey = "";
 						}
 						const nextDrafts = { ...drafts, [cardId]: null };
 						settingsDraftMem.baseline = nextBase;
@@ -1971,28 +2053,102 @@ window.__ModuleLoader__.load({
 				}
 			};
 
-			const builtinSourceIds = ["deepseek", "opencode-go"];
-			const builtinSources = [
-				{ id: "deepseek", name: "DeepSeek 官方余额", kind: "balance", builtin: true },
-				{ id: "opencode-go", name: "OpenCode Go 订阅用量", kind: "usage", builtin: true },
-			];
-			const customSources = Array.isArray(view.quotaSources)
-				? view.quotaSources.filter((source) => !builtinSourceIds.includes(source.id))
-				: [];
-			const quotaSourceOptions = [...builtinSources, ...customSources];
 			const quotaTemplates = Array.isArray(view.quotaTemplates) ? view.quotaTemplates : [];
 			const dshProviderDirectory = Array.isArray(view.dshProviders) ? view.dshProviders : [];
-			const configuredDshProviders = dshProviderDirectory.filter((provider) => provider.configured === true);
-			const selectedQuotaSource = quotaSourceOptions.find((s) => s.id === view.provider) ?? null;
-			const quotaSourceLabel = (source) => source?.id === "deepseek"
-				? t("settings.provider.deepseek")
-				: source?.id === "opencode-go"
-					? t("settings.provider.opencode")
-					: (source?.name || source?.id || "");
-			const percentMode = selectedQuotaSource?.kind === "usage" || view.provider === "opencode-go";
-			const showOpencode = selectedQuotaSource?.id === "opencode-go" && (view.provider === "opencode-go" || selectedQuotaSource?.kind === "usage");
-			const dshOpencode = configuredDshProviders.find((provider) => provider.id === "opencode-go");
 			const currency = view.currency ?? "CNY";
+			const providerQuotaBindings = Array.isArray(view.providerQuotas) ? view.providerQuotas : [];
+			const percentMode = providerQuotaBindings.some((binding) => {
+				if (binding.enabled === false || binding.sourceType === "custom") return false;
+				const provider = dshProviderDirectory.find((item) => item.id === binding.providerId);
+				const templateId = binding.sourceType === "template" ? binding.templateId : (provider?.templateId || binding.templateId);
+				return quotaTemplates.find((template) => template.id === templateId)?.category === "subscription";
+			});
+			const providerBindingFor = (providerId) => providerQuotaBindings.find((binding) => binding.providerId === providerId) ?? null;
+			const visibleDshProviders = dshProviderDirectory.filter((provider) => {
+				const binding = providerBindingFor(provider.id);
+				return provider.configured === true || (binding && binding.implicit !== true);
+			});
+			const safeProviderSourceId = (providerId) => {
+				const suffix = String(providerId ?? "provider").toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "") || "provider";
+				return ("quota-" + suffix).slice(0, 64);
+			};
+			const emptyProviderCustomSource = (provider) => ({
+				id: safeProviderSourceId(provider.id),
+				name: (provider.name || provider.id) + " 额度",
+				kind: "metric",
+				template: "",
+				providerIds: [provider.id],
+				providerPatterns: [],
+				enabled: true,
+				request: { method: "GET", url: "", dshProvider: provider.id, authRef: "", authStyle: "bearer" },
+				response: {
+					metrics: [{ key: "remaining", label: "剩余额度", valuePath: "", usedPath: "", totalPath: "", unit: "", resetsAtPath: "" }],
+				},
+			});
+			const defaultProviderBinding = (provider) => ({
+				providerId: provider.id,
+				enabled: provider.quotaSupported === true,
+				sourceType: provider.quotaSupported === true ? "auto" : "custom",
+				templateId: provider.templateId || "",
+				sourceProviderId: "",
+				...(provider.quotaSupported === true ? {} : { source: emptyProviderCustomSource(provider) }),
+			});
+			const updateProviderBinding = (provider, patchOrUpdater) => {
+				const current = cloneSettings(providerBindingFor(provider.id) ?? defaultProviderBinding(provider));
+				const patch = typeof patchOrUpdater === "function" ? patchOrUpdater(current) : patchOrUpdater;
+				const nextBinding = { ...current, ...patch, providerId: provider.id, _edited: true };
+				const next = providerQuotaBindings.some((binding) => binding.providerId === provider.id)
+					? providerQuotaBindings.map((binding) => binding.providerId === provider.id ? nextBinding : cloneSettings(binding))
+					: [...providerQuotaBindings.map((binding) => cloneSettings(binding)), nextBinding];
+				patchCard("quota", { providerQuotas: next });
+				setSourceTest({ state: "idle", fields: [], message: "", providerId: provider.id });
+			};
+			const providerSourceLabel = (provider, binding) => {
+				if (!binding || binding.enabled === false) return t("settings.providerQuota.hidden");
+				if (binding.sourceType === "provider") {
+					const target = dshProviderDirectory.find((item) => item.id === binding.sourceProviderId);
+					return t("settings.providerQuota.reuseSummary", { name: target?.name || binding.sourceProviderId || "—" });
+				}
+				if (binding.sourceType === "custom") return t("settings.providerQuota.custom");
+				const templateId = binding.sourceType === "template" ? binding.templateId : (provider.templateId || binding.templateId);
+				const template = quotaTemplates.find((item) => item.id === templateId);
+				return binding.sourceType === "auto"
+					? t("settings.providerQuota.autoSummary", { template: template?.name || templateId || "—" })
+					: (template?.name || templateId || "—");
+			};
+			const testProviderBinding = async (provider, binding) => {
+				setSourceTest({ state: "testing", fields: [], message: "", providerId: provider.id });
+				try {
+					const clean = cloneSettings(binding);
+					delete clean.adapterId;
+					delete clean.implicit;
+					delete clean.migrated;
+					delete clean._edited;
+					const res = await fetch("/query-credits/test-connection", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: JSON.stringify({ binding: clean })
+					});
+					const data = await res.json();
+					if (!data.ok) throw new Error(data.error || "connection failed");
+					const fields = Array.isArray(data.availableFields) ? data.availableFields : [];
+					const details = [
+						...Object.entries(data.usage ?? {}).map(([key, window]) => opencodeWindowName(key, t) + " " + formatPercent(window?.percent)),
+						...(data.metrics ?? []).map((metric) => (metric?.label || metric?.key || "Quota") + " " + formatMetricValue(metric)),
+						...(data.balances ?? []).map((wallet) => (wallet?.currency || "") + " " + String(wallet?.total ?? 0)),
+					].filter(Boolean);
+					setSourceTest({
+						state: "ok",
+						fields,
+						providerId: provider.id,
+						message: details.length
+							? t("settings.providerQuota.testParsed", { count: details.length, details: details.join(" · ") })
+							: t("settings.providerQuota.testFields", { count: fields.length }),
+					});
+				} catch (error) {
+					setSourceTest({ state: "error", fields: [], message: error instanceof Error ? error.message : String(error), providerId: provider.id });
+				}
+			};
 
 			const emptyCustomSourceDraft = () => ({
 				id: "",
@@ -2251,323 +2407,177 @@ window.__ModuleLoader__.load({
 				onToggle: () => toggleOpen("quota"),
 				saving: savingCard === "quota",
 				failed: failedCard === "quota",
-				onDiscard: () => discardCard("quota"),
+				onDiscard: () => { discardCard("quota"); setEditingProviderId(null); setSourceTest({ state: "idle", fields: [], message: "" }); },
 				onSave: () => { void saveCard("quota"); },
 				key: "quota"
 			}, [
-				react.createElement(FieldGrid, { key: "quota_fields" }, [
-					react.createElement(FieldRow, {
-						t,
-						key: "quotaMode",
-						label: t("settings.quotaMode"),
-						hint: t("settings.quotaModeHint"),
-						overridden: isSchemaOverridden("quotaMode", view.quotaMode, currency),
-						onReset: () => resetField("quota", "quotaMode"),
-						disabled: savingCard === "quota"
-					}, react.createElement("select", {
-						className: "dshqb_select",
-						value: view.quotaMode === "custom" ? "custom" : "follow",
-						onChange: (e) => patchCard("quota", { quotaMode: e.target.value === "custom" ? "custom" : "follow" })
-					}, [
-						react.createElement("option", { value: "follow", key: "follow" }, t("settings.quotaMode.follow")),
-						react.createElement("option", { value: "custom", key: "custom" }, t("settings.quotaMode.custom"))
-					])),
-					react.createElement(FieldRow, {
-						t,
-						key: "provider",
-						label: t("settings.provider"),
-						hint: t(view.quotaMode === "custom" ? "settings.providerHintCustom" : "settings.providerHintFollow"),
-						overridden: isSchemaOverridden("provider", view.provider, currency),
-						onReset: () => resetField("quota", "provider"),
-						disabled: savingCard === "quota"
-					}, react.createElement("select", {
-						className: "dshqb_select",
-						value: view.provider,
-						onChange: (e) => patchCard("quota", { provider: e.target.value })
-					}, quotaSourceOptions.map((source) =>
-						react.createElement("option", { value: source.id, key: source.id }, quotaSourceLabel(source))
-					))),
-					react.createElement(FieldRow, {
-						t,
-						key: "currency",
-						label: t("settings.currency"),
-						hint: t(selectedQuotaSource?.kind === "usage" ? "settings.currencyHintQuota" : "settings.currencyHint"),
-						overridden: isSchemaOverridden("currency", view.currency, currency),
-						onReset: () => resetField("quota", "currency"),
-						disabled: savingCard === "quota"
-					}, react.createElement("select", {
-						className: "dshqb_select",
-						value: view.currency,
-						onChange: (e) => patchCard("quota", { currency: e.target.value })
-					}, [
-						react.createElement("option", { value: "CNY", key: "cny" }, "CNY (人民币 ¥)"),
-						react.createElement("option", { value: "USD", key: "usd" }, "USD (美元 $)"),
-						react.createElement("option", { value: "EUR", key: "eur" }, "EUR (欧元 €)")
-					])),
-					showOpencode && dshOpencode ? react.createElement(FieldRow, {
-						t,
-						key: "oc_dsh",
-						wide: true,
-						label: t("settings.provider.opencode"),
-						hint: t("settings.dshReuse", { template: t("settings.provider.opencode") }),
-						disabled: savingCard === "quota"
-					}, react.createElement("div", { className: "dshqb_source_builtin" }, [
-						t("settings.dshCredential"),
-						react.createElement("span", { className: "dshqb_source_chip", key: "provider" }, dshOpencode.name)
-					])) : null,
-					showOpencode && !dshOpencode ? react.createElement(FieldRow, {
-						t,
-						key: "oc_base",
-						wide: true,
-						label: t("settings.opencodeBaseUrl"),
-						overridden: isSchemaOverridden("opencodeBaseUrl", view.opencodeBaseUrl, currency),
-						onReset: () => resetField("quota", "opencodeBaseUrl"),
-						disabled: savingCard === "quota"
-					}, react.createElement("input", {
-						type: "text",
-						className: "dshqb_input",
-						value: view.opencodeBaseUrl,
-						onChange: (e) => patchCard("quota", { opencodeBaseUrl: e.target.value })
-					})) : null,
-					showOpencode && !dshOpencode ? react.createElement(FieldRow, {
-						t,
-						key: "oc_ref",
-						label: t("settings.opencodeApiKeyRef"),
-						hint: t("settings.opencodeApiKeyRefHint"),
-						overridden: isSchemaOverridden("opencodeApiKeyRef", view.opencodeApiKeyRef, currency),
-						onReset: () => resetField("quota", "opencodeApiKeyRef"),
-						disabled: savingCard === "quota"
-					}, react.createElement("input", {
-						type: "text",
-						className: "dshqb_input",
-						value: view.opencodeApiKeyRef,
-						onChange: (e) => patchCard("quota", { opencodeApiKeyRef: e.target.value })
-					})) : null,
-					showOpencode && !dshOpencode ? react.createElement(FieldRow, {
-						t,
-						key: "oc_key",
-						label: t("settings.opencodeApiKey"),
-						hint: t("settings.opencodeApiKeyHint"),
-						overridden: isSchemaOverridden("opencodeApiKey", view.opencodeApiKey, currency),
-						onReset: () => patchCard("quota", { opencodeApiKey: "" }),
-						disabled: savingCard === "quota"
-					}, react.createElement("input", {
-						type: "password",
-						className: "dshqb_input",
-						placeholder: "sk-opencode-…",
-						value: view.opencodeApiKey,
-						onChange: (e) => patchCard("quota", { opencodeApiKey: e.target.value })
-					})) : null
-				]),
-				(() => {
-					const draft = customSourceDraft;
-					const sourceKindLabel = (kind) => t("settings.kind." + (kind || "metric"));
-					const customList = customSources.length > 0
-						? customSources.map((source) => react.createElement("div", { className: "dshqb_custom_source_row", key: source.id }, [
-							react.createElement("span", { className: "dshqb_custom_source_copy", key: "copy" }, [
-								react.createElement("span", { className: "dshqb_custom_source_name", key: "name" }, source.name || source.id),
-								react.createElement("span", { className: "dshqb_custom_source_meta", key: "meta" }, [
-									source.template ? (quotaTemplates.find((item) => item.id === source.template)?.name || source.template) : sourceKindLabel(source.kind),
-									" · ",
-									(source.providerIds ?? []).join(", ") || "—",
-								])
+				react.createElement("div", { className: "dshqb_provider_quota_intro", key: "intro" }, t("settings.providerQuota.intro")),
+				visibleDshProviders.length === 0
+					? react.createElement("div", { className: "dshqb_provider_quota_empty", key: "empty" }, t("settings.providerQuota.empty"))
+					: react.createElement("div", { className: "dshqb_provider_quota_list", key: "providers" }, visibleDshProviders.map((provider) => {
+						const binding = cloneSettings(providerBindingFor(provider.id) ?? defaultProviderBinding(provider));
+						const enabled = binding.enabled !== false;
+						const editing = editingProviderId === provider.id;
+						const source = binding.source ?? emptyProviderCustomSource(provider);
+						const metric = source.response?.metrics?.[0] ?? { key: "remaining", label: "剩余额度" };
+						const testState = sourceTest.providerId === provider.id ? sourceTest : { state: "idle", fields: [], message: "" };
+						const otherProviders = visibleDshProviders.filter((item) => item.id !== provider.id);
+						const sourceTypes = [
+							...(provider.quotaSupported === true ? [["auto", t("settings.providerQuota.auto")]] : []),
+							["template", t("settings.providerQuota.template")],
+							...(otherProviders.length ? [["provider", t("settings.providerQuota.reuse")]] : []),
+							["custom", t("settings.providerQuota.custom")],
+						];
+						const currentSourceType = sourceTypes.some(([value]) => value === binding.sourceType) ? binding.sourceType : sourceTypes[0][0];
+						const hintKey = "settings.providerQuota." + (currentSourceType === "provider" ? "reuseHint" : currentSourceType + "Hint");
+						const providerFieldOptions = (current) => {
+							const rows = Array.isArray(testState.fields) ? testState.fields : [];
+							const options = [["", rows.length ? t("settings.selectField") : t("settings.testFirst")]];
+							if (current && !rows.some((field) => field.path === current)) options.push([current, current]);
+							for (const field of rows) options.push([field.path, field.path + " — " + String(field.value)]);
+							return options;
+						};
+						const patchSource = (section, value) => updateProviderBinding(provider, (current) => {
+							const currentSource = current.source ?? emptyProviderCustomSource(provider);
+							return { source: { ...currentSource, [section]: { ...(currentSource[section] ?? {}), ...value } } };
+						});
+						const patchMetric = (field, value) => patchSource("response", { metrics: [{ ...metric, [field]: value }] });
+						const requestDshProvider = source.request?.dshProvider;
+						const credentialChoice = requestDshProvider
+							? requestDshProvider
+							: (source.request?.authStyle === "none" ? "__none" : "__ref");
+						const testResult = testState.state === "ok" || testState.state === "error"
+							? react.createElement("div", {
+								className: "dshqb_source_test " + (testState.state === "ok" ? "dshqb_source_test_ok" : "dshqb_source_test_bad"),
+								role: "status",
+								key: "test_result"
+							}, testState.message)
+							: null;
+						const editor = editing ? react.createElement("div", { className: "dshqb_provider_quota_editor", key: "editor" }, [
+							react.createElement(FieldGrid, { key: "source_type_grid" }, [
+								react.createElement(FieldRow, {
+									t, key: "source_type", wide: true, label: t("settings.providerQuota.source"), hint: t(hintKey), disabled: savingCard === "quota"
+								}, react.createElement("select", {
+									className: "dshqb_select",
+									value: currentSourceType,
+									onChange: (e) => {
+										const sourceType = e.target.value;
+										updateProviderBinding(provider, (current) => ({
+											enabled: true,
+											sourceType,
+											templateId: sourceType === "auto" ? (provider.templateId || "") : (current.templateId || quotaTemplates[0]?.id || ""),
+											sourceProviderId: sourceType === "provider" ? (current.sourceProviderId || otherProviders[0]?.id || "") : current.sourceProviderId,
+											...(sourceType === "custom" ? { source: current.source ?? emptyProviderCustomSource(provider) } : {}),
+										}));
+									}
+								}, sourceTypes.map(([value, label]) => react.createElement("option", { value, key: value }, label))))
 							]),
-							react.createElement("button", {
-								type: "button",
-								className: "dshqb_btn dshqb_btn_outline dshqb_btn_small",
-								onClick: () => beginEditSource(source),
-								disabled: savingCard === "quota",
-								key: "edit"
-							}, t("settings.edit")),
-							react.createElement("button", {
-								type: "button",
-								className: "dshqb_btn dshqb_btn_outline dshqb_btn_small",
-								onClick: () => { void removeCustomSource(source.id); },
-								disabled: savingCard === "quota",
-								key: "remove"
-							}, t("settings.remove"))
-						]))
-						: react.createElement("div", { className: "dshqb_form_hint", key: "empty" }, t("settings.noCustomSources"));
-					const input = (key, label, value, onChange, type = "text", hint = null) => react.createElement(FieldRow, {
-						t,
-						key,
-						label,
-						hint,
-						wide: true,
-						disabled: savingCard === "quota"
-					}, react.createElement("input", {
-						type,
-						className: "dshqb_input",
-						value: value ?? "",
-						onChange: (e) => onChange(e.target.value),
-						key: "input"
-					}));
-					const select = (key, label, value, options, onChange, hint = null) => react.createElement(FieldRow, {
-						t,
-						key,
-						label,
-						hint,
-						wide: true,
-						disabled: savingCard === "quota"
-					}, react.createElement("select", {
-						className: "dshqb_select",
-						value,
-						onChange: (e) => onChange(e.target.value),
-						key: "select"
-					}, options.map(([v, l]) => react.createElement("option", { value: v, key: v }, l))));
-					const metricPatch = (field, value) => patchCustomNested("response", "metrics", [{
-						...(draft?.response?.metrics?.[0] ?? { key: "remaining", label: "剩余额度" }),
-						[field]: value,
-					}]);
-					const fieldOptions = (current) => {
-						const rows = Array.isArray(sourceTest.fields) ? sourceTest.fields : [];
-						const options = [["", rows.length ? t("settings.selectField") : t("settings.testFirst")]];
-						if (current && !rows.some((field) => field.path === current)) options.push([current, current]);
-						for (const field of rows) options.push([field.path, field.path + " — " + String(field.value)]);
-						return options;
-					};
-					const templateCard = (template, dshProvider = null) => {
-						const added = customSources.some((source) => source.template === template.id
-							&& (!dshProvider || source.request?.dshProvider === dshProvider.id));
-						return react.createElement("div", { className: "dshqb_template_card", key: (dshProvider ? "dsh:" + dshProvider.id : "tpl:" + template.id) }, [
-							react.createElement("span", { className: "dshqb_template_copy", key: "copy" }, [
-								react.createElement("span", { className: "dshqb_template_name", key: "name" }, dshProvider?.name || template.name),
-								react.createElement("span", { className: "dshqb_template_desc", key: "desc" }, dshProvider
-									? t(dshProvider.configured ? "settings.dshReady" : "settings.dshNotReady", { template: template.name })
-									: template.description)
-							]),
-							react.createElement("button", {
-								type: "button",
-								className: "dshqb_btn dshqb_btn_outline dshqb_btn_small",
-								disabled: added || savingCard === "quota",
-								onClick: () => beginAddTemplate(template, dshProvider),
-								key: "add"
-							}, t(added ? "settings.template.added" : "settings.template.add"))
-						]);
-					};
-					const dshCards = dshProviderDirectory.flatMap((provider) => {
-						if (provider.builtin) return [];
-						const template = quotaTemplates.find((item) => item.id === provider.templateId);
-						return template ? [templateCard(template, provider)] : [];
-					});
-					const dshTemplateIds = new Set(dshProviderDirectory
-						.filter((provider) => !provider.builtin)
-						.map((provider) => provider.templateId));
-					const templateGroups = ["subscription", "balance"].map((category) => {
-						const templates = quotaTemplates.filter((template) => template.category === category && !dshTemplateIds.has(template.id));
-						if (templates.length === 0) return null;
-						return react.createElement("div", { className: "dshqb_template_group", key: category }, [
-							react.createElement("span", { className: "dshqb_template_group_title", key: "title" }, t("settings.template." + category)),
-							react.createElement("div", { className: "dshqb_template_grid", key: "grid" }, templates.map((template) => templateCard(template)))
-						]);
-					}).filter(Boolean);
-					const template = draft?.template ? quotaTemplates.find((item) => item.id === draft.template) : null;
-					const dshProvider = draft?.request?.dshProvider
-						? dshProviderDirectory.find((provider) => provider.id === draft.request.dshProvider)
-						: null;
-					const form = draft
-						? react.createElement("div", { className: "dshqb_custom_source_form", key: "form" }, [
-							react.createElement("div", { className: "dshqb_source_form_head", key: "head" }, [
-								react.createElement("span", { className: "dshqb_source_head_copy", key: "copy" }, [
-									react.createElement("span", { className: "dshqb_source_title", key: "title" }, t(editingSourceId ? "settings.editCustomSource" : "settings.template.add")),
-									react.createElement("span", { className: "dshqb_form_hint", key: "hint" }, t(template ? "settings.templateSourceHint" : "settings.customSourceHint"))
+							currentSourceType === "template" ? react.createElement(FieldGrid, { key: "template_grid" }, [
+								react.createElement(FieldRow, { t, key: "template", wide: true, label: t("settings.providerQuota.templateSelect"), disabled: savingCard === "quota" },
+									react.createElement("select", {
+										className: "dshqb_select", value: binding.templateId || quotaTemplates[0]?.id || "",
+										onChange: (e) => updateProviderBinding(provider, { templateId: e.target.value, sourceType: "template", enabled: true })
+										}, ["subscription", "balance"].flatMap((category) => quotaTemplates.filter((item) => item.category === category).map((template) =>
+											react.createElement("option", { value: template.id, key: template.id }, t("settings.template." + category) + " · " + template.name)
+									)))
+								)
+							]) : null,
+							currentSourceType === "provider" ? react.createElement(FieldGrid, { key: "reuse_grid" }, [
+								react.createElement(FieldRow, { t, key: "reuse", wide: true, label: t("settings.providerQuota.reuseSelect"), disabled: savingCard === "quota" },
+									react.createElement("select", {
+										className: "dshqb_select", value: binding.sourceProviderId || otherProviders[0]?.id || "",
+										onChange: (e) => updateProviderBinding(provider, { sourceProviderId: e.target.value, sourceType: "provider", enabled: true })
+									}, otherProviders.map((item) => react.createElement("option", { value: item.id, key: item.id }, item.name + " · " + item.id)))
+								)
+							]) : null,
+							currentSourceType === "custom" ? react.createElement("div", { className: "dshqb_provider_custom", key: "custom" }, [
+								react.createElement(FieldGrid, { key: "request_grid" }, [
+									react.createElement(FieldRow, { t, key: "url", wide: true, label: t("settings.providerQuota.endpoint"), disabled: savingCard === "quota" },
+										react.createElement("input", { className: "dshqb_input", type: "text", value: source.request?.url || "", placeholder: "https://api.example.com/v1/credits", onChange: (e) => patchSource("request", { url: e.target.value }) })
+									),
+									react.createElement(FieldRow, { t, key: "credential", wide: true, label: t("settings.providerQuota.credential"), disabled: savingCard === "quota" },
+										react.createElement("select", {
+											className: "dshqb_select", value: credentialChoice,
+											onChange: (e) => {
+												const choice = e.target.value;
+												if (choice === "__none") patchSource("request", { dshProvider: "", authRef: "", authStyle: "none" });
+												else if (choice === "__ref") patchSource("request", { dshProvider: "", authStyle: source.request?.authStyle === "none" ? "bearer" : (source.request?.authStyle || "bearer") });
+												else patchSource("request", { dshProvider: choice, authRef: "", authStyle: "bearer" });
+											}
+										}, [
+											react.createElement("option", { value: provider.id, key: provider.id }, t("settings.providerQuota.credentialCurrent", { name: provider.name })),
+											...dshProviderDirectory.filter((item) => item.id !== provider.id && item.configured === true).map((item) => react.createElement("option", { value: item.id, key: item.id }, t("settings.providerQuota.credentialOther", { name: item.name }))),
+											react.createElement("option", { value: "__ref", key: "__ref" }, t("settings.providerQuota.credentialRef")),
+											react.createElement("option", { value: "__none", key: "__none" }, t("settings.providerQuota.credentialNone")),
+										])
+									),
+									credentialChoice === "__ref" ? react.createElement(FieldRow, { t, key: "auth_ref", label: t("settings.quotaAuthRef"), hint: t("settings.quotaAuthRefHint"), disabled: savingCard === "quota" },
+										react.createElement("input", { className: "dshqb_input", type: "text", value: source.request?.authRef || "", onChange: (e) => patchSource("request", { authRef: e.target.value }) })
+									) : null,
+									credentialChoice === "__ref" ? react.createElement(FieldRow, { t, key: "auth_style", label: t("settings.authStyle"), disabled: savingCard === "quota" },
+										react.createElement("select", { className: "dshqb_select", value: source.request?.authStyle || "bearer", onChange: (e) => patchSource("request", { authStyle: e.target.value }) }, [
+											react.createElement("option", { value: "bearer", key: "bearer" }, t("settings.auth.bearer")),
+											react.createElement("option", { value: "header", key: "header" }, t("settings.auth.header")),
+											react.createElement("option", { value: "query", key: "query" }, t("settings.auth.query")),
+										])
+									) : null,
 								]),
-								template ? react.createElement("span", { className: "dshqb_source_chip", key: "chip" }, template.name) : null
-							]),
-						dshProvider ? react.createElement("div", { className: "dshqb_source_builtin", key: "dsh" }, [
-								t(dshProvider.configured ? "settings.dshCredential" : "settings.dshCredentialPending"),
-								react.createElement("span", { className: "dshqb_source_chip", key: "provider" }, dshProvider.name)
-							]) : null,
-							react.createElement(FieldGrid, { key: "fields" }, [
-								input("src_id", t("settings.id"), draft.id, (v) => patchCustomDraft("id", v)),
-								input("src_name", t("settings.name"), draft.name, (v) => patchCustomDraft("name", v)),
-								input("src_providers", t("settings.providerIds"), draft.providerIds, (v) => patchCustomDraft("providerIds", v), "text", t("settings.providerIdsHint")),
-								...(!template && draft.kind === "metric" ? [
-									input("src_url", t("settings.quotaUrl"), draft.request?.url, (v) => patchCustomNested("request", "url", v)),
-									input("src_auth", t("settings.quotaAuthRef"), draft.request?.authRef, (v) => patchCustomNested("request", "authRef", v), "text", t("settings.quotaAuthRefHint")),
-									select("src_auth_style", t("settings.authStyle"), draft.request?.authStyle || "bearer", [
-										["bearer", t("settings.auth.bearer")], ["header", t("settings.auth.header")],
-										["query", t("settings.auth.query")], ["none", t("settings.auth.none")]
-									], (v) => patchCustomNested("request", "authStyle", v)),
-									input("src_metric_name", t("settings.metricLabel"), draft.response?.metrics?.[0]?.label, (v) => patchCustomNested("response", "metrics", [{ ...(draft.response?.metrics?.[0] ?? {}), label: v }])),
-									select("src_metric_value", t("settings.metricValuePath"), draft.response?.metrics?.[0]?.valuePath || "", fieldOptions(draft.response?.metrics?.[0]?.valuePath), (v) => metricPatch("valuePath", v)),
-									select("src_metric_used", t("settings.metricUsedPath"), draft.response?.metrics?.[0]?.usedPath || "", fieldOptions(draft.response?.metrics?.[0]?.usedPath), (v) => metricPatch("usedPath", v)),
-									select("src_metric_total", t("settings.metricTotalPath"), draft.response?.metrics?.[0]?.totalPath || "", fieldOptions(draft.response?.metrics?.[0]?.totalPath), (v) => metricPatch("totalPath", v), t("settings.customMappingHint")),
-									input("src_metric_unit", t("settings.metricUnit"), draft.response?.metrics?.[0]?.unit, (v) => patchCustomNested("response", "metrics", [{ ...(draft.response?.metrics?.[0] ?? {}), unit: v }])),
-									select("src_metric_reset", t("settings.metricResetPath"), draft.response?.metrics?.[0]?.resetsAtPath || "", fieldOptions(draft.response?.metrics?.[0]?.resetsAtPath), (v) => metricPatch("resetsAtPath", v)),
-								] : []),
-							]),
-							react.createElement("div", { className: "dshqb_source_actions", key: "test_actions" }, [
-								react.createElement("button", {
-									type: "button",
-									className: "dshqb_btn dshqb_btn_outline",
-									onClick: () => { void testCustomSource(); },
-									disabled: sourceTest.state === "testing" || savingCard === "quota",
-									key: "test"
-								}, t(sourceTest.state === "testing" ? "settings.btnTesting" : "settings.btnTest"))
-							]),
-							sourceTest.state === "ok" || sourceTest.state === "error"
-								? react.createElement("div", {
-									className: "dshqb_source_test " + (sourceTest.state === "ok" ? "dshqb_source_test_ok" : "dshqb_source_test_bad"),
-									role: "status",
-									key: "test_result"
-								}, sourceTest.message)
-								: null,
-							template ? react.createElement("details", { className: "dshqb_source_advanced", key: "advanced" }, [
-								react.createElement("summary", { key: "summary" }, t("settings.advanced")),
-								react.createElement(FieldGrid, { key: "advanced_fields" }, [
-									input("src_url", t("settings.quotaUrl"), draft.request?.url, (v) => patchCustomNested("request", "url", v)),
-									input("src_auth", t("settings.quotaAuthRef"), draft.request?.authRef, (v) => patchCustomNested("request", "authRef", v), "text", t("settings.quotaAuthRefHint"))
+								react.createElement("div", { className: "dshqb_source_actions", key: "test_actions" },
+									react.createElement("button", { type: "button", className: "dshqb_btn dshqb_btn_outline", disabled: testState.state === "testing" || savingCard === "quota", onClick: () => { void testProviderBinding(provider, { ...binding, sourceType: "custom", source }); } }, t(testState.state === "testing" ? "settings.btnTesting" : "settings.btnTest"))
+								),
+								testResult,
+								react.createElement("div", { className: "dshqb_provider_mapping", key: "mapping" }, [
+									react.createElement("span", { className: "dshqb_template_group_title", key: "title" }, t("settings.providerQuota.mapping")),
+									react.createElement(FieldGrid, { key: "mapping_grid" }, [
+										react.createElement(FieldRow, { t, key: "label", label: t("settings.metricLabel"), disabled: savingCard === "quota" }, react.createElement("input", { className: "dshqb_input", value: metric.label || "", onChange: (e) => patchMetric("label", e.target.value) })),
+										react.createElement(FieldRow, { t, key: "unit", label: t("settings.metricUnit"), disabled: savingCard === "quota" }, react.createElement("input", { className: "dshqb_input", value: metric.unit || "", placeholder: "CNY / USD / 次", onChange: (e) => patchMetric("unit", e.target.value) })),
+										...[["valuePath", "settings.metricValuePath"], ["usedPath", "settings.metricUsedPath"], ["totalPath", "settings.metricTotalPath"], ["resetsAtPath", "settings.metricResetPath"]].map(([field, label]) =>
+											react.createElement(FieldRow, { t, key: field, label: t(label), disabled: savingCard === "quota" }, react.createElement("select", { className: "dshqb_select", value: metric[field] || "", onChange: (e) => patchMetric(field, e.target.value) }, providerFieldOptions(metric[field]).map(([value, text]) => react.createElement("option", { value, key: value }, text))))
+										),
+									])
 								])
-							]) : null,
-							customSourceError ? react.createElement("p", { className: "dshqb_pcard_failed", role: "status", key: "err" }, customSourceError) : null,
-							react.createElement("div", { className: "dshqb_source_actions", key: "ftr" }, [
-								react.createElement("button", {
-									type: "button",
-									className: "dshqb_btn dshqb_btn_outline",
-									onClick: () => { setCustomSourceDraft(null); setEditingSourceId(null); setCustomSourceError(""); setSourceTest({ state: "idle", fields: [], message: "" }); },
-									key: "cancel"
-								}, t("settings.btnCancel")),
-								react.createElement("button", {
-									type: "button",
-									className: "dshqb_btn dshqb_btn_primary",
-									onClick: () => { void saveCustomSource(); },
-									disabled: savingCard === "quota",
-									key: "save"
-								}, t("settings.btnSaveSource"))
-							])
-						])
-						: null;
-					return react.createElement("div", { className: "dshqb_source_section", key: "custom" }, [
-						react.createElement("div", { className: "dshqb_source_head", key: "head" }, [
-							react.createElement("span", { className: "dshqb_source_head_copy", key: "copy" }, [
-								react.createElement("span", { className: "dshqb_source_title", key: "title" }, t("settings.customSources")),
-								react.createElement("span", { className: "dshqb_form_hint", key: "hint" }, t("settings.sourceSectionHint"))
+							]) : react.createElement("div", { className: "dshqb_provider_template_test", key: "template_test" }, [
+								react.createElement("div", { className: "dshqb_source_actions", key: "actions" }, react.createElement("button", {
+									type: "button", className: "dshqb_btn dshqb_btn_outline", disabled: currentSourceType === "provider" || testState.state === "testing" || savingCard === "quota",
+									onClick: () => { void testProviderBinding(provider, {
+										...binding,
+										sourceType: currentSourceType,
+										templateId: binding.templateId || provider.templateId || quotaTemplates[0]?.id || "",
+									}); }
+								}, t(testState.state === "testing" ? "settings.btnTesting" : "settings.btnTest"))),
+								testResult
 							]),
-							react.createElement("span", { className: "dshqb_source_actions", key: "actions" }, [
-							react.createElement("button", {
-								type: "button",
-								className: "dshqb_btn dshqb_btn_outline dshqb_btn_small",
-								onClick: beginAddSource,
-								disabled: savingCard === "quota",
-								key: "add"
-							}, t("settings.addCustomSource"))
-							])
-						]),
-						react.createElement("div", { className: "dshqb_source_builtin", key: "builtin" }, [
-							t("settings.builtinSources"),
-							react.createElement("span", { className: "dshqb_source_chip", key: "deepseek" }, t("settings.provider.deepseek")),
-							react.createElement("span", { className: "dshqb_source_chip", key: "go" }, t("settings.provider.opencode"))
-						]),
-						dshCards.length ? react.createElement("div", { className: "dshqb_template_group", key: "dsh_group" }, [
-							react.createElement("span", { className: "dshqb_template_group_title", key: "title" }, t("settings.dshDetected")),
-							react.createElement("div", { className: "dshqb_template_grid", key: "grid" }, dshCards)
-						]) : null,
-						...templateGroups,
-						react.createElement("div", { className: "dshqb_source_list", key: "list" }, customList),
-						form
-					]);
-				})()
+							react.createElement("div", { className: "dshqb_source_actions", key: "close_actions" }, react.createElement("button", { type: "button", className: "dshqb_btn dshqb_btn_outline", onClick: () => setEditingProviderId(null) }, t("settings.collapse")))
+						]) : null;
+						return react.createElement("div", { className: "dshqb_provider_quota_item" + (enabled ? "" : " dshqb_provider_quota_item_off"), key: provider.id }, [
+							react.createElement("div", { className: "dshqb_provider_quota_head", key: "head" }, [
+								react.createElement("span", { className: "dshqb_provider_quota_identity", key: "identity" }, [
+									react.createElement("span", { className: "dshqb_provider_quota_name", key: "name" }, provider.name || provider.id),
+									react.createElement("span", { className: "dshqb_provider_quota_id", key: "id" }, provider.id),
+								]),
+								react.createElement("span", { className: "dshqb_provider_quota_badges", key: "badges" }, [
+									provider.configured === true ? react.createElement("span", { className: "dshqb_source_chip", key: "configured" }, t("settings.providerQuota.configured")) : null,
+								react.createElement(SwitchControl, {
+									checked: enabled,
+									disabled: savingCard === "quota",
+									label: t("settings.providerQuota.enabled"),
+									onChange: (e) => updateProviderBinding(provider, {
+										enabled: e.target.checked,
+										...(e.target.checked && provider.quotaSupported !== true && binding.sourceType === "auto"
+											? { sourceType: "template", templateId: quotaTemplates[0]?.id || "" }
+											: {}),
+									}),
+									key: "switch"
+								})
+								])
+							]),
+							react.createElement("div", { className: "dshqb_provider_quota_summary", key: "summary" }, [
+								react.createElement("span", { className: "dshqb_provider_quota_source", key: "source" }, providerSourceLabel(provider, binding)),
+								react.createElement("button", { type: "button", className: "dshqb_btn dshqb_btn_outline dshqb_btn_small", disabled: savingCard === "quota", onClick: () => setEditingProviderId(editing ? null : provider.id), key: "edit" }, t(editing ? "settings.collapse" : "settings.edit"))
+							]),
+							editor
+						]);
+					}))
 			]);
 
 			const threshCard = react.createElement(PluginCard, {
@@ -2737,6 +2747,31 @@ window.__ModuleLoader__.load({
 				onSave: () => { void saveCard("pricing"); },
 				key: "pricing"
 			}, [
+				react.createElement(FieldGrid, { key: "currency_grid" }, [
+					react.createElement(FieldRow, {
+						t,
+						key: "currency",
+						wide: true,
+						label: t("settings.currency"),
+						hint: t("settings.currencyHintQuota"),
+						overridden: isSchemaOverridden("currency", view.currency, currency),
+						onReset: () => resetField("pricing", "currency"),
+						disabled: savingCard === "pricing"
+					}, react.createElement("select", {
+						className: "dshqb_select",
+						value: view.currency,
+						onChange: (e) => {
+							const nextCurrency = e.target.value;
+							const nextPrices = { ...(view.prices || {}) };
+							for (const [model, p] of Object.entries(officialPricesFor(nextCurrency))) nextPrices[model] = p;
+							patchCard("pricing", { currency: nextCurrency, prices: nextPrices, defaultPrices: officialDefaultPrices(nextCurrency) });
+						}
+					}, [
+						react.createElement("option", { value: "CNY", key: "cny" }, "CNY (人民币 ¥)"),
+						react.createElement("option", { value: "USD", key: "usd" }, "USD (美元 $)"),
+						react.createElement("option", { value: "EUR", key: "eur" }, "EUR (欧元 €)")
+					]))
+				]),
 				react.createElement("table", { className: "dshqb_pricing_table", key: "p_table" }, [
 					react.createElement("thead", { key: "th" }, [
 						react.createElement("tr", { key: "r" }, [
@@ -3248,10 +3283,16 @@ window.__ModuleLoader__.load({
 				: null;
 			const payload = balance.status === "ok" ? balance.payload : null;
 			const featureEnabled = payload?.enabled !== false;
-			const quotaSource = resolveQuotaSource(modelProvider, {
-				quotaMode: payload?.quotaMode,
-				provider: fallbackProvider
-			}, payload?.quotaSources);
+			const providerQuotaMap = payload?.providerQuotaMap && typeof payload.providerQuotaMap === "object" ? payload.providerQuotaMap : null;
+			const providerQuotaMapEntry = providerQuotaMap && modelProvider
+				? Object.entries(providerQuotaMap).find(([providerId]) => normalizeProvider(providerId) === normalizeProvider(modelProvider))
+				: null;
+			const quotaSource = providerQuotaMap
+				? (providerQuotaMapEntry?.[1] || null)
+				: resolveQuotaSource(modelProvider, {
+					quotaMode: payload?.quotaMode,
+					provider: fallbackProvider
+				}, payload?.quotaSources);
 			const quotaSourceView = payload?.views?.[quotaSource];
 			const quotaSourceKind = quotaSourceView?.kind || (quotaSource === "opencode-go" ? "usage" : "balance");
 			const showDock = payload?.showDock !== false;
@@ -3295,7 +3336,7 @@ window.__ModuleLoader__.load({
 			let leftCol = null;
 
 			// 1. 账户余额读数节点与左栏卡片内容
-			if (balance.status === "ok") {
+			if (balance.status === "ok" && quotaSource !== null) {
 				const info = mergeQuotaView(balance.payload, quotaSource);
 				if (info.ok === true && info.usage && (quotaSourceKind === "usage" || info.kind === "usage")) {
 					const usage = info.usage || {};
@@ -3415,11 +3456,13 @@ window.__ModuleLoader__.load({
 						onClick: handleRefresh,
 						disabled: isRefreshing
 					}));
-					balNode = react.createElement("span", { className: "dshqb_amount", key: "bal" }, statusDot, t("balance", { amount }));
+					const balanceSourceName = info.name || quotaSource;
+					balNode = react.createElement("span", { className: "dshqb_amount", key: "bal" }, statusDot,
+						info.providerId ? t("balance.readoutCustom", { name: balanceSourceName, amount }) : t("balance", { amount }));
 
 					leftCol = react.createElement("div", { className: "dshqb_col", key: "left" }, [
 						react.createElement("div", { className: "dshqb_card_header", key: "head" }, [
-							react.createElement("span", { className: "dshqb_card_title", key: "title" }, t("card.balanceTitle")),
+							react.createElement("span", { className: "dshqb_card_title", key: "title" }, info.providerId ? "📊 " + balanceSourceName : t("card.balanceTitle")),
 							react.createElement("span", { className: "dshqb_card_badges", key: "badges" }, [
 								tariffBadge,
 								react.createElement(HoverTooltip, {
@@ -3548,7 +3591,7 @@ window.__ModuleLoader__.load({
 					});
 					balNode = react.createElement("span", { className: "dshqb_error", key: "bal" }, statusDot, message);
 					leftCol = react.createElement("div", { className: "dshqb_col", key: "left" }, [
-						react.createElement("div", { className: "dshqb_card_header", key: "head" }, react.createElement("span", { className: "dshqb_card_title" }, isCustom ? "🎯 " + customSourceName : t("card.balanceTitle"))),
+						react.createElement("div", { className: "dshqb_card_header", key: "head" }, react.createElement("span", { className: "dshqb_card_title" }, isCustom || info.providerId ? "🎯 " + customSourceName : t("card.balanceTitle"))),
 						react.createElement("div", { className: "dshqb_card_sub", key: "err" }, isCustom ? t("quota.errorCustom", { error: typeof info.error === "string" ? info.error : message }) : t("card.error", { error: typeof info.error === "string" ? info.error : message }))
 					]);
 				}

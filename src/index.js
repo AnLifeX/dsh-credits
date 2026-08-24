@@ -2,9 +2,8 @@
  * dsh-credits — server half.
  *
  * 1. 额度服务: 按 `refreshIntervalMs` 并行缓存已启用的余额 / 订阅额度源，
- *    通过 HTTP 路由 `/query-credits` 提供给浏览器（浏览器只读缓存）。底部读数
- *    优先按当前对话模型的 DSH 供应商自动匹配；未命中时使用 `provider`
- *    指定的回退源，也可切换为固定展示。
+ *    通过 HTTP 路由 `/query-credits` 提供给浏览器（浏览器只读缓存）。每个 DSH
+ *    供应商通过 `providerQuotas` 独立选择额度来源、凭证与缓存；未配置时不显示额度。
  *    DeepSeek 密钥优先取 `apiKey`, 否则经 credentials 解析 `apiKeyRef`; OpenCode Go
  *    密钥优先取 `opencodeApiKey`, 再经 credentials/环境变量解析 `opencodeApiKeyRef`,
  *    最后回退读取 OpenCode CLI 的 `~/.local/share/opencode/auth.json`。
@@ -513,7 +512,7 @@ const ProviderQuota = Schema.object({
 export const Config = Schema.object({
   /** 整个额度功能总开关；关闭后不查询额度且前端隐藏所有额度 UI */
   enabled: Schema.boolean().default(true),
-  /** follow=跟随当前对话模型; custom=固定使用 provider */
+  /** 旧版兼容字段；新设置页使用 providerQuotas，不再暴露全局查询模式。 */
   quotaMode: Schema.union(QUOTA_MODES).default('follow'),
   /** 底部统计条是否展示额度读数 */
   showDock: Schema.boolean().default(true),
@@ -525,7 +524,7 @@ export const Config = Schema.object({
   showPopover: Schema.boolean().default(true),
   /** 底部统计条是否展示实时生成吞吐 TPS */
   showTps: Schema.boolean().default(true),
-  /** 自定义模式的数据源; 跟随模式下仅在无法识别当前模型时作为回退 */
+  /** 旧版兼容字段；仅在没有 providerQuotas 的旧配置中作为默认源。 */
   provider: Schema.string().default('deepseek'),
   /** 显式 DeepSeek API 密钥; 留空则走 apiKeyRef(credentials / 环境变量) */
   apiKey: Schema.string().default(''),
@@ -554,7 +553,7 @@ export const Config = Schema.object({
   dangerThreshold: Schema.number().min(0).default(5),
   /** 未列出的模型的回退单价 */
   defaultPrices: ModelPrice.default({ cacheHit: 0.1, cacheMiss: 1, output: 2 }),
-  /** 自定义额度源适配器列表（可覆盖内置适配器） */
+  /** 旧版额度源列表；会按 providerIds 迁移为 providerQuotas 绑定。 */
   quotaSources: Schema.array(QuotaSource).default([]),
   /** 每个 DSH 供应商实例独立选择额度来源。 */
   providerQuotas: Schema.array(ProviderQuota).default([]),
@@ -1383,7 +1382,7 @@ export function apply(ctx, config) {
       const key = normalizeProvider(provider.id)
       const binding = explicit.get(key) ?? legacy.get(key) ?? {
         providerId: provider.id,
-        enabled: provider.quotaSupported === true,
+        enabled: provider.configured === true && provider.quotaSupported === true,
         sourceType: 'auto',
         templateId: provider.templateId || '',
         sourceProviderId: '',
@@ -1821,8 +1820,10 @@ export function apply(ctx, config) {
       const base = {
         ok: false,
         provider: adapter.id,
+        providerId: adapter.providerId ?? '',
         kind: adapter.kind,
         name: adapter.name,
+        template: adapter.template ?? '',
         fetchedAt: cache.fetchedAt,
       }
       if (cache.state !== 'ok' || cache.payload?.provider !== adapter.id) {
