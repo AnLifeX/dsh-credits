@@ -7,11 +7,13 @@ import assert from 'node:assert/strict'
 import { EventEmitter } from 'node:events'
 import {
   apply,
+  buildProviderQuotaAdapter,
   collectQuotaFields,
   matchQuotaTemplateForProvider,
   normalizeCustomMetrics,
   normalizeTemplateUsage,
   quotaSourceFromProvider,
+  resolveProviderQuotaSource,
   resolveQuotaSource,
 } from '../src/index.js'
 
@@ -28,22 +30,37 @@ const mockCtx = {
         },
         async readRecord(key) {
           if (key === 'llm-pi-ai/opencode-go') return { kind: 'api-key', key: 'sk-mock-opencode-record' }
+          if (key === 'llm-pi-ai/go-work') return { kind: 'api-key', key: 'sk-go-work' }
+          if (key === 'llm-pi-ai/go-personal') return { kind: 'api-key', key: 'sk-go-personal' }
           return undefined
         },
       }
     }
     if (key === 'llm') {
       return {
-        listProviders: () => [{ id: 'opencode-go', name: 'OpenCode Go' }],
-        listConfigurableProviders: () => [{
-          provider: 'opencode-go', displayName: 'OpenCode Go', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'opencode-go'],
-        }],
+        listProviders: () => [
+          { id: 'opencode-go', name: 'OpenCode Go' },
+          { id: 'go-work', name: 'Work Go' },
+          { id: 'go-personal', name: 'Personal Go' },
+          { id: 'unsupported-route', name: 'Unsupported Route' },
+        ],
+        listConfigurableProviders: () => [
+          { provider: 'opencode-go', displayName: 'OpenCode Go', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'opencode-go'] },
+          { provider: 'go-work', displayName: 'Work Go', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'go-work'] },
+          { provider: 'go-personal', displayName: 'Personal Go', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'go-personal'] },
+          { provider: 'unsupported-route', displayName: 'Unsupported Route', settingsNs: 'llm-pi-ai', settingsPath: ['providers', 'unsupported-route'] },
+        ],
       }
     }
     if (key === 'settings') {
       return {
         get(ns) {
-          if (ns === 'llm-pi-ai') return { providers: { 'opencode-go': { baseURL: 'https://opencode.ai/zen/go/v1' } } }
+          if (ns === 'llm-pi-ai') return { providers: {
+            'opencode-go': { baseURL: 'https://opencode.ai/zen/go/v1' },
+            'go-work': { baseURL: 'https://opencode.ai/zen/go/v1' },
+            'go-personal': { baseURL: 'https://opencode.ai/zen/go/v1' },
+            'unsupported-route': { baseURL: 'https://example.invalid/v1' },
+          } }
           return undefined
         },
       }
@@ -91,15 +108,19 @@ const mockCtx = {
 }
 
 // 网络 stub: DeepSeek 返回余额, OpenCode Go 返回三个窗口用量。
-globalThis.fetch = async (url) => {
+globalThis.fetch = async (url, options = {}) => {
   const target = String(url)
   if (target.includes('opencode')) {
+    const authorization = String(options.headers?.Authorization ?? '')
+    const rollingPercent = authorization.includes('sk-go-work')
+      ? 21
+      : (authorization.includes('sk-go-personal') ? 34 : 9)
     return {
       ok: true,
       status: 200,
       json: async () => ({
         usage: {
-          rolling: { status: 'ok', percent: 9, resetsAt: '2026-08-14T07:20:04.810Z' },
+          rolling: { status: 'ok', percent: rollingPercent, resetsAt: '2026-08-14T07:20:04.810Z' },
           weekly: { status: 'ok', percent: 12, resetsAt: '2026-08-17T00:00:00.810Z' },
           monthly: { status: 'ok', percent: 6, resetsAt: '2026-09-09T00:41:03.810Z' },
         },
@@ -207,8 +228,13 @@ assert.equal(resGetConfig.data.config.showPopover, true)
   assert.equal(resGetConfig.data.config.showTps, true)
   assert.equal(resGetConfig.data.config.opencodeBaseUrl, 'https://opencode.ai/zen/go/v1/usage')
   assert.ok(resGetConfig.data.config.quotaTemplates.some((template) => template.id === 'kimi-coding'))
-  assert.deepEqual(resGetConfig.data.config.dshProviders.map((provider) => provider.id), ['opencode-go'])
-  assert.equal(resGetConfig.data.config.dshProviders[0].credentialMode, 'record')
+  assert.ok(resGetConfig.data.config.quotaTemplates.some((template) => template.id === 'opencode-go'))
+  assert.deepEqual(new Set(resGetConfig.data.config.dshProviders.map((provider) => provider.id)), new Set([
+    'opencode-go', 'go-work', 'go-personal', 'unsupported-route',
+  ]))
+  assert.equal(resGetConfig.data.config.dshProviders.find((provider) => provider.id === 'opencode-go').credentialMode, 'record')
+  assert.equal(resGetConfig.data.config.providerQuotas.find((binding) => binding.providerId === 'go-work').templateId, 'opencode-go')
+  assert.equal(resGetConfig.data.config.providerQuotas.find((binding) => binding.providerId === 'unsupported-route').enabled, false)
   console.log('GET /query-credits/config passed')
 
   // 2. POST /query-credits/config 修改阈值与单价
@@ -242,88 +268,89 @@ assert.equal(resGetConfig.data.config.showPopover, true)
   console.log('POST /query-credits/config (opencode-go) passed')
 
   const resOpenCodeQuota = await invokeRoute('/query-credits', 'GET')
-  assert.equal(resOpenCodeQuota.data.provider, 'opencode-go')
-  assert.equal(resOpenCodeQuota.data.defaultProvider, 'opencode-go')
+  assert.ok(resOpenCodeQuota.data.provider.startsWith('provider:'))
+  assert.ok(resOpenCodeQuota.data.defaultProvider.startsWith('provider:'))
+  assert.equal(resOpenCodeQuota.data.providerQuotaMap['opencode-go'], 'provider:opencode-go')
+  assert.equal(resOpenCodeQuota.data.providerQuotaMap['go-work'], 'provider:go-work')
+  assert.equal(resOpenCodeQuota.data.providerQuotaMap['go-personal'], 'provider:go-personal')
+  assert.equal(resOpenCodeQuota.data.providerQuotaMap['unsupported-route'], null)
   assert.equal(resOpenCodeQuota.data.usage.rolling.percent, 9)
   assert.equal(resOpenCodeQuota.data.usage.weekly.percent, 12)
   assert.equal(resOpenCodeQuota.data.usage.monthly.percent, 6)
-  assert.equal(resOpenCodeQuota.data.views['opencode-go'].usage.rolling.percent, 9)
-  assert.equal(resOpenCodeQuota.data.views.deepseek.ok, true)
-  assert.ok(Array.isArray(resOpenCodeQuota.data.views.deepseek.balances))
+  assert.equal(resOpenCodeQuota.data.views['provider:opencode-go'].usage.rolling.percent, 9)
+  assert.equal(resOpenCodeQuota.data.views['provider:go-work'].usage.rolling.percent, 21)
+  assert.equal(resOpenCodeQuota.data.views['provider:go-personal'].usage.rolling.percent, 34)
   console.log('GET /query-credits (opencode-go) passed')
 
-  const resDeepseekView = await invokeRoute('/query-credits', 'GET', null, 'source=deepseek')
+  const resDeepseekView = await invokeRoute('/query-credits', 'GET', null, 'source=deepseek&force=1')
   assert.equal(resDeepseekView.data.provider, 'deepseek')
-  assert.equal(resDeepseekView.data.defaultProvider, 'opencode-go')
+  assert.ok(resDeepseekView.data.defaultProvider.startsWith('provider:'))
   assert.ok(Array.isArray(resDeepseekView.data.balances))
-  assert.equal(resDeepseekView.data.views['opencode-go'].usage.rolling.percent, 9)
+  assert.equal(resDeepseekView.data.views['provider:opencode-go'].usage.rolling.percent, 9)
   console.log('GET /query-credits?source=deepseek passed')
 
   // 2.6 自定义 HTTP / JSONPath 额度源
   process.env.CUSTOM_QUOTA_KEY = 'sk-custom-mock'
   const resCustomPost = await invokeRoute('/query-credits/config', 'POST', {
-    provider: 'custom-metric',
-    quotaMode: 'custom',
-    quotaSources: [{
-      id: 'custom-metric',
-      name: 'Custom Metric',
-      kind: 'metric',
-      providerIds: ['my-provider'],
-      default: false,
+    providerQuotas: [{
+      providerId: 'unsupported-route',
       enabled: true,
-      request: {
-        url: 'https://custom.example.com/quota',
-        authRef: 'CUSTOM_QUOTA_KEY',
-        authStyle: 'bearer',
-        headers: { 'X-Api-Key': 'secret-header-value' },
-      },
-      response: {
-        metrics: [{
-          key: 'remaining',
-          label: '剩余额度',
-          valuePath: '$.data.remaining',
-          totalPath: '$.data.total',
-          unit: 'USD',
-          resetsAtPath: '$.data.resetsAt',
-        }],
+      sourceType: 'custom',
+      source: {
+        id: 'custom-metric',
+        name: 'Custom Metric',
+        kind: 'metric',
+        providerIds: [],
+        default: false,
+        enabled: true,
+        request: {
+          url: 'https://custom.example.com/quota',
+          dshProvider: '',
+          authRef: 'CUSTOM_QUOTA_KEY',
+          authStyle: 'bearer',
+          headers: { 'X-Api-Key': 'secret-header-value' },
+        },
+        response: {
+          metrics: [{
+            key: 'remaining',
+            label: '剩余额度',
+            valuePath: '$.data.remaining',
+            totalPath: '$.data.total',
+            unit: 'USD',
+            resetsAtPath: '$.data.resetsAt',
+          }],
+        },
       },
     }],
   })
   assert.equal(resCustomPost.data.ok, true)
-  assert.equal(resCustomPost.data.config.provider, 'custom-metric')
-  assert.equal(resCustomPost.data.config.quotaSources[0].request.headers['X-Api-Key'], '***', 'custom header secrets must be masked')
+  assert.equal(resCustomPost.data.config.providerQuotas.find((binding) => binding.providerId === 'unsupported-route').source.request.headers['X-Api-Key'], '***', 'custom header secrets must be masked')
   console.log('POST /query-credits/config (custom-metric) passed')
 
-  const resCustom = await invokeRoute('/query-credits', 'GET', null, 'source=custom-metric')
-  assert.equal(resCustom.data.provider, 'custom-metric')
+  const resCustom = await invokeRoute('/query-credits', 'GET', null, 'source=provider%3Aunsupported-route')
+  assert.equal(resCustom.data.provider, 'provider:unsupported-route')
   assert.equal(resCustom.data.kind, 'metric')
   assert.equal(resCustom.data.metrics[0].value, 25)
   assert.equal(resCustom.data.metrics[0].total, 100)
   assert.equal(resCustom.data.metrics[0].unit, 'USD')
-  assert.equal(resCustom.data.views['custom-metric'].ok, true)
-  console.log('GET /query-credits?source=custom-metric passed')
+  assert.equal(resCustom.data.views['provider:unsupported-route'].ok, true)
+  assert.equal(resCustom.data.providerQuotaMap['unsupported-route'], 'provider:unsupported-route')
+  console.log('GET /query-credits?source=provider:unsupported-route passed')
 
-  const resCustomDefault = await invokeRoute('/query-credits', 'GET')
-  assert.equal(resCustomDefault.data.provider, 'custom-metric', 'custom mode should fix provider')
-  assert.equal(resCustomDefault.data.defaultProvider, 'custom-metric')
-  console.log('GET /query-credits (custom default) passed')
-
-  const resCustomConn = await invokeRoute('/query-credits/test-connection', 'POST', { provider: 'custom-metric' })
+  const customBinding = resCustomPost.data.config.providerQuotas.find((binding) => binding.providerId === 'unsupported-route')
+  const resCustomConn = await invokeRoute('/query-credits/test-connection', 'POST', { binding: customBinding })
   assert.equal(resCustomConn.status, 200)
   assert.equal(resCustomConn.data.ok, true)
   assert.equal(resCustomConn.data.metrics[0].value, 25)
   assert.ok(resCustomConn.data.availableFields.some((field) => field.path === '$.data.remaining'))
   console.log('POST /query-credits/test-connection (custom-metric) passed')
 
-  // 回到内置源 + follow，保证后续 disable 测试与旧行为一致
+  // 清空显式绑定，恢复按 DSH 供应商自动识别。
   const resResetConfig = await invokeRoute('/query-credits/config', 'POST', {
-    provider: 'deepseek',
-    quotaMode: 'follow',
     quotaSources: [],
+    providerQuotas: [],
   })
   assert.equal(resResetConfig.data.ok, true)
-  assert.equal(resResetConfig.data.config.provider, 'deepseek')
-  assert.equal(resResetConfig.data.config.quotaMode, 'follow')
 
   assert.equal(quotaSourceFromProvider('opencode-go'), 'opencode-go')
   assert.equal(quotaSourceFromProvider('OPENCODE-GO'), 'opencode-go')
@@ -336,6 +363,24 @@ assert.equal(resGetConfig.data.config.showPopover, true)
   assert.equal(resolveQuotaSource('anthropic', { quotaMode: 'custom', provider: 'opencode-go' }), 'opencode-go')
   assert.equal(resolveQuotaSource('opencode-go', { quotaMode: 'custom', provider: 'deepseek' }), 'deepseek')
   console.log('quotaSourceFromProvider / resolveQuotaSource mapping passed')
+
+  const providerBindings = [
+    { providerId: 'go-work', enabled: true, sourceType: 'auto', adapterId: 'provider:go-work' },
+    { providerId: 'go-personal', enabled: true, sourceType: 'provider', sourceProviderId: 'go-work' },
+    { providerId: 'disabled-go', enabled: false, sourceType: 'auto', adapterId: 'provider:disabled-go' },
+  ]
+  assert.equal(resolveProviderQuotaSource('go-work', providerBindings), 'provider:go-work')
+  assert.equal(resolveProviderQuotaSource('go-personal', providerBindings), 'provider:go-work')
+  assert.equal(resolveProviderQuotaSource('disabled-go', providerBindings), null)
+  assert.equal(resolveProviderQuotaSource('unknown', providerBindings), null)
+  const workAdapter = buildProviderQuotaAdapter({
+    id: 'go-work', name: 'Work Go', baseURL: 'https://opencode.ai/zen/go/v1', templateId: 'opencode-go',
+  }, { providerId: 'go-work', enabled: true, sourceType: 'auto' })
+  assert.equal(workAdapter.id, 'provider:go-work')
+  assert.equal(workAdapter.request.url, 'https://opencode.ai/zen/go/v1/usage')
+  assert.equal(workAdapter.request.dshProvider, 'go-work')
+  assert.equal(workAdapter.template, 'opencode-go')
+  console.log('provider-centric quota binding / reuse passed')
 
   assert.deepEqual(matchQuotaTemplateForProvider('my-kimi-route', 'https://api.kimi.com/coding/v1'), { builtin: false, id: 'kimi-coding' })
   assert.deepEqual(matchQuotaTemplateForProvider('deepseek-official'), { builtin: true, id: 'deepseek' })

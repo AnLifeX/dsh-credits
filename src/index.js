@@ -65,6 +65,30 @@ export const QUOTA_ADAPTER_IDS = BUILTIN_QUOTA_ADAPTERS.map((adapter) => adapter
  */
 export const QUOTA_SOURCE_TEMPLATES = [
   {
+    id: 'deepseek',
+    category: 'balance',
+    name: 'DeepSeek 官方余额',
+    description: '查询 DeepSeek 官方账户余额（CNY / USD）',
+    builtin: true,
+    source: {
+      id: 'deepseek', name: 'DeepSeek 官方余额', kind: 'balance', providerIds: ['deepseek', 'deepseek-official'],
+      request: { url: 'https://api.deepseek.com/user/balance', authRef: 'DEEPSEEK_API_KEY', authStyle: 'bearer' },
+      template: 'deepseek',
+    },
+  },
+  {
+    id: 'opencode-go',
+    category: 'subscription',
+    name: 'OpenCode Go 订阅用量',
+    description: '查询 OpenCode Go 的 5 小时、每周与每月用量窗口',
+    builtin: true,
+    source: {
+      id: 'opencode-go', name: 'OpenCode Go 订阅用量', kind: 'usage', providerIds: ['opencode-go'],
+      request: { url: OPENCODE_GO_DEFAULT_BASE_URL, authRef: 'OPENCODE_GO_API_KEY', authStyle: 'bearer' },
+      template: 'opencode-go',
+    },
+  },
+  {
     id: 'stepfun-balance',
     category: 'balance',
     name: 'StepFun 余额',
@@ -249,6 +273,102 @@ const normalizeQuotaSourceConfig = (source) => {
   return normalized
 }
 
+export const providerQuotaAdapterId = (providerId) => `provider:${String(providerId ?? '').trim()}`
+
+const normalizeProviderQuotaConfig = (binding) => {
+  if (!binding || typeof binding !== 'object') throw new Error('provider-quota-invalid')
+  const providerId = String(binding.providerId ?? '').trim()
+  if (!providerId) throw new Error('provider-quota-provider-required')
+  const sourceType = String(binding.sourceType ?? 'auto').trim().toLowerCase()
+  if (!['auto', 'template', 'custom', 'provider'].includes(sourceType)) throw new Error('provider-quota-source-type-invalid')
+  const normalized = {
+    providerId,
+    enabled: binding.enabled !== false,
+    sourceType,
+    templateId: String(binding.templateId ?? '').trim(),
+    sourceProviderId: String(binding.sourceProviderId ?? '').trim(),
+  }
+  if (sourceType === 'template' && !getQuotaSourceTemplate(normalized.templateId)) throw new Error('provider-quota-template-invalid')
+  if (sourceType === 'provider' && !normalized.sourceProviderId) throw new Error('provider-quota-source-provider-required')
+  if (sourceType === 'custom') {
+    normalized.source = normalizeQuotaSourceConfig(binding.source)
+  }
+  return normalized
+}
+
+const providerTemplateUrl = (provider, sourceType, templateId, defaultUrl) => {
+  if (sourceType !== 'auto') return defaultUrl
+  const baseURL = String(provider?.baseURL ?? '').trim().replace(/\/+$/, '')
+  if (!baseURL) return defaultUrl
+  if (templateId === 'deepseek') return /\/user\/balance$/i.test(baseURL) ? baseURL : `${baseURL}/user/balance`
+  if (templateId === 'opencode-go') return /\/usage$/i.test(baseURL) ? baseURL : `${baseURL}/usage`
+  return defaultUrl
+}
+
+/** 将一个供应商绑定物化为独立适配器，确保同模板的多个账号不共享缓存或凭证。 */
+export const buildProviderQuotaAdapter = (provider, rawBinding = {}) => {
+  const providerId = String(rawBinding.providerId ?? provider?.id ?? '').trim()
+  if (!providerId || rawBinding.enabled === false || rawBinding.sourceType === 'provider') return null
+  const sourceType = String(rawBinding.sourceType ?? 'auto').trim().toLowerCase()
+  if (sourceType === 'custom') {
+    const source = normalizeQuotaSourceConfig(rawBinding.source)
+    const requestDshProvider = rawBinding.source?.request?.dshProvider
+    return {
+      ...source,
+      id: providerQuotaAdapterId(providerId),
+      name: String(provider?.name || source.name || providerId),
+      providerIds: [providerId],
+      providerPatterns: [],
+      default: false,
+      builtin: false,
+      providerId,
+      sourceType,
+      request: {
+        ...(source.request ?? {}),
+        dshProvider: requestDshProvider === '' ? '' : (requestDshProvider || providerId),
+      },
+    }
+  }
+  const templateId = sourceType === 'template'
+    ? String(rawBinding.templateId ?? '').trim()
+    : String(provider?.templateId ?? rawBinding.templateId ?? '').trim()
+  const template = getQuotaSourceTemplate(templateId)
+  if (!template) return null
+  const source = mergeQuotaSourceTemplate({ template: templateId })
+  return {
+    ...source,
+    id: providerQuotaAdapterId(providerId),
+    name: String(provider?.name || source.name || providerId),
+    providerIds: [providerId],
+    providerPatterns: [],
+    default: false,
+    builtin: false,
+    providerId,
+    sourceType,
+    quotaTemplateName: template.name,
+    request: {
+      ...(source.request ?? {}),
+      url: providerTemplateUrl(provider, sourceType, templateId, source.request?.url),
+      dshProvider: providerId,
+    },
+  }
+}
+
+/** 当前模型供应商 → 该供应商独立绑定的适配器；未配置时明确返回 null。 */
+export const resolveProviderQuotaSource = (modelProvider, bindings = []) => {
+  const byProvider = new Map((bindings ?? []).map((binding) => [normalizeProvider(binding?.providerId), binding]))
+  const visit = (providerId, seen = new Set()) => {
+    const normalized = normalizeProvider(providerId)
+    if (!normalized || seen.has(normalized)) return null
+    seen.add(normalized)
+    const binding = byProvider.get(normalized)
+    if (!binding || binding.enabled === false) return null
+    if (binding.sourceType === 'provider') return visit(binding.sourceProviderId, seen)
+    return binding.adapterId || providerQuotaAdapterId(binding.providerId)
+  }
+  return visit(modelProvider)
+}
+
 /** 按适配器 id 查内置适配器。 */
 export const getBuiltinQuotaAdapter = (id) =>
   BUILTIN_QUOTA_ADAPTERS.find((adapter) => adapter.id === id) ?? null
@@ -380,6 +500,16 @@ const QuotaSource = Schema.object({
   response: QuotaResponse.default({}),
 })
 
+/** 以 DSH 供应商实例为主体的额度绑定。 */
+const ProviderQuota = Schema.object({
+  providerId: Schema.string().min(1),
+  enabled: Schema.boolean().default(true),
+  sourceType: Schema.union(['auto', 'template', 'custom', 'provider']).default('auto'),
+  templateId: Schema.string().default(''),
+  sourceProviderId: Schema.string().default(''),
+  source: QuotaSource,
+})
+
 export const Config = Schema.object({
   /** 整个额度功能总开关；关闭后不查询额度且前端隐藏所有额度 UI */
   enabled: Schema.boolean().default(true),
@@ -426,6 +556,8 @@ export const Config = Schema.object({
   defaultPrices: ModelPrice.default({ cacheHit: 0.1, cacheMiss: 1, output: 2 }),
   /** 自定义额度源适配器列表（可覆盖内置适配器） */
   quotaSources: Schema.array(QuotaSource).default([]),
+  /** 每个 DSH 供应商实例独立选择额度来源。 */
+  providerQuotas: Schema.array(ProviderQuota).default([]),
 })
 
 /** 归一化 DeepSeek 余额响应中的金额字符串。 */
@@ -569,6 +701,8 @@ const usageWindow = (percent, resetsAt = null, status = null) => ({
 
 /** 解析内置订阅模板，输出与 OpenCode Go 相同的动态窗口结构。 */
 export const normalizeTemplateUsage = (templateId, data) => {
+  if (templateId === 'opencode-go') return normalizeOpencodeUsage(data)
+
   if (templateId === 'kimi-coding') {
     const windows = {}
     const detail = Array.isArray(data?.limits)
@@ -1047,6 +1181,7 @@ export function apply(ctx, config) {
     prices: { ...(config.prices ?? {}) },
     defaultPrices: { ...(config.defaultPrices ?? { cacheHit: 0.1, cacheMiss: 1, output: 2 }) },
     quotaSources: Array.isArray(config.quotaSources) ? config.quotaSources.map((s) => ({ ...s })) : [],
+    providerQuotas: Array.isArray(config.providerQuotas) ? config.providerQuotas.map((binding) => ({ ...binding })) : [],
   }
 
   const getConfig = () => runtimeConfig
@@ -1163,7 +1298,6 @@ export function apply(ctx, config) {
       const profile = readPath(section, entry.settingsPath) ?? {}
       const baseURL = typeof profile?.baseURL === 'string' ? profile.baseURL : ''
       const template = matchQuotaTemplateForProvider(entry.provider, baseURL)
-      if (!template) continue
       rows.set(entry.provider, {
         id: entry.provider,
         name: live.get(entry.provider)?.name || entry.displayName || profile?.displayName || entry.provider,
@@ -1172,14 +1306,14 @@ export function apply(ctx, config) {
         baseURL,
         authRef: typeof profile?.apiKeyEnv === 'string' ? profile.apiKeyEnv : '',
         credentialMode: typeof profile?.apiKeyEnv === 'string' ? 'reference' : 'record',
-        templateId: template.id,
-        builtin: template.builtin === true,
+        templateId: template?.id ?? '',
+        builtin: template?.builtin === true,
+        quotaSupported: template !== null,
       })
     }
     for (const provider of live.values()) {
       if (rows.has(provider.id)) continue
       const template = matchQuotaTemplateForProvider(provider.id)
-      if (!template) continue
       rows.set(provider.id, {
         id: provider.id,
         name: provider.name || provider.id,
@@ -1188,8 +1322,9 @@ export function apply(ctx, config) {
         baseURL: '',
         authRef: '',
         credentialMode: 'record',
-        templateId: template.id,
-        builtin: template.builtin === true,
+        templateId: template?.id ?? '',
+        builtin: template?.builtin === true,
+        quotaSupported: template !== null,
       })
     }
     const deepseek = settings?.get?.('llm-deepseek')
@@ -1204,9 +1339,83 @@ export function apply(ctx, config) {
         credentialMode: 'reference',
         templateId: 'deepseek',
         builtin: true,
+        quotaSupported: true,
       })
     }
     return [...rows.values()].sort((a, b) => Number(b.configured) - Number(a.configured) || a.name.localeCompare(b.name))
+  }
+
+  /**
+   * 显式配置优先；旧 quotaSources 按 providerIds 迁移；能识别的 DSH 供应商默认自动绑定。
+   * 不支持且未配置的供应商保留在列表中，但不会生成额度请求。
+   */
+  const getEffectiveProviderQuotas = () => {
+    const directory = getDshProviders()
+    const providers = new Map(directory.map((provider) => [normalizeProvider(provider.id), provider]))
+    const explicit = new Map()
+    for (const raw of runtimeConfig.providerQuotas ?? []) {
+      try {
+        const binding = normalizeProviderQuotaConfig(raw)
+        explicit.set(normalizeProvider(binding.providerId), binding)
+      } catch (error) {
+        ctx.logger.warn(`[dsh-credits] ignored invalid provider quota (${raw?.providerId ?? ''}): ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
+    const legacy = new Map()
+    for (const source of runtimeConfig.quotaSources ?? []) {
+      if (!source || source.enabled === false) continue
+      for (const providerId of source.providerIds ?? []) {
+        const key = normalizeProvider(providerId)
+        if (!key || explicit.has(key) || legacy.has(key)) continue
+        legacy.set(key, {
+          providerId: String(providerId),
+          enabled: true,
+          sourceType: 'custom',
+          templateId: String(source.template ?? ''),
+          sourceProviderId: '',
+          source,
+          migrated: true,
+        })
+      }
+    }
+    const bindings = []
+    for (const provider of directory) {
+      const key = normalizeProvider(provider.id)
+      const binding = explicit.get(key) ?? legacy.get(key) ?? {
+        providerId: provider.id,
+        enabled: provider.quotaSupported === true,
+        sourceType: 'auto',
+        templateId: provider.templateId || '',
+        sourceProviderId: '',
+        implicit: true,
+      }
+      bindings.push({ ...binding, providerId: provider.id, provider })
+      explicit.delete(key)
+      legacy.delete(key)
+    }
+    for (const binding of [...explicit.values(), ...legacy.values()]) {
+      const provider = providers.get(normalizeProvider(binding.providerId)) ?? {
+        id: binding.providerId,
+        name: binding.providerId,
+        configured: false,
+        baseURL: '',
+        templateId: binding.templateId || '',
+        quotaSupported: Boolean(binding.templateId),
+        missing: true,
+      }
+      bindings.push({ ...binding, provider })
+    }
+    return bindings.map((binding) => ({
+      ...binding,
+      adapterId: binding.enabled !== false && binding.sourceType !== 'provider'
+        ? providerQuotaAdapterId(binding.providerId)
+        : '',
+    }))
+  }
+
+  const getProviderQuotaMap = () => {
+    const bindings = getEffectiveProviderQuotas()
+    return Object.fromEntries(bindings.map((binding) => [binding.providerId, resolveProviderQuotaSource(binding.providerId, bindings)]))
   }
 
   /** 经 credentials seam / 环境变量解析一个密钥引用。 */
@@ -1290,11 +1499,31 @@ export function apply(ctx, config) {
         ctx.logger.warn(`[dsh-credits] ignored invalid quota source (${source.id}): ${error instanceof Error ? error.message : String(error)}`)
       }
     }
+    for (const binding of getEffectiveProviderQuotas()) {
+      try {
+        const adapter = buildProviderQuotaAdapter(binding.provider, binding)
+        if (adapter) merged.set(adapter.id, adapter)
+      } catch (error) {
+        ctx.logger.warn(`[dsh-credits] ignored provider quota adapter (${binding.providerId}): ${error instanceof Error ? error.message : String(error)}`)
+      }
+    }
     return [...merged.values()]
   }
 
   const getQuotaAdapter = (providerOrId) => matchQuotaAdapter(providerOrId, getRuntimeAdapters()) ?? null
   const getRuntimeAdapterIds = () => getRuntimeAdapters().map((adapter) => adapter.id)
+  const getActiveRuntimeAdapterIds = () => {
+    const ids = [...new Set(Object.values(getProviderQuotaMap()).filter(Boolean))]
+    return ids.length > 0 ? ids : getRuntimeAdapterIds()
+  }
+  const resolveRuntimeQuotaSource = (modelProvider = null) => {
+    const bindings = getEffectiveProviderQuotas()
+    if (modelProvider !== null && modelProvider !== undefined && normalizeProvider(modelProvider)) {
+      return resolveProviderQuotaSource(modelProvider, bindings)
+    }
+    const first = bindings.map((binding) => resolveProviderQuotaSource(binding.providerId, bindings)).find(Boolean)
+    return first ?? resolveQuotaSource(null, runtimeConfig, getRuntimeAdapters())
+  }
 
   const emptyQuotaCache = () => ({ state: 'empty', payload: null, error: null, fetchedAt: 0, lastErrorAt: 0 })
   const caches = new Map()
@@ -1347,6 +1576,15 @@ export function apply(ctx, config) {
       const data = await res.json()
       const preview = options.includePreview === true ? { availableFields: collectQuotaFields(data) } : {}
       if (adapter.kind === 'balance') {
+        if (adapter.template === 'deepseek') {
+          return {
+            provider: adapter.id,
+            kind: 'balance',
+            isAvailable: data?.is_available === true,
+            balances: normalizeBalances(data),
+            ...preview,
+          }
+        }
         return {
           provider: adapter.id,
           kind: 'balance',
@@ -1455,7 +1693,7 @@ export function apply(ctx, config) {
   const refresh = (provider = null) => {
     if (runtimeConfig.enabled === false) return Promise.resolve()
     if (provider) return refreshOne(provider)
-    return Promise.all(getRuntimeAdapterIds().map((id) => refreshOne(id)))
+    return Promise.all(getActiveRuntimeAdapterIds().map((id) => refreshOne(id)))
   }
 
   let loopTimer = null
@@ -1470,7 +1708,7 @@ export function apply(ctx, config) {
         return
       }
       void refresh().then(() => {
-        const ids = getRuntimeAdapterIds()
+        const ids = getActiveRuntimeAdapterIds()
         const bothMissing = ids.length > 0 && ids.every((id) => {
           const cache = caches.get(id)
           return cache?.state === 'error' && cache?.error === 'api-key-missing'
@@ -1495,7 +1733,7 @@ export function apply(ctx, config) {
     return k.slice(0, 4) + '****' + k.slice(-4)
   }
 
-  const sanitizeCustomQuotaSources = () => (runtimeConfig.quotaSources ?? []).map((rawSource) => {
+  const sanitizeQuotaSource = (rawSource) => {
     const source = mergeQuotaSourceTemplate(rawSource)
     return {
       ...source,
@@ -1507,7 +1745,24 @@ export function apply(ctx, config) {
         ),
       },
     }
-  })
+  }
+
+  const sanitizeCustomQuotaSources = () => (runtimeConfig.quotaSources ?? []).map(sanitizeQuotaSource)
+
+  const sanitizeProviderQuotas = () => {
+    const bindings = getEffectiveProviderQuotas()
+    return bindings.map((binding) => ({
+      providerId: binding.providerId,
+      enabled: binding.enabled !== false,
+      sourceType: binding.sourceType,
+      templateId: binding.templateId || binding.provider?.templateId || '',
+      sourceProviderId: binding.sourceProviderId || '',
+      ...(binding.source ? { source: sanitizeQuotaSource(binding.source) } : {}),
+      adapterId: resolveProviderQuotaSource(binding.providerId, bindings),
+      implicit: binding.implicit === true,
+      migrated: binding.migrated === true,
+    }))
+  }
 
   const getSanitizedConfig = () => {
     return {
@@ -1536,6 +1791,7 @@ export function apply(ctx, config) {
       prices: { ...runtimeConfig.prices },
       defaultPrices: { ...runtimeConfig.defaultPrices },
       quotaSources: sanitizeCustomQuotaSources(),
+      providerQuotas: sanitizeProviderQuotas(),
       quotaTemplates: QUOTA_SOURCE_TEMPLATES.map((template) => ({
         id: template.id,
         category: template.category,
@@ -1586,7 +1842,7 @@ export function apply(ctx, config) {
       }
     }
 
-    const serialize = (source = resolveQuotaSource(null, runtimeConfig, getRuntimeAdapters())) => {
+    const serialize = (source = resolveRuntimeQuotaSource(null)) => {
       const adapters = getRuntimeAdapters()
       const defaultAdapter = defaultQuotaAdapter(adapters)
       const picked = getQuotaAdapter(source)?.id ?? defaultAdapter?.id ?? 'deepseek'
@@ -1598,7 +1854,7 @@ export function apply(ctx, config) {
         provider: picked,
         kind: view.kind,
         sourceName: view.name,
-        defaultProvider: resolveQuotaSource(null, runtimeConfig, adapters),
+        defaultProvider: resolveRuntimeQuotaSource(null),
         quotaMode: runtimeConfig.quotaMode === 'custom' ? 'custom' : 'follow',
         showDock: runtimeConfig.showDock !== false,
         dockLayout: normalizeDockLayout(runtimeConfig.dockLayout),
@@ -1629,6 +1885,7 @@ export function apply(ctx, config) {
           default: adapter.default,
           enabled: adapter.enabled !== false,
         })),
+        providerQuotaMap: getProviderQuotaMap(),
         views,
         ...(view.usage ? { usage: view.usage } : {}),
         ...(view.metrics ? { metrics: view.metrics } : {}),
@@ -1663,7 +1920,7 @@ export function apply(ctx, config) {
         const defaultAdapter = defaultQuotaAdapter(getRuntimeAdapters())
         const source = sourceParam
           ? (getQuotaAdapter(sourceParam)?.id ?? defaultAdapter?.id ?? 'deepseek')
-          : resolveQuotaSource(null, runtimeConfig, getRuntimeAdapters())
+          : resolveRuntimeQuotaSource(null)
         if (force) {
           const now = Date.now()
           const targets = sourceParam ? [source] : getRuntimeAdapterIds()
@@ -1730,6 +1987,32 @@ export function apply(ctx, config) {
                 }
                 runtimeConfig.quotaSources = nextSources
               }
+              if (Array.isArray(body.providerQuotas)) {
+                const prevBindings = runtimeConfig.providerQuotas ?? []
+                const nextBindings = body.providerQuotas.map((rawBinding) => {
+                  const prev = prevBindings.find((binding) => normalizeProvider(binding.providerId) === normalizeProvider(rawBinding?.providerId))
+                  if (rawBinding?.sourceType !== 'custom' || !rawBinding.source || !prev?.source) {
+                    return normalizeProviderQuotaConfig(rawBinding)
+                  }
+                  const nextHeaders = { ...(prev.source.request?.headers ?? {}) }
+                  for (const [key, value] of Object.entries(rawBinding.source.request?.headers ?? {})) {
+                    if (value === '***' && prev.source.request?.headers?.[key] !== undefined) nextHeaders[key] = prev.source.request.headers[key]
+                    else nextHeaders[key] = value
+                  }
+                  return normalizeProviderQuotaConfig({
+                    ...rawBinding,
+                    source: {
+                      ...rawBinding.source,
+                      request: { ...(rawBinding.source.request ?? {}), headers: nextHeaders },
+                    },
+                  })
+                })
+                const normalizedProviderIds = nextBindings.map((binding) => normalizeProvider(binding.providerId))
+                if (new Set(normalizedProviderIds).size !== normalizedProviderIds.length) {
+                  throw new Error('provider-quota-provider-duplicate')
+                }
+                runtimeConfig.providerQuotas = nextBindings
+              }
               if (typeof body.warningThreshold === 'number' && body.warningThreshold >= 0) runtimeConfig.warningThreshold = body.warningThreshold
               if (typeof body.dangerThreshold === 'number' && body.dangerThreshold >= 0) runtimeConfig.dangerThreshold = body.dangerThreshold
               if (typeof body.refreshIntervalMs === 'number' && body.refreshIntervalMs >= 1000) runtimeConfig.refreshIntervalMs = body.refreshIntervalMs
@@ -1781,9 +2064,22 @@ export function apply(ctx, config) {
         }
         try {
           const body = await readJsonBody(req)
-          const draftAdapter = body.source && typeof body.source === 'object'
-            ? { ...normalizeQuotaSourceConfig(body.source), builtin: false }
+          const draftBinding = body.binding && typeof body.binding === 'object'
+            ? normalizeProviderQuotaConfig(body.binding)
             : null
+          const bindingProvider = draftBinding
+            ? (getDshProviders().find((provider) => normalizeProvider(provider.id) === normalizeProvider(draftBinding.providerId)) ?? {
+                id: draftBinding.providerId,
+                name: draftBinding.providerId,
+                baseURL: '',
+                templateId: draftBinding.templateId || '',
+              })
+            : null
+          const draftAdapter = draftBinding
+            ? buildProviderQuotaAdapter(bindingProvider, draftBinding)
+            : (body.source && typeof body.source === 'object'
+                ? { ...normalizeQuotaSourceConfig(body.source), builtin: false }
+                : null)
           const adapter = draftAdapter ?? (typeof body.provider === 'string' && getQuotaAdapter(body.provider)
             ? getQuotaAdapter(body.provider)
             : (getQuotaAdapter(runtimeConfig.provider) ?? defaultQuotaAdapter(getRuntimeAdapters())))
