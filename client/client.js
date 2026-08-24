@@ -1028,18 +1028,27 @@ window.__ModuleLoader__.load({
 			"settings.auth.none": "无需鉴权",
 			"settings.metricLabel": "指标名称",
 			"settings.metricValuePath": "剩余额度字段",
+			"settings.metricValuePathHint": "接口直接返回剩余额度时选择此字段；如果只返回“已用额度 + 总额度”，这里留空。",
 			"settings.metricUsedPath": "已用额度字段（可选）",
+			"settings.metricUsedPathHint": "仅在需要用“总额度 − 已用额度”计算剩余时选择。",
 			"settings.metricTotalPath": "总额度字段（可选）",
+			"settings.metricTotalPathHint": "可用于展示总额度；与已用额度字段同时填写时，也可计算剩余额度。",
 			"settings.metricUnit": "单位",
-			"settings.metricResetPath": "重置时间 JSONPath",
-			"settings.metricAggregate": "数组转换",
-			"settings.metricAggregate.value": "取单值 / 第一项",
+			"settings.metricUnitHint": "只影响展示，例如 CNY、USD、次或 Token。",
+			"settings.metricResetPath": "重置时间字段（可选）",
+			"settings.metricResetPathHint": "订阅套餐有重置时间时选择；普通余额通常留空。",
+			"settings.metricMappingHint": "先测试接口，再为每个指标选择返回字段。可以直接读取“剩余额度”，也可以通过“总额度 − 已用额度”计算。未选择有效字段时不会再显示为 0。",
+			"settings.metricAggregate": "多值处理（仅数组字段）",
+			"settings.metricAggregateHint": "普通数字保持“直接取值”即可；只有所选字段返回数组时，才需要求和、计数、最小值或最大值。",
+			"settings.metricAggregate.value": "直接取值（数组时取第一项）",
 			"settings.metricAggregate.sum": "求和",
 			"settings.metricAggregate.count": "计数",
 			"settings.metricAggregate.min": "最小值",
 			"settings.metricAggregate.max": "最大值",
-			"settings.metricScale": "乘数",
+			"settings.metricScale": "换算乘数",
+			"settings.metricScaleHint": "最终值 = 原始值 × 换算乘数 + 加减偏移。例如 4609838000000 换算为 4.609838，可填写 0.000000000001（10⁻¹²）。",
 			"settings.metricOffset": "加减偏移",
+			"settings.metricOffsetHint": "在乘数换算后再加上的数值；通常保持 0。",
 			"settings.addMetric": "添加展示指标",
 			"settings.removeMetric": "删除指标",
 			"settings.metricItem": "指标 {index}",
@@ -1325,18 +1334,27 @@ window.__ModuleLoader__.load({
 			"settings.auth.none": "No authentication",
 			"settings.metricLabel": "Metric label",
 			"settings.metricValuePath": "Remaining field",
+			"settings.metricValuePathHint": "Select this when the API directly returns the remaining quota; leave it empty when only used and total values are available.",
 			"settings.metricUsedPath": "Used field (optional)",
+			"settings.metricUsedPathHint": "Only select this when remaining quota should be calculated as total minus used.",
 			"settings.metricTotalPath": "Total field (optional)",
+			"settings.metricTotalPathHint": "Displays the total quota and, together with the used field, can calculate the remaining quota.",
 			"settings.metricUnit": "Unit",
-			"settings.metricResetPath": "Reset time JSONPath",
-			"settings.metricAggregate": "Array transform",
-			"settings.metricAggregate.value": "Single value / first item",
+			"settings.metricUnitHint": "Display only, for example CNY, USD, requests, or tokens.",
+			"settings.metricResetPath": "Reset-time field (optional)",
+			"settings.metricResetPathHint": "Select this for plans with a reset time; ordinary balances usually leave it empty.",
+			"settings.metricMappingHint": "Test the endpoint first, then select response fields for each metric. Read a remaining value directly or calculate total minus used. An unconfigured field is no longer reported as zero.",
+			"settings.metricAggregate": "Multiple-value handling (arrays only)",
+			"settings.metricAggregateHint": "Keep Direct value for an ordinary number. Sum, count, minimum, and maximum only apply when the selected field returns an array.",
+			"settings.metricAggregate.value": "Direct value (first item for arrays)",
 			"settings.metricAggregate.sum": "Sum",
 			"settings.metricAggregate.count": "Count",
 			"settings.metricAggregate.min": "Minimum",
 			"settings.metricAggregate.max": "Maximum",
-			"settings.metricScale": "Multiplier",
+			"settings.metricScale": "Conversion multiplier",
+			"settings.metricScaleHint": "Final value = raw value × multiplier + offset. For example, convert 4609838000000 to 4.609838 with 0.000000000001 (10⁻¹²).",
 			"settings.metricOffset": "Offset",
+			"settings.metricOffsetHint": "Added after applying the multiplier; normally leave this at 0.",
 			"settings.addMetric": "Add display metric",
 			"settings.removeMetric": "Remove metric",
 			"settings.metricItem": "Metric {index}",
@@ -2215,7 +2233,7 @@ window.__ModuleLoader__.load({
 				sourceProviderId: "",
 				...(provider.quotaSupported === true ? {} : { source: emptyProviderCustomSource(provider) }),
 			});
-			const updateProviderBinding = (provider, patchOrUpdater) => {
+			const updateProviderBinding = (provider, patchOrUpdater, preserveTestFields = false) => {
 				const current = cloneSettings(providerBindingFor(provider.id) ?? defaultProviderBinding(provider));
 				const patch = typeof patchOrUpdater === "function" ? patchOrUpdater(current) : patchOrUpdater;
 				const nextBinding = { ...current, ...patch, providerId: provider.id, _edited: true };
@@ -2223,7 +2241,13 @@ window.__ModuleLoader__.load({
 					? providerQuotaBindings.map((binding) => binding.providerId === provider.id ? nextBinding : cloneSettings(binding))
 					: [...providerQuotaBindings.map((binding) => cloneSettings(binding)), nextBinding];
 				patchCard("quota", { providerQuotas: next });
-				setSourceTest({ state: "idle", fields: [], message: "", providerId: provider.id });
+				if (preserveTestFields) {
+					setSourceTest((current) => current.providerId === provider.id
+						? { ...current, state: "idle", message: "", diagnostics: null }
+						: current);
+				} else {
+					setSourceTest({ state: "idle", fields: [], message: "", providerId: provider.id });
+				}
 			};
 			const providerSourceLabel = (provider, binding) => {
 				if (!binding || binding.enabled === false) return t("settings.providerQuota.hidden");
@@ -2578,13 +2602,13 @@ window.__ModuleLoader__.load({
 							for (const field of rows) options.push([field.path, field.path + " — " + String(field.value)]);
 							return options;
 						};
-						const patchSource = (section, value) => updateProviderBinding(provider, (current) => {
+						const patchSource = (section, value, preserveTestFields = false) => updateProviderBinding(provider, (current) => {
 							const currentSource = current.source ?? emptyProviderCustomSource(provider);
 							return { source: { ...currentSource, [section]: { ...(currentSource[section] ?? {}), ...value } } };
-						});
+						}, preserveTestFields);
 						const patchMetric = (index, field, value) => patchSource("response", {
 							metrics: metrics.map((metric, metricIndex) => metricIndex === index ? { ...metric, [field]: value } : metric)
-						});
+						}, true);
 						const patchHeaders = (headers) => patchSource("request", { headers });
 						const requestDshProvider = source.request?.dshProvider;
 						const selectedTemplateId = currentSourceType === "auto"
@@ -2758,11 +2782,12 @@ window.__ModuleLoader__.load({
 								testResult,
 								react.createElement("div", { className: "dshqb_provider_mapping", key: "mapping" }, [
 									react.createElement("span", { className: "dshqb_template_group_title", key: "title" }, t("settings.providerQuota.mapping")),
+									react.createElement("div", { className: "dshqb_form_hint", key: "hint" }, t("settings.metricMappingHint")),
 									react.createElement("div", { className: "dshqb_metric_list", key: "metric_list" }, metrics.map((metric, metricIndex) => {
 										const listId = "dshqb-fields-" + provider.id.replace(/[^a-z0-9_-]/gi, "-") + "-" + metricIndex;
-										const fieldInput = (field, label) => {
+										const fieldInput = (field, label, hint) => {
 											const fieldListId = listId + "-" + field;
-											return react.createElement(FieldRow, { t, key: field, label: t(label), disabled: savingCard === "quota" }, [
+											return react.createElement(FieldRow, { t, key: field, label: t(label), hint: t(hint), disabled: savingCard === "quota" }, [
 												react.createElement("input", { className: "dshqb_input", list: fieldListId, value: metric[field] || "", placeholder: "$.data.value", onChange: (e) => patchMetric(metricIndex, field, e.target.value), key: "input" }),
 												react.createElement("datalist", { id: fieldListId, key: "list" }, providerFieldOptions(metric[field]).filter(([value]) => value).map(([value, text]) => react.createElement("option", { value, label: text, key: value })))
 											]);
@@ -2770,22 +2795,22 @@ window.__ModuleLoader__.load({
 										return react.createElement("div", { className: "dshqb_metric_editor", key: metric.key || metricIndex }, [
 											react.createElement("div", { className: "dshqb_metric_editor_head", key: "head" }, [
 												react.createElement("span", { key: "label" }, t("settings.metricItem", { index: metricIndex + 1 })),
-												metrics.length > 1 ? react.createElement("button", { type: "button", className: "dshqb_btn dshqb_btn_outline", onClick: () => patchSource("response", { metrics: metrics.filter((_, index) => index !== metricIndex) }), key: "remove" }, t("settings.removeMetric")) : null,
+												metrics.length > 1 ? react.createElement("button", { type: "button", className: "dshqb_btn dshqb_btn_outline", onClick: () => patchSource("response", { metrics: metrics.filter((_, index) => index !== metricIndex) }, true), key: "remove" }, t("settings.removeMetric")) : null,
 											]),
 											react.createElement(FieldGrid, { key: "grid" }, [
 												react.createElement(FieldRow, { t, key: "label", label: t("settings.metricLabel"), disabled: savingCard === "quota" }, react.createElement("input", { className: "dshqb_input", value: metric.label || "", onChange: (e) => patchMetric(metricIndex, "label", e.target.value) })),
-												react.createElement(FieldRow, { t, key: "unit", label: t("settings.metricUnit"), disabled: savingCard === "quota" }, react.createElement("input", { className: "dshqb_input", value: metric.unit || "", placeholder: "CNY / USD / 次", onChange: (e) => patchMetric(metricIndex, "unit", e.target.value) })),
-												fieldInput("valuePath", "settings.metricValuePath"),
-												fieldInput("usedPath", "settings.metricUsedPath"),
-												fieldInput("totalPath", "settings.metricTotalPath"),
-												fieldInput("resetsAtPath", "settings.metricResetPath"),
-												react.createElement(FieldRow, { t, key: "aggregate", label: t("settings.metricAggregate"), disabled: savingCard === "quota" }, react.createElement("select", { className: "dshqb_select", value: metric.aggregate || "value", onChange: (e) => patchMetric(metricIndex, "aggregate", e.target.value) }, ["value", "sum", "count", "min", "max"].map((value) => react.createElement("option", { value, key: value }, t("settings.metricAggregate." + value))))),
-												react.createElement(FieldRow, { t, key: "scale", label: t("settings.metricScale"), disabled: savingCard === "quota" }, react.createElement("input", { className: "dshqb_input", type: "number", step: "any", value: metric.scale ?? 1, onChange: (e) => patchMetric(metricIndex, "scale", Number(e.target.value)) })),
-												react.createElement(FieldRow, { t, key: "offset", label: t("settings.metricOffset"), disabled: savingCard === "quota" }, react.createElement("input", { className: "dshqb_input", type: "number", step: "any", value: metric.offset ?? 0, onChange: (e) => patchMetric(metricIndex, "offset", Number(e.target.value)) })),
+												react.createElement(FieldRow, { t, key: "unit", label: t("settings.metricUnit"), hint: t("settings.metricUnitHint"), disabled: savingCard === "quota" }, react.createElement("input", { className: "dshqb_input", value: metric.unit || "", placeholder: "CNY / USD / 次", onChange: (e) => patchMetric(metricIndex, "unit", e.target.value) })),
+												fieldInput("valuePath", "settings.metricValuePath", "settings.metricValuePathHint"),
+												fieldInput("usedPath", "settings.metricUsedPath", "settings.metricUsedPathHint"),
+												fieldInput("totalPath", "settings.metricTotalPath", "settings.metricTotalPathHint"),
+												fieldInput("resetsAtPath", "settings.metricResetPath", "settings.metricResetPathHint"),
+												react.createElement(FieldRow, { t, key: "aggregate", label: t("settings.metricAggregate"), hint: t("settings.metricAggregateHint"), disabled: savingCard === "quota" }, react.createElement("select", { className: "dshqb_select", value: metric.aggregate || "value", onChange: (e) => patchMetric(metricIndex, "aggregate", e.target.value) }, ["value", "sum", "count", "min", "max"].map((value) => react.createElement("option", { value, key: value }, t("settings.metricAggregate." + value))))),
+												react.createElement(FieldRow, { t, key: "scale", label: t("settings.metricScale"), hint: t("settings.metricScaleHint"), disabled: savingCard === "quota" }, react.createElement("input", { className: "dshqb_input", type: "number", step: "any", value: metric.scale ?? 1, onChange: (e) => patchMetric(metricIndex, "scale", Number(e.target.value)) })),
+												react.createElement(FieldRow, { t, key: "offset", label: t("settings.metricOffset"), hint: t("settings.metricOffsetHint"), disabled: savingCard === "quota" }, react.createElement("input", { className: "dshqb_input", type: "number", step: "any", value: metric.offset ?? 0, onChange: (e) => patchMetric(metricIndex, "offset", Number(e.target.value)) })),
 											])
 										]);
 									})),
-									react.createElement("div", { className: "dshqb_source_actions", key: "add_metric" }, react.createElement("button", { type: "button", className: "dshqb_btn dshqb_btn_outline", onClick: () => patchSource("response", { metrics: [...metrics, { key: nextMetricKey, label: "额度 " + nextMetricIndex, valuePath: "", usedPath: "", totalPath: "", resetsAtPath: "", unit: "", aggregate: "value", scale: 1, offset: 0 }] }) }, t("settings.addMetric")))
+									react.createElement("div", { className: "dshqb_source_actions", key: "add_metric" }, react.createElement("button", { type: "button", className: "dshqb_btn dshqb_btn_outline", onClick: () => patchSource("response", { metrics: [...metrics, { key: nextMetricKey, label: "额度 " + nextMetricIndex, valuePath: "", usedPath: "", totalPath: "", resetsAtPath: "", unit: "", aggregate: "value", scale: 1, offset: 0 }] }, true) }, t("settings.addMetric")))
 								])
 							]) : react.createElement("div", { className: "dshqb_provider_template_test", key: "template_test" }, [
 								selectedTemplate?.autoEnable === false && selectedTemplate.description

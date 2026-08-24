@@ -920,28 +920,36 @@ export const normalizeCustomUsage = (data, response = {}) => {
 /** 归一化自定义单值/多指标额度响应。 */
 export const normalizeCustomMetrics = (data, response = {}) => {
   const metrics = response.metrics ?? []
-  return metrics.map((metric) => {
+  return metrics.flatMap((metric) => {
     const scale = Number.isFinite(Number(metric.scale)) ? Number(metric.scale) : 1
     const offset = Number.isFinite(Number(metric.offset)) ? Number(metric.offset) : 0
     const aggregate = ['sum', 'count', 'min', 'max'].includes(metric.aggregate) ? metric.aggregate : 'value'
     const readAmount = (path) => {
-      if (!path) return 0
+      if (!path) return null
       const raw = getByPath(data, path)
+      if (raw === null || raw === undefined) return null
       const values = Array.isArray(raw) ? raw : [raw]
       if (aggregate === 'count') return values.filter((value) => value !== null && value !== undefined).length
-      const numbers = values.map(Number).filter(Number.isFinite)
-      if (numbers.length === 0) return 0
+      const numbers = values
+        .map((value) => typeof value === 'string' && value.trim() === '' ? Number.NaN : Number(value))
+        .filter(Number.isFinite)
+      if (numbers.length === 0) return null
       if (aggregate === 'sum') return numbers.reduce((sum, value) => sum + value, 0)
       if (aggregate === 'min') return Math.min(...numbers)
       if (aggregate === 'max') return Math.max(...numbers)
       return numbers[0]
     }
-    const total = metric.totalPath ? readAmount(metric.totalPath) * scale : 0
-    const used = metric.usedPath ? readAmount(metric.usedPath) * scale : 0
-    const value = metric.valuePath
-      ? readAmount(metric.valuePath) * scale + offset
-      : (metric.usedPath && metric.totalPath ? total - used + offset : offset)
-    return {
+    const rawTotal = metric.totalPath ? readAmount(metric.totalPath) : null
+    const rawUsed = metric.usedPath ? readAmount(metric.usedPath) : null
+    const rawValue = metric.valuePath ? readAmount(metric.valuePath) : null
+    const computesFromUsed = !metric.valuePath && metric.usedPath && metric.totalPath
+    if ((metric.valuePath && rawValue === null) || (computesFromUsed && (rawUsed === null || rawTotal === null)) || (!metric.valuePath && !computesFromUsed)) {
+      return []
+    }
+    const total = rawTotal === null ? 0 : rawTotal * scale
+    const used = rawUsed === null ? 0 : rawUsed * scale
+    const value = metric.valuePath ? rawValue * scale + offset : total - used + offset
+    return [{
       key: metric.key,
       label: metric.label || metric.key || '额度',
       value,
@@ -949,7 +957,7 @@ export const normalizeCustomMetrics = (data, response = {}) => {
       total,
       unit: metric.unit || '',
       resetsAt: metric.resetsAtPath ? (getByPath(data, metric.resetsAtPath) || null) : null,
-    }
+    }]
   })
 }
 

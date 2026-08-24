@@ -159,6 +159,10 @@ if (!code.includes('data.diagnostics ?? null')) throw new Error('quota test erro
 if (!code.includes('dshqb_diagnostic_preview')) throw new Error('quota test response preview missing')
 if (!code.includes('settings.cookieCredentialHint')) throw new Error('cookie credential format hint missing')
 if (!code.includes('dshqb_toast_error')) throw new Error('error toast styling missing')
+if (!code.includes('preserveTestFields')) throw new Error('response field choices should survive mapping edits')
+if (!code.includes('settings.metricMappingHint')) throw new Error('metric mapping guidance missing')
+if (!code.includes('settings.metricScaleHint')) throw new Error('metric conversion formula hint missing')
+if (!code.includes('Multiple-value handling (arrays only)')) throw new Error('array-only transform wording missing')
 
 const capturedRegister = []
 api.apply(makeSlotCtx(capturedRegister))

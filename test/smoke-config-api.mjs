@@ -527,6 +527,16 @@ assert.equal(resGetConfig.data.config.showPopover, true)
   })
   assert.equal(metrics[0].value, 65)
   assert.equal(metrics[0].used, 35)
+  assert.deepEqual(normalizeCustomMetrics({ balance: 123 }, {
+    metrics: [{ key: 'unconfigured', valuePath: '', scale: 1 }],
+  }), [], 'an unselected metric field must not be reported as zero')
+  assert.deepEqual(normalizeCustomMetrics({ balance: 123 }, {
+    metrics: [{ key: 'missing', valuePath: '$.missing', scale: 1 }],
+  }), [], 'a missing metric field must not be reported as zero')
+  const zeroMetric = normalizeCustomMetrics({ balance: 0 }, {
+    metrics: [{ key: 'zero', valuePath: '$.balance', scale: 1 }],
+  })
+  assert.equal(zeroMetric[0].value, 0, 'a real numeric zero must remain visible')
   const overdrawnMetrics = normalizeCustomMetrics({ used: 120, total: 100 }, {
     metrics: [{ key: 'quota', usedPath: '$.used', totalPath: '$.total', scale: 1 }],
   })
