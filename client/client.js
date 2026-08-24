@@ -865,6 +865,29 @@ window.__ModuleLoader__.load({
 			"settings.opencodeApiKey": "OpenCode Go API Key",
 			"settings.opencodeApiKeyHint": "留空则用环境变量或 auth.json。",
 			"settings.opencodeBaseUrl": "OpenCode Go Usage API",
+			"settings.customSources": "自定义额度源",
+			"settings.noCustomSources": "暂无自定义额度源。",
+			"settings.addCustomSource": "➕ 添加额度源",
+			"settings.editCustomSource": "编辑自定义额度源",
+			"settings.edit": "编辑",
+			"settings.remove": "移除",
+			"settings.name": "名称",
+			"settings.kind": "类型",
+			"settings.providerIds": "匹配供应商 ID（逗号分隔）",
+			"settings.providerPatterns": "匹配供应商正则（逗号分隔）",
+			"settings.defaultSource": "默认展示源",
+			"settings.quotaUrl": "接口 URL",
+			"settings.quotaAuthRef": "凭证引用名",
+			"settings.metricLabel": "指标名称",
+			"settings.metricValuePath": "剩余值 JSONPath",
+			"settings.metricTotalPath": "总额 JSONPath",
+			"settings.metricUnit": "单位",
+			"settings.metricResetPath": "重置时间 JSONPath",
+			"settings.metricValue": "数值",
+			"settings.metricTotal": "总额",
+			"settings.metricResetTime": "重置时间",
+			"settings.btnCancel": "取消",
+			"settings.quotaSourceIdRequired": "请先填写额度源 ID。",
 			"settings.serverIntervalHintQuota": "后台查询真实用量的频率。",
 			"settings.warningPercent": "剩余额度预警阈值 (黄灯 🟡)",
 			"settings.dangerPercent": "剩余额度告急阈值 (红灯 🔴)",
@@ -1028,6 +1051,29 @@ window.__ModuleLoader__.load({
 			"settings.opencodeApiKey": "OpenCode Go API Key",
 			"settings.opencodeApiKeyHint": "Empty uses env or auth.json.",
 			"settings.opencodeBaseUrl": "OpenCode Go Usage API",
+			"settings.customSources": "Custom Quota Sources",
+			"settings.noCustomSources": "No custom quota sources yet.",
+			"settings.addCustomSource": "➕ Add Source",
+			"settings.editCustomSource": "Edit Custom Quota Source",
+			"settings.edit": "Edit",
+			"settings.remove": "Remove",
+			"settings.name": "Name",
+			"settings.kind": "Kind",
+			"settings.providerIds": "Provider IDs (comma separated)",
+			"settings.providerPatterns": "Provider patterns (comma separated)",
+			"settings.defaultSource": "Default source",
+			"settings.quotaUrl": "API URL",
+			"settings.quotaAuthRef": "Credential ref",
+			"settings.metricLabel": "Metric label",
+			"settings.metricValuePath": "Remaining value JSONPath",
+			"settings.metricTotalPath": "Total JSONPath",
+			"settings.metricUnit": "Unit",
+			"settings.metricResetPath": "Reset time JSONPath",
+			"settings.metricValue": "Value",
+			"settings.metricTotal": "Total",
+			"settings.metricResetTime": "Reset time",
+			"settings.btnCancel": "Cancel",
+			"settings.quotaSourceIdRequired": "Please enter a quota source ID.",
 			"settings.serverIntervalHintQuota": "How often the backend fetches usage.",
 			"settings.warningPercent": "Remaining quota warning threshold (Yellow 🟡)",
 			"settings.dangerPercent": "Remaining quota danger threshold (Red 🔴)",
@@ -1123,7 +1169,8 @@ window.__ModuleLoader__.load({
 			opencodeApiKey: "",
 			opencodeBaseUrl: "https://opencode.ai/zen/go/v1/usage",
 			prices: { ...DEFAULT_PRICES },
-			defaultPrices: officialDefaultPrices("CNY")
+			defaultPrices: officialDefaultPrices("CNY"),
+			quotaSources: []
 		};
 
 		function generateYaml(config) {
@@ -1139,6 +1186,9 @@ window.__ModuleLoader__.load({
 				`    showPopover: ${config.showPopover !== false}`,
 				`    showTps: ${config.showTps !== false}`,
 				`    provider: ${config.provider}`,
+				...(Array.isArray(config.quotaSources) && config.quotaSources.length > 0
+					? [`    quotaSources: ${JSON.stringify(config.quotaSources)}`]
+					: []),
 				`    dangerThreshold: ${config.dangerThreshold}`,
 				`    warningThreshold: ${config.warningThreshold}`,
 				`    refreshIntervalMs: ${config.refreshIntervalMs}`,
@@ -1298,7 +1348,7 @@ window.__ModuleLoader__.load({
 				showCapsule: c.showCapsule !== false,
 				showPopover: c.showPopover !== false,
 				showTps: c.showTps !== false,
-				provider: c.provider === "opencode-go" ? "opencode-go" : "deepseek",
+				provider: typeof c.provider === "string" && c.provider.trim() ? c.provider.trim() : "deepseek",
 				currency: c.currency ?? "CNY",
 				warningThreshold: c.warningThreshold ?? 10,
 				dangerThreshold: c.dangerThreshold ?? 5,
@@ -1311,14 +1361,15 @@ window.__ModuleLoader__.load({
 				opencodeApiKey: "",
 				opencodeBaseUrl: c.opencodeBaseUrl || "https://opencode.ai/zen/go/v1/usage",
 				prices: hydratePrices(loadedPrices, c.currency ?? "CNY"),
-				defaultPrices: c.defaultPrices ?? officialDefaultPrices(c.currency ?? "CNY")
+				defaultPrices: c.defaultPrices ?? officialDefaultPrices(c.currency ?? "CNY"),
+				quotaSources: Array.isArray(c.quotaSources) ? c.quotaSources.map((s) => cloneSettings(s)) : []
 			};
 		}
 
 		const CARD_IDS = ["display", "quota", "thresholds", "pricing"];
 		const CARD_KEYS = {
 			display: ["showDock", "dockLayout", "showCapsule", "showPopover", "showTps"],
-			quota: ["quotaMode", "provider", "currency", "opencodeApiKeyRef", "opencodeApiKey", "opencodeBaseUrl"],
+			quota: ["quotaMode", "provider", "currency", "opencodeApiKeyRef", "opencodeApiKey", "opencodeBaseUrl", "quotaSources"],
 			thresholds: ["warningThreshold", "dangerThreshold", "refreshIntervalMs", "clientPollIntervalMs", "timeoutMs"],
 			pricing: ["prices", "defaultPrices"]
 		};
@@ -1369,6 +1420,18 @@ window.__ModuleLoader__.load({
 			if (!overlay || typeof overlay !== "object") return overlay;
 			const next = cloneSettings(overlay);
 			for (const key of SECRET_FIELDS) delete next[key];
+			if (Array.isArray(next.quotaSources)) {
+				next.quotaSources = next.quotaSources.map((source) => ({
+					...source,
+					request: {
+						...(source.request ?? {}),
+						headers: Object.fromEntries(
+							Object.entries(source.request?.headers ?? {})
+								.map(([k, v]) => [k, /authorization|token|api[-_]?key|secret/i.test(k) ? "***" : v]),
+						),
+					},
+				}));
+			}
 			return next;
 		}
 
@@ -1588,6 +1651,9 @@ window.__ModuleLoader__.load({
 			const [newModelMiss, setNewModelMiss] = react.useState(1.0);
 			const [newModelOut, setNewModelOut] = react.useState(2.0);
 			const [newModelMultiplier, setNewModelMultiplier] = react.useState(1);
+			const [customSourceDraft, setCustomSourceDraft] = react.useState(null);
+			const [editingSourceId, setEditingSourceId] = react.useState(null);
+			const [customSourceError, setCustomSourceError] = react.useState("");
 
 			const baseView = mergeView(baseline, drafts);
 			const view = enabledOverride === null ? baseView : { ...baseView, enabled: enabledOverride };
@@ -1721,10 +1787,15 @@ window.__ModuleLoader__.load({
 						payload.showTps = merged.showTps !== false;
 					} else if (cardId === "quota") {
 						payload.quotaMode = merged.quotaMode === "custom" ? "custom" : "follow";
-						payload.provider = merged.provider === "opencode-go" ? "opencode-go" : "deepseek";
+						payload.provider = String(merged.provider ?? "deepseek").trim();
 						payload.currency = String(merged.currency ?? "CNY").trim().toUpperCase();
 						payload.opencodeApiKeyRef = String(merged.opencodeApiKeyRef ?? "").trim();
 						payload.opencodeBaseUrl = String(merged.opencodeBaseUrl ?? "").trim();
+						if (drafts.quota && Object.prototype.hasOwnProperty.call(drafts.quota, "quotaSources")) {
+							payload.quotaSources = Array.isArray(merged.quotaSources)
+								? merged.quotaSources.map((s) => cloneSettings(s))
+								: [];
+						}
 						if (String(merged.opencodeApiKey ?? "").trim() !== "") payload.opencodeApiKey = String(merged.opencodeApiKey).trim();
 						if (payload.currency !== String(baseline.currency ?? "").toUpperCase() && !isCardDirty("pricing", drafts.pricing, baseline)) {
 							const overlayPrices = { ...(baseline.prices || {}) };
@@ -1788,9 +1859,93 @@ window.__ModuleLoader__.load({
 				}
 			};
 
-			const percentMode = view.provider === "opencode-go";
-			const showOpencode = view.quotaMode === "follow" || view.provider === "opencode-go";
+			const builtinSourceIds = ["deepseek", "opencode-go"];
+			const quotaSourceOptions = Array.isArray(view.quotaSources) && view.quotaSources.length > 0
+				? view.quotaSources
+				: [
+					{ id: "deepseek", name: "DeepSeek 官方余额", kind: "balance" },
+					{ id: "opencode-go", name: "OpenCode Go 订阅用量", kind: "usage" },
+				];
+			const selectedQuotaSource = quotaSourceOptions.find((s) => s.id === view.provider) ?? null;
+			const percentMode = selectedQuotaSource?.kind === "usage" || view.provider === "opencode-go";
+			const showOpencode = view.quotaMode === "follow" || selectedQuotaSource?.kind === "usage";
 			const currency = view.currency ?? "CNY";
+
+			const emptyCustomSourceDraft = () => ({
+				id: "",
+				name: "",
+				kind: "metric",
+				providerIds: "",
+				providerPatterns: "",
+				default: false,
+				enabled: true,
+				request: { method: "GET", url: "", authRef: "", authStyle: "bearer" },
+				response: {
+					metrics: [{ key: "remaining", label: "剩余额度", valuePath: "$.data.remaining", totalPath: "$.data.total", unit: "", resetsAtPath: "" }],
+				},
+				manual: { value: 100, total: 100, label: "手动额度", unit: "%", resetsAt: "" },
+			});
+			const patchCustomDraft = (field, value) => {
+				setCustomSourceDraft((prev) => ({ ...(prev ?? emptyCustomSourceDraft()), [field]: value }));
+			};
+			const patchCustomNested = (section, field, value) => {
+				setCustomSourceDraft((prev) => {
+					const base = prev ?? emptyCustomSourceDraft();
+					return { ...base, [section]: { ...(base[section] ?? {}), [field]: value } };
+				});
+			};
+			const beginAddSource = () => {
+				setEditingSourceId(null);
+				setCustomSourceError("");
+				setCustomSourceDraft(emptyCustomSourceDraft());
+			};
+			const beginEditSource = (source) => {
+				setEditingSourceId(source.id);
+				setCustomSourceError("");
+				setCustomSourceDraft({
+					...source,
+					providerIds: (source.providerIds ?? []).join(", "),
+					providerPatterns: (source.providerPatterns ?? []).join(", "),
+				});
+			};
+			const saveCustomSource = () => {
+				const draft = customSourceDraft;
+				if (!draft || !String(draft.id ?? "").trim()) {
+					setCustomSourceError(t("settings.quotaSourceIdRequired"));
+					return;
+				}
+				const nextSource = {
+					...draft,
+					id: String(draft.id).trim().toLowerCase(),
+					name: String(draft.name ?? draft.id).trim() || draft.id,
+					providerIds: String(draft.providerIds ?? "").split(",").map((s) => s.trim()).filter(Boolean),
+					providerPatterns: String(draft.providerPatterns ?? "").split(",").map((s) => s.trim()).filter(Boolean),
+					request: { ...(draft.request ?? {}), authStyle: draft.request?.authStyle || "bearer" },
+					response: { ...(draft.response ?? {}) },
+					manual: { ...(draft.manual ?? {}) },
+				};
+				const current = Array.isArray(view.quotaSources) ? view.quotaSources : [];
+				const exists = current.some((s) => s.id === nextSource.id);
+				const updated = exists
+					? current.map((s) => s.id === nextSource.id ? nextSource : s)
+					: [...current, nextSource];
+				if (!exists && String(view.provider ?? "") === "") patchCard("quota", { provider: nextSource.id });
+				patchCard("quota", { quotaSources: updated });
+				setCustomSourceDraft(null);
+				setEditingSourceId(null);
+				setCustomSourceError("");
+			};
+			const removeCustomSource = (id) => {
+				const current = Array.isArray(view.quotaSources) ? view.quotaSources : [];
+				const updated = current.filter((s) => s.id !== id);
+				const patch = { quotaSources: updated };
+				if (view.provider === id) patch.provider = updated[0]?.id || "deepseek";
+				patchCard("quota", patch);
+				if (editingSourceId === id) {
+					setCustomSourceDraft(null);
+					setEditingSourceId(null);
+				}
+			};
 
 			const displayCheck = (field, labelKey, hintKey) => react.createElement(FieldRow, {
 				t,
@@ -1900,16 +2055,15 @@ window.__ModuleLoader__.load({
 					}, react.createElement("select", {
 						className: "dshqb_select",
 						value: view.provider,
-						onChange: (e) => patchCard("quota", { provider: e.target.value === "opencode-go" ? "opencode-go" : "deepseek" })
-					}, [
-						react.createElement("option", { value: "deepseek", key: "ds" }, t("settings.provider.deepseek")),
-						react.createElement("option", { value: "opencode-go", key: "oc" }, t("settings.provider.opencode"))
-					])),
+						onChange: (e) => patchCard("quota", { provider: e.target.value })
+					}, quotaSourceOptions.map((source) =>
+						react.createElement("option", { value: source.id, key: source.id }, source.name || source.id)
+					))),
 					react.createElement(FieldRow, {
 						t,
 						key: "currency",
 						label: t("settings.currency"),
-						hint: t(view.provider === "opencode-go" ? "settings.currencyHintQuota" : "settings.currencyHint"),
+						hint: t(selectedQuotaSource?.kind === "usage" ? "settings.currencyHintQuota" : "settings.currencyHint"),
 						overridden: isSchemaOverridden("currency", view.currency, currency),
 						onReset: () => resetField("quota", "currency"),
 						disabled: savingCard === "quota"
@@ -1965,7 +2119,134 @@ window.__ModuleLoader__.load({
 						value: view.opencodeApiKey,
 						onChange: (e) => patchCard("quota", { opencodeApiKey: e.target.value })
 					})) : null
-				])
+				]),
+				(() => {
+					const customSources = quotaSourceOptions.filter((s) => !builtinSourceIds.includes(s.id));
+					const draft = customSourceDraft;
+					const customList = customSources.length > 0
+						? customSources.map((source) => react.createElement("div", { className: "dshqb_custom_source_row", key: source.id }, [
+							react.createElement("span", { className: "dshqb_custom_source_name", key: "name" }, (source.name || source.id) + " · " + (source.kind || "metric")),
+							react.createElement("span", { className: "dshqb_custom_source_meta", key: "meta" }, [
+								(source.providerIds ?? []).join(", ") || "—",
+								source.default ? " · default" : "",
+							]),
+							react.createElement("button", {
+								type: "button",
+								className: "dshqb_btn dshqb_btn_outline dshqb_btn_small",
+								onClick: () => beginEditSource(source),
+								key: "edit"
+							}, t("settings.edit")),
+							react.createElement("button", {
+								type: "button",
+								className: "dshqb_btn dshqb_btn_outline dshqb_btn_small",
+								onClick: () => removeCustomSource(source.id),
+								key: "remove"
+							}, t("settings.remove"))
+						]))
+						: react.createElement("div", { className: "dshqb_form_hint", key: "empty" }, t("settings.noCustomSources"));
+					const input = (key, label, value, onChange, type = "text") => react.createElement(FieldRow, {
+						t,
+						key,
+						label,
+						wide: true,
+						disabled: savingCard === "quota"
+					}, react.createElement("input", {
+						type,
+						className: "dshqb_input",
+						value: value ?? "",
+						onChange: (e) => onChange(e.target.value),
+						key: "input"
+					}));
+					const select = (key, label, value, options, onChange) => react.createElement(FieldRow, {
+						t,
+						key,
+						label,
+						wide: true,
+						disabled: savingCard === "quota"
+					}, react.createElement("select", {
+						className: "dshqb_select",
+						value,
+						onChange: (e) => onChange(e.target.value),
+						key: "select"
+					}, options.map(([v, l]) => react.createElement("option", { value: v, key: v }, l))));
+					const form = draft
+						? react.createElement("div", { className: "dshqb_custom_source_form", key: "form" }, [
+							react.createElement("div", { className: "dshqb_card_sub", key: "title" }, t(editingSourceId ? "settings.editCustomSource" : "settings.addCustomSource")),
+							react.createElement(FieldGrid, { key: "fields" }, [
+								draft.kind === "metric" || draft.kind === "usage" || draft.kind === "balance"
+									? input("src_id", "ID", draft.id, (v) => patchCustomDraft("id", v))
+									: input("src_id", "ID", draft.id, (v) => patchCustomDraft("id", v)),
+								input("src_name", t("settings.name"), draft.name, (v) => patchCustomDraft("name", v)),
+								select("src_kind", t("settings.kind"), draft.kind, [
+									["metric", "Metric"],
+									["manual", "Manual"],
+									["usage", "Usage"],
+									["balance", "Balance"],
+								], (v) => patchCustomDraft("kind", v)),
+								input("src_providers", t("settings.providerIds"), draft.providerIds, (v) => patchCustomDraft("providerIds", v)),
+								input("src_patterns", t("settings.providerPatterns"), draft.providerPatterns, (v) => patchCustomDraft("providerPatterns", v)),
+								react.createElement(FieldRow, {
+									t,
+									key: "src_default",
+									label: t("settings.defaultSource"),
+									disabled: savingCard === "quota"
+								}, react.createElement(SwitchControl, {
+									checked: draft.default === true,
+									disabled: savingCard === "quota",
+									onChange: () => patchCustomDraft("default", draft.default !== true),
+									label: t("settings.defaultSource"),
+									key: "sw"
+								})),
+								...(draft.kind === "metric" ? [
+									input("src_url", t("settings.quotaUrl"), draft.request?.url, (v) => patchCustomNested("request", "url", v)),
+									input("src_auth", t("settings.quotaAuthRef"), draft.request?.authRef, (v) => patchCustomNested("request", "authRef", v)),
+									input("src_metric_name", t("settings.metricLabel"), draft.response?.metrics?.[0]?.label, (v) => patchCustomNested("response", "metrics", [{ ...(draft.response?.metrics?.[0] ?? {}), label: v }])),
+									input("src_metric_value", t("settings.metricValuePath"), draft.response?.metrics?.[0]?.valuePath, (v) => patchCustomNested("response", "metrics", [{ ...(draft.response?.metrics?.[0] ?? {}), valuePath: v }])),
+									input("src_metric_total", t("settings.metricTotalPath"), draft.response?.metrics?.[0]?.totalPath, (v) => patchCustomNested("response", "metrics", [{ ...(draft.response?.metrics?.[0] ?? {}), totalPath: v }])),
+									input("src_metric_unit", t("settings.metricUnit"), draft.response?.metrics?.[0]?.unit, (v) => patchCustomNested("response", "metrics", [{ ...(draft.response?.metrics?.[0] ?? {}), unit: v }])),
+									input("src_metric_reset", t("settings.metricResetPath"), draft.response?.metrics?.[0]?.resetsAtPath, (v) => patchCustomNested("response", "metrics", [{ ...(draft.response?.metrics?.[0] ?? {}), resetsAtPath: v }])),
+								] : []),
+								...(draft.kind === "manual" ? [
+									input("src_manual_value", t("settings.metricValue"), draft.manual?.value ?? "", (v) => patchCustomNested("manual", "value", Number(v) || 0), "number"),
+									input("src_manual_total", t("settings.metricTotal"), draft.manual?.total ?? "", (v) => patchCustomNested("manual", "total", Number(v) || 0), "number"),
+									input("src_manual_label", t("settings.metricLabel"), draft.manual?.label, (v) => patchCustomNested("manual", "label", v)),
+									input("src_manual_unit", t("settings.metricUnit"), draft.manual?.unit, (v) => patchCustomNested("manual", "unit", v)),
+									input("src_manual_reset", t("settings.metricResetTime"), draft.manual?.resetsAt, (v) => patchCustomNested("manual", "resetsAt", v)),
+								] : [])
+							]),
+							customSourceError ? react.createElement("p", { className: "dshqb_pcard_failed", role: "status", key: "err" }, customSourceError) : null,
+							react.createElement("div", { className: "dshqb_pcard_footer", key: "ftr" }, [
+								react.createElement("button", {
+									type: "button",
+									className: "dshqb_btn dshqb_btn_outline",
+									onClick: () => { setCustomSourceDraft(null); setEditingSourceId(null); setCustomSourceError(""); },
+									key: "cancel"
+								}, t("settings.btnCancel")),
+								react.createElement("button", {
+									type: "button",
+									className: "dshqb_btn dshqb_btn_primary",
+									onClick: saveCustomSource,
+									disabled: savingCard === "quota",
+									key: "save"
+								}, t("settings.btnSave"))
+							])
+						])
+						: null;
+					return react.createElement("div", { className: "dshqb_custom_sources", key: "custom" }, [
+						react.createElement("div", { className: "dshqb_card_sub", key: "head" }, [
+							t("settings.customSources"),
+							react.createElement("button", {
+								type: "button",
+								className: "dshqb_btn dshqb_btn_outline dshqb_btn_small",
+								onClick: beginAddSource,
+								disabled: savingCard === "quota",
+								key: "add"
+							}, t("settings.addCustomSource"))
+						]),
+						customList,
+						form
+					]);
+				})()
 			]);
 
 			const threshCard = react.createElement(PluginCard, {

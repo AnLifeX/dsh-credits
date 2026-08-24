@@ -1308,7 +1308,19 @@ export function apply(ctx, config) {
               if (typeof body.opencodeApiKey === 'string') runtimeConfig.opencodeApiKey = body.opencodeApiKey.trim()
               if (typeof body.opencodeApiKeyRef === 'string' && body.opencodeApiKeyRef.trim()) runtimeConfig.opencodeApiKeyRef = body.opencodeApiKeyRef.trim()
               if (typeof body.opencodeBaseUrl === 'string' && body.opencodeBaseUrl.trim()) runtimeConfig.opencodeBaseUrl = body.opencodeBaseUrl.trim()
-              if (Array.isArray(body.quotaSources)) runtimeConfig.quotaSources = body.quotaSources.map((s) => ({ ...s }))
+              if (Array.isArray(body.quotaSources)) {
+                const prevSources = runtimeConfig.quotaSources ?? []
+                runtimeConfig.quotaSources = body.quotaSources.map((s) => {
+                  const prev = prevSources.find((p) => p.id === s.id)
+                  if (!prev) return { ...s }
+                  const nextHeaders = { ...(prev.request?.headers ?? {}) }
+                  for (const [k, v] of Object.entries(s.request?.headers ?? {})) {
+                    if (v === '***' && prev.request?.headers?.[k] !== undefined) nextHeaders[k] = prev.request.headers[k]
+                    else nextHeaders[k] = v
+                  }
+                  return { ...s, request: { ...(s.request ?? {}), headers: nextHeaders } }
+                })
+              }
               if (typeof body.warningThreshold === 'number' && body.warningThreshold >= 0) runtimeConfig.warningThreshold = body.warningThreshold
               if (typeof body.dangerThreshold === 'number' && body.dangerThreshold >= 0) runtimeConfig.dangerThreshold = body.dangerThreshold
               if (typeof body.refreshIntervalMs === 'number' && body.refreshIntervalMs >= 1000) runtimeConfig.refreshIntervalMs = body.refreshIntervalMs
