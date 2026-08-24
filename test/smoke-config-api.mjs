@@ -78,6 +78,16 @@ globalThis.fetch = async (url) => {
       }),
     }
   }
+  if (target.includes('custom.example.com')) {
+    return {
+      ok: true,
+      status: 200,
+      json: async () => ({
+        is_available: true,
+        data: { remaining: 25, total: 100, resetsAt: '2026-08-17T00:00:00.000Z' },
+      }),
+    }
+  }
   return {
     ok: true,
     status: 200,
@@ -217,6 +227,94 @@ assert.equal(resGetConfig.data.config.showTps, true)
   assert.ok(Array.isArray(resDeepseekView.data.balances))
   assert.equal(resDeepseekView.data.views['opencode-go'].usage.rolling.percent, 9)
   console.log('GET /query-credits?source=deepseek passed')
+
+  // 2.6 自定义 HTTP / JSONPath 额度源
+  process.env.CUSTOM_QUOTA_KEY = 'sk-custom-mock'
+  const resCustomPost = await invokeRoute('/query-credits/config', 'POST', {
+    provider: 'custom-metric',
+    quotaMode: 'custom',
+    quotaSources: [{
+      id: 'custom-metric',
+      name: 'Custom Metric',
+      kind: 'metric',
+      providerIds: ['my-provider'],
+      default: false,
+      enabled: true,
+      request: {
+        url: 'https://custom.example.com/quota',
+        authRef: 'CUSTOM_QUOTA_KEY',
+        authStyle: 'bearer',
+        headers: { 'X-Api-Key': 'secret-header-value' },
+      },
+      response: {
+        metrics: [{
+          key: 'remaining',
+          label: '剩余额度',
+          valuePath: '$.data.remaining',
+          totalPath: '$.data.total',
+          unit: 'USD',
+          resetsAtPath: '$.data.resetsAt',
+        }],
+      },
+    }],
+  })
+  assert.equal(resCustomPost.data.ok, true)
+  assert.equal(resCustomPost.data.config.provider, 'custom-metric')
+  assert.equal(resCustomPost.data.config.quotaSources[0].request.headers['X-Api-Key'], '***', 'custom header secrets must be masked')
+  console.log('POST /query-credits/config (custom-metric) passed')
+
+  const resCustom = await invokeRoute('/query-credits', 'GET', null, 'source=custom-metric')
+  assert.equal(resCustom.data.provider, 'custom-metric')
+  assert.equal(resCustom.data.kind, 'metric')
+  assert.equal(resCustom.data.metrics[0].value, 25)
+  assert.equal(resCustom.data.metrics[0].total, 100)
+  assert.equal(resCustom.data.metrics[0].unit, 'USD')
+  assert.equal(resCustom.data.views['custom-metric'].ok, true)
+  console.log('GET /query-credits?source=custom-metric passed')
+
+  const resCustomDefault = await invokeRoute('/query-credits', 'GET')
+  assert.equal(resCustomDefault.data.provider, 'custom-metric', 'custom mode should fix provider')
+  assert.equal(resCustomDefault.data.defaultProvider, 'custom-metric')
+  console.log('GET /query-credits (custom default) passed')
+
+  const resCustomConn = await invokeRoute('/query-credits/test-connection', 'POST', { provider: 'custom-metric' })
+  assert.equal(resCustomConn.status, 200)
+  assert.equal(resCustomConn.data.ok, true)
+  assert.equal(resCustomConn.data.metrics[0].value, 25)
+  console.log('POST /query-credits/test-connection (custom-metric) passed')
+
+  // 2.7 手动/静态额度源
+  const resManual = await invokeRoute('/query-credits/config', 'POST', {
+    provider: 'manual-source',
+    quotaMode: 'custom',
+    quotaSources: [{
+      id: 'manual-source',
+      name: 'Manual Quota',
+      kind: 'manual',
+      providerIds: ['manual-provider'],
+      default: false,
+      enabled: true,
+      manual: { value: 33, total: 100, label: '手动额度', unit: '%', resetsAt: '2026-09-01T00:00:00.000Z' },
+    }],
+  })
+  assert.equal(resManual.data.ok, true)
+  assert.equal(resManual.data.config.provider, 'manual-source')
+  const resManualQuota = await invokeRoute('/query-credits', 'GET', null, 'source=manual-source')
+  assert.equal(resManualQuota.data.provider, 'manual-source')
+  assert.equal(resManualQuota.data.kind, 'manual')
+  assert.equal(resManualQuota.data.metrics[0].value, 33)
+  assert.equal(resManualQuota.data.metrics[0].total, 100)
+  console.log('manual quota source passed')
+
+  // 回到内置源 + follow，保证后续 disable 测试与旧行为一致
+  const resResetConfig = await invokeRoute('/query-credits/config', 'POST', {
+    provider: 'deepseek',
+    quotaMode: 'follow',
+    quotaSources: [],
+  })
+  assert.equal(resResetConfig.data.ok, true)
+  assert.equal(resResetConfig.data.config.provider, 'deepseek')
+  assert.equal(resResetConfig.data.config.quotaMode, 'follow')
 
   assert.equal(quotaSourceFromProvider('opencode-go'), 'opencode-go')
   assert.equal(quotaSourceFromProvider('OPENCODE-GO'), 'opencode-go')
