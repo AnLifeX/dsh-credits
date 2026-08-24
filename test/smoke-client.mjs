@@ -162,6 +162,11 @@ if (!code.includes('dshqb_toast_error')) throw new Error('error toast styling mi
 if (!code.includes('preserveTestFields')) throw new Error('response field choices should survive mapping edits')
 if (!code.includes('settings.metricMappingHint')) throw new Error('metric mapping guidance missing')
 if (!code.includes('settings.metricScaleHint')) throw new Error('metric conversion formula hint missing')
+if (!code.includes('settings.metricCalculation.direct')) throw new Error('direct metric calculation option missing')
+if (!code.includes('settings.metricCalculation.subtract')) throw new Error('subtractive metric calculation option missing')
+if (!code.includes('calculation === "direct" ? fieldInput("valuePath"')) throw new Error('direct metric fields are not conditional')
+if (!code.includes('calculation === "subtract" ? fieldInput("usedPath"')) throw new Error('subtractive metric fields are not conditional')
+if (!code.includes('settings.metricBaselinePath')) throw new Error('generic percentage baseline wording missing')
 if (!code.includes('Multiple-value handling (arrays only)')) throw new Error('array-only transform wording missing')
 
 const capturedRegister = []

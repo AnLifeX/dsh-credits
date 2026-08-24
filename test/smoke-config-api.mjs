@@ -356,6 +356,7 @@ assert.equal(resGetConfig.data.config.showPopover, true)
           metrics: [{
             key: 'remaining',
             label: '剩余额度',
+            calculation: 'direct',
             valuePath: '$.data.remaining',
             totalPath: '$.data.total',
             unit: 'USD',
@@ -380,6 +381,7 @@ assert.equal(resGetConfig.data.config.showPopover, true)
   assert.match(savedCustomBinding.source.request.authRef, /^DSH_CREDITS_PROVIDER_UNSUPPORTED_ROUTE_[0-9A-F]{8}$/)
   assert.equal(credentialSecrets.get(savedCustomBinding.source.request.authRef), '__SF_auth.session-token=session-secret')
   assert.equal(savedCustomBinding.source.request.headers['x-subject-id'], 'subject-123')
+  assert.equal(savedCustomBinding.source.response.metrics[0].calculation, 'direct')
   assert.equal(customRequests.at(-1).options.headers.Cookie, '__SF_auth.session-token=session-secret')
   assert.equal(customRequests.at(-1).options.headers['x-subject-id'], 'subject-123')
   console.log('POST /query-credits/config (custom-metric) passed')
@@ -527,6 +529,16 @@ assert.equal(resGetConfig.data.config.showPopover, true)
   })
   assert.equal(metrics[0].value, 65)
   assert.equal(metrics[0].used, 35)
+  const directMetric = normalizeCustomMetrics({ balance: 4.609838, used: 20.390162, total: 25 }, {
+    metrics: [{ key: 'balance', calculation: 'direct', valuePath: '$.balance', usedPath: '$.used', totalPath: '$.total' }],
+  })
+  assert.equal(directMetric[0].value, 4.609838)
+  assert.equal(directMetric[0].used, 0, 'direct mode must ignore a stale used field')
+  assert.equal(directMetric[0].total, 25, 'direct mode may use total as its percentage baseline')
+  const subtractMetric = normalizeCustomMetrics({ balance: 999, used: 35, total: 100 }, {
+    metrics: [{ key: 'quota', calculation: 'subtract', valuePath: '$.balance', usedPath: '$.used', totalPath: '$.total' }],
+  })
+  assert.equal(subtractMetric[0].value, 65, 'explicit subtract mode must win over stale direct fields')
   assert.deepEqual(normalizeCustomMetrics({ balance: 123 }, {
     metrics: [{ key: 'unconfigured', valuePath: '', scale: 1 }],
   }), [], 'an unselected metric field must not be reported as zero')
@@ -538,7 +550,7 @@ assert.equal(resGetConfig.data.config.showPopover, true)
   })
   assert.equal(zeroMetric[0].value, 0, 'a real numeric zero must remain visible')
   const overdrawnMetrics = normalizeCustomMetrics({ used: 120, total: 100 }, {
-    metrics: [{ key: 'quota', usedPath: '$.used', totalPath: '$.total', scale: 1 }],
+    metrics: [{ key: 'quota', calculation: 'subtract', usedPath: '$.used', totalPath: '$.total', scale: 1 }],
   })
   assert.equal(overdrawnMetrics[0].value, -20)
   const transformedMetrics = normalizeCustomMetrics({ items: [{ amount: '2.5' }, { amount: 4.0608 }] }, {

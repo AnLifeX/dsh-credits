@@ -95,7 +95,7 @@ export const QUOTA_SOURCE_TEMPLATES = [
     source: {
       id: 'stepfun', name: 'StepFun 余额', kind: 'metric', providerIds: ['stepfun'],
       request: { url: 'https://api.stepfun.com/v1/accounts', authRef: 'STEPFUN_API_KEY', authStyle: 'bearer' },
-      response: { metrics: [{ key: 'balance', label: '账户余额', valuePath: '$.balance', unit: 'CNY' }] },
+      response: { metrics: [{ key: 'balance', label: '账户余额', calculation: 'direct', valuePath: '$.balance', unit: 'CNY' }] },
     },
   },
   {
@@ -106,7 +106,7 @@ export const QUOTA_SOURCE_TEMPLATES = [
     source: {
       id: 'openrouter', name: 'OpenRouter 余额', kind: 'metric', providerIds: ['openrouter'],
       request: { url: 'https://openrouter.ai/api/v1/credits', authRef: 'OPENROUTER_API_KEY', authStyle: 'bearer' },
-      response: { metrics: [{ key: 'credits', label: '可用余额', usedPath: '$.data.total_usage', totalPath: '$.data.total_credits', unit: 'USD' }] },
+      response: { metrics: [{ key: 'credits', label: '可用余额', calculation: 'subtract', usedPath: '$.data.total_usage', totalPath: '$.data.total_credits', unit: 'USD' }] },
     },
   },
   {
@@ -117,7 +117,7 @@ export const QUOTA_SOURCE_TEMPLATES = [
     source: {
       id: 'novita', name: 'Novita AI 余额', kind: 'metric', providerIds: ['novita', 'novita-ai'],
       request: { url: 'https://api.novita.ai/v3/user/balance', authRef: 'NOVITA_API_KEY', authStyle: 'bearer' },
-      response: { metrics: [{ key: 'balance', label: '可用余额', valuePath: '$.availableBalance', scale: 0.0001, unit: 'USD' }] },
+      response: { metrics: [{ key: 'balance', label: '可用余额', calculation: 'direct', valuePath: '$.availableBalance', scale: 0.0001, unit: 'USD' }] },
     },
   },
   {
@@ -499,6 +499,8 @@ const QuotaRequest = Schema.object({
 const QuotaMetric = Schema.object({
   key: Schema.string(),
   label: Schema.string().default(''),
+  /** 空值仅用于兼容旧配置；运行时会根据已填写字段推断。 */
+  calculation: Schema.union(['', 'direct', 'subtract']).default(''),
   valuePath: Schema.string().default(''),
   usedPath: Schema.string().default(''),
   totalPath: Schema.string().default(''),
@@ -939,16 +941,20 @@ export const normalizeCustomMetrics = (data, response = {}) => {
       if (aggregate === 'max') return Math.max(...numbers)
       return numbers[0]
     }
+    const calculation = metric.calculation === 'subtract'
+      ? 'subtract'
+      : metric.calculation === 'direct'
+        ? 'direct'
+        : (!metric.valuePath && metric.usedPath && metric.totalPath ? 'subtract' : 'direct')
     const rawTotal = metric.totalPath ? readAmount(metric.totalPath) : null
-    const rawUsed = metric.usedPath ? readAmount(metric.usedPath) : null
-    const rawValue = metric.valuePath ? readAmount(metric.valuePath) : null
-    const computesFromUsed = !metric.valuePath && metric.usedPath && metric.totalPath
-    if ((metric.valuePath && rawValue === null) || (computesFromUsed && (rawUsed === null || rawTotal === null)) || (!metric.valuePath && !computesFromUsed)) {
+    const rawUsed = calculation === 'subtract' && metric.usedPath ? readAmount(metric.usedPath) : null
+    const rawValue = calculation === 'direct' && metric.valuePath ? readAmount(metric.valuePath) : null
+    if ((calculation === 'direct' && rawValue === null) || (calculation === 'subtract' && (rawUsed === null || rawTotal === null))) {
       return []
     }
     const total = rawTotal === null ? 0 : rawTotal * scale
     const used = rawUsed === null ? 0 : rawUsed * scale
-    const value = metric.valuePath ? rawValue * scale + offset : total - used + offset
+    const value = calculation === 'direct' ? rawValue * scale + offset : total - used + offset
     return [{
       key: metric.key,
       label: metric.label || metric.key || '额度',

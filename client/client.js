@@ -1027,17 +1027,23 @@ window.__ModuleLoader__.load({
 			"settings.auth.form": "Form 请求体参数",
 			"settings.auth.none": "无需鉴权",
 			"settings.metricLabel": "指标名称",
-			"settings.metricValuePath": "剩余额度字段",
-			"settings.metricValuePathHint": "接口直接返回剩余额度时选择此字段；如果只返回“已用额度 + 总额度”，这里留空。",
-			"settings.metricUsedPath": "已用额度字段（可选）",
-			"settings.metricUsedPathHint": "仅在需要用“总额度 − 已用额度”计算剩余时选择。",
-			"settings.metricTotalPath": "总额度字段（可选）",
-			"settings.metricTotalPathHint": "可用于展示总额度；与已用额度字段同时填写时，也可计算剩余额度。",
+			"settings.metricCalculation": "计算方式",
+			"settings.metricCalculationHint": "选择如何从接口响应中得到这个指标的最终值。",
+			"settings.metricCalculation.direct": "直接读取指标值",
+			"settings.metricCalculation.subtract": "总量减已用量",
+			"settings.metricValuePath": "指标值字段",
+			"settings.metricValuePathHint": "选择要展示的原始数值字段，例如余额、剩余次数、已用量或任意统计值。",
+			"settings.metricUsedPath": "已用量字段",
+			"settings.metricUsedPathHint": "最终指标值将按“总量减已用量”计算。",
+			"settings.metricTotalPath": "总量字段",
+			"settings.metricTotalPathHint": "与已用量字段一起计算最终指标值。",
+			"settings.metricBaselinePath": "百分比基准字段（可选）",
+			"settings.metricBaselinePathHint": "用于计算该指标占总量的百分比并显示进度条；不需要百分比时留空。",
 			"settings.metricUnit": "单位",
 			"settings.metricUnitHint": "只影响展示，例如 CNY、USD、次或 Token。",
 			"settings.metricResetPath": "重置时间字段（可选）",
-			"settings.metricResetPathHint": "订阅套餐有重置时间时选择；普通余额通常留空。",
-			"settings.metricMappingHint": "先测试接口，再为每个指标选择返回字段。可以直接读取“剩余额度”，也可以通过“总额度 − 已用额度”计算。未选择有效字段时不会再显示为 0。",
+			"settings.metricResetPathHint": "指标有重置周期时选择；余额等长期有效的指标通常留空。",
+			"settings.metricMappingHint": "每项代表一个要展示的指标。先选择计算方式，再映射当前方式所需的字段；无效或缺失的字段不会显示为 0。",
 			"settings.metricAggregate": "多值处理（仅数组字段）",
 			"settings.metricAggregateHint": "普通数字保持“直接取值”即可；只有所选字段返回数组时，才需要求和、计数、最小值或最大值。",
 			"settings.metricAggregate.value": "直接取值（数组时取第一项）",
@@ -1046,7 +1052,9 @@ window.__ModuleLoader__.load({
 			"settings.metricAggregate.min": "最小值",
 			"settings.metricAggregate.max": "最大值",
 			"settings.metricScale": "换算乘数",
-			"settings.metricScaleHint": "最终值 = 原始值 × 换算乘数 + 加减偏移。例如 4609838000000 换算为 4.609838，可填写 0.000000000001（10⁻¹²）。",
+			"settings.metricScaleHint": "读取到的数值会先乘以此数；例如 4609838000000 换算为 4.609838，可填写 0.000000000001（10⁻¹²）。",
+			"settings.metricFormula.direct": "计算结果 = 指标值 × 换算乘数 + 加减偏移。",
+			"settings.metricFormula.subtract": "计算结果 =（总量减已用量）× 换算乘数 + 加减偏移。",
 			"settings.metricOffset": "加减偏移",
 			"settings.metricOffsetHint": "在乘数换算后再加上的数值；通常保持 0。",
 			"settings.addMetric": "添加展示指标",
@@ -1333,17 +1341,23 @@ window.__ModuleLoader__.load({
 			"settings.auth.form": "Form body parameter",
 			"settings.auth.none": "No authentication",
 			"settings.metricLabel": "Metric label",
-			"settings.metricValuePath": "Remaining field",
-			"settings.metricValuePathHint": "Select this when the API directly returns the remaining quota; leave it empty when only used and total values are available.",
-			"settings.metricUsedPath": "Used field (optional)",
-			"settings.metricUsedPathHint": "Only select this when remaining quota should be calculated as total minus used.",
-			"settings.metricTotalPath": "Total field (optional)",
-			"settings.metricTotalPathHint": "Displays the total quota and, together with the used field, can calculate the remaining quota.",
+			"settings.metricCalculation": "Calculation",
+			"settings.metricCalculationHint": "Choose how the final metric value is obtained from the API response.",
+			"settings.metricCalculation.direct": "Read metric value directly",
+			"settings.metricCalculation.subtract": "Total minus used",
+			"settings.metricValuePath": "Metric value field",
+			"settings.metricValuePathHint": "Select the raw value to display, such as a balance, remaining requests, usage, or any other measurement.",
+			"settings.metricUsedPath": "Used value field",
+			"settings.metricUsedPathHint": "The final metric value is calculated as total minus used.",
+			"settings.metricTotalPath": "Total value field",
+			"settings.metricTotalPathHint": "Used together with the used value field to calculate the final metric value.",
+			"settings.metricBaselinePath": "Percentage baseline field (optional)",
+			"settings.metricBaselinePathHint": "Calculates the metric's percentage of its total and shows a progress bar. Leave empty when no percentage is needed.",
 			"settings.metricUnit": "Unit",
 			"settings.metricUnitHint": "Display only, for example CNY, USD, requests, or tokens.",
 			"settings.metricResetPath": "Reset-time field (optional)",
-			"settings.metricResetPathHint": "Select this for plans with a reset time; ordinary balances usually leave it empty.",
-			"settings.metricMappingHint": "Test the endpoint first, then select response fields for each metric. Read a remaining value directly or calculate total minus used. An unconfigured field is no longer reported as zero.",
+			"settings.metricResetPathHint": "Select this for a metric with a reset cycle. Long-lived values such as balances usually leave it empty.",
+			"settings.metricMappingHint": "Each item is one displayed metric. Choose its calculation first, then map only the fields required by that method. Invalid or missing fields are not reported as zero.",
 			"settings.metricAggregate": "Multiple-value handling (arrays only)",
 			"settings.metricAggregateHint": "Keep Direct value for an ordinary number. Sum, count, minimum, and maximum only apply when the selected field returns an array.",
 			"settings.metricAggregate.value": "Direct value (first item for arrays)",
@@ -1352,7 +1366,9 @@ window.__ModuleLoader__.load({
 			"settings.metricAggregate.min": "Minimum",
 			"settings.metricAggregate.max": "Maximum",
 			"settings.metricScale": "Conversion multiplier",
-			"settings.metricScaleHint": "Final value = raw value × multiplier + offset. For example, convert 4609838000000 to 4.609838 with 0.000000000001 (10⁻¹²).",
+			"settings.metricScaleHint": "The values read from the response are multiplied by this number. For example, convert 4609838000000 to 4.609838 with 0.000000000001 (10⁻¹²).",
+			"settings.metricFormula.direct": "Result = metric value × multiplier + offset.",
+			"settings.metricFormula.subtract": "Result = (total minus used) × multiplier + offset.",
 			"settings.metricOffset": "Offset",
 			"settings.metricOffsetHint": "Added after applying the multiplier; normally leave this at 0.",
 			"settings.addMetric": "Add display metric",
@@ -2222,7 +2238,7 @@ window.__ModuleLoader__.load({
 				enabled: true,
 				request: { method: "GET", url: "", dshProvider: "", credentialMode: "direct", authRef: "", authValue: "", credentialConfigured: false, authStyle: "bearer", authHeader: "Authorization", authParam: "api_key", headers: {}, bodyType: "none", body: "" },
 				response: {
-					metrics: [{ key: "remaining", label: "剩余额度", valuePath: "", usedPath: "", totalPath: "", unit: "", resetsAtPath: "", aggregate: "value", scale: 1, offset: 0 }],
+					metrics: [{ key: "remaining", label: "剩余额度", calculation: "direct", valuePath: "", usedPath: "", totalPath: "", unit: "", resetsAtPath: "", aggregate: "value", scale: 1, offset: 0 }],
 				},
 			});
 			const defaultProviderBinding = (provider) => ({
@@ -2314,7 +2330,7 @@ window.__ModuleLoader__.load({
 				enabled: true,
 				request: { method: "GET", url: "", dshProvider: "", credentialMode: "direct", authRef: "", authValue: "", credentialConfigured: false, authStyle: "bearer", authHeader: "Authorization", authParam: "api_key", headers: {}, bodyType: "none", body: "" },
 				response: {
-					metrics: [{ key: "remaining", label: "剩余额度", valuePath: "", usedPath: "", totalPath: "", unit: "", resetsAtPath: "", aggregate: "value", scale: 1, offset: 0 }],
+					metrics: [{ key: "remaining", label: "剩余额度", calculation: "direct", valuePath: "", usedPath: "", totalPath: "", unit: "", resetsAtPath: "", aggregate: "value", scale: 1, offset: 0 }],
 				},
 			});
 			const sourceToDraft = (source) => ({
@@ -2584,7 +2600,7 @@ window.__ModuleLoader__.load({
 						const source = binding.source ?? emptyProviderCustomSource(provider);
 						const metrics = Array.isArray(source.response?.metrics) && source.response.metrics.length
 							? source.response.metrics
-							: [{ key: "remaining", label: "剩余额度", valuePath: "", usedPath: "", totalPath: "", unit: "", resetsAtPath: "", aggregate: "value", scale: 1, offset: 0 }];
+							: [{ key: "remaining", label: "剩余额度", calculation: "direct", valuePath: "", usedPath: "", totalPath: "", unit: "", resetsAtPath: "", aggregate: "value", scale: 1, offset: 0 }];
 						const testState = sourceTest.providerId === provider.id ? sourceTest : { state: "idle", fields: [], message: "" };
 						const otherProviders = visibleDshProviders.filter((item) => item.id !== provider.id);
 						const sourceTypes = [
@@ -2608,6 +2624,18 @@ window.__ModuleLoader__.load({
 						}, preserveTestFields);
 						const patchMetric = (index, field, value) => patchSource("response", {
 							metrics: metrics.map((metric, metricIndex) => metricIndex === index ? { ...metric, [field]: value } : metric)
+						}, true);
+						const calculationOf = (metric) => metric.calculation === "subtract"
+							? "subtract"
+							: metric.calculation === "direct"
+								? "direct"
+								: (!metric.valuePath && metric.usedPath && metric.totalPath ? "subtract" : "direct");
+						const patchMetricCalculation = (index, calculation) => patchSource("response", {
+							metrics: metrics.map((metric, metricIndex) => metricIndex !== index
+								? metric
+								: calculation === "subtract"
+									? { ...metric, calculation, valuePath: "" }
+									: { ...metric, calculation: "direct", usedPath: "" })
 						}, true);
 						const patchHeaders = (headers) => patchSource("request", { headers });
 						const requestDshProvider = source.request?.dshProvider;
@@ -2784,6 +2812,7 @@ window.__ModuleLoader__.load({
 									react.createElement("span", { className: "dshqb_template_group_title", key: "title" }, t("settings.providerQuota.mapping")),
 									react.createElement("div", { className: "dshqb_form_hint", key: "hint" }, t("settings.metricMappingHint")),
 									react.createElement("div", { className: "dshqb_metric_list", key: "metric_list" }, metrics.map((metric, metricIndex) => {
+										const calculation = calculationOf(metric);
 										const listId = "dshqb-fields-" + provider.id.replace(/[^a-z0-9_-]/gi, "-") + "-" + metricIndex;
 										const fieldInput = (field, label, hint) => {
 											const fieldListId = listId + "-" + field;
@@ -2800,17 +2829,22 @@ window.__ModuleLoader__.load({
 											react.createElement(FieldGrid, { key: "grid" }, [
 												react.createElement(FieldRow, { t, key: "label", label: t("settings.metricLabel"), disabled: savingCard === "quota" }, react.createElement("input", { className: "dshqb_input", value: metric.label || "", onChange: (e) => patchMetric(metricIndex, "label", e.target.value) })),
 												react.createElement(FieldRow, { t, key: "unit", label: t("settings.metricUnit"), hint: t("settings.metricUnitHint"), disabled: savingCard === "quota" }, react.createElement("input", { className: "dshqb_input", value: metric.unit || "", placeholder: "CNY / USD / 次", onChange: (e) => patchMetric(metricIndex, "unit", e.target.value) })),
-												fieldInput("valuePath", "settings.metricValuePath", "settings.metricValuePathHint"),
-												fieldInput("usedPath", "settings.metricUsedPath", "settings.metricUsedPathHint"),
-												fieldInput("totalPath", "settings.metricTotalPath", "settings.metricTotalPathHint"),
+												react.createElement(FieldRow, { t, key: "calculation", label: t("settings.metricCalculation"), hint: t("settings.metricCalculationHint"), disabled: savingCard === "quota" }, react.createElement("select", { className: "dshqb_select", value: calculation, onChange: (e) => patchMetricCalculation(metricIndex, e.target.value) }, [
+													react.createElement("option", { value: "direct", key: "direct" }, t("settings.metricCalculation.direct")),
+													react.createElement("option", { value: "subtract", key: "subtract" }, t("settings.metricCalculation.subtract")),
+												])),
+												calculation === "direct" ? fieldInput("valuePath", "settings.metricValuePath", "settings.metricValuePathHint") : null,
+												calculation === "subtract" ? fieldInput("totalPath", "settings.metricTotalPath", "settings.metricTotalPathHint") : null,
+												calculation === "subtract" ? fieldInput("usedPath", "settings.metricUsedPath", "settings.metricUsedPathHint") : null,
+												calculation === "direct" ? fieldInput("totalPath", "settings.metricBaselinePath", "settings.metricBaselinePathHint") : null,
 												fieldInput("resetsAtPath", "settings.metricResetPath", "settings.metricResetPathHint"),
 												react.createElement(FieldRow, { t, key: "aggregate", label: t("settings.metricAggregate"), hint: t("settings.metricAggregateHint"), disabled: savingCard === "quota" }, react.createElement("select", { className: "dshqb_select", value: metric.aggregate || "value", onChange: (e) => patchMetric(metricIndex, "aggregate", e.target.value) }, ["value", "sum", "count", "min", "max"].map((value) => react.createElement("option", { value, key: value }, t("settings.metricAggregate." + value))))),
-												react.createElement(FieldRow, { t, key: "scale", label: t("settings.metricScale"), hint: t("settings.metricScaleHint"), disabled: savingCard === "quota" }, react.createElement("input", { className: "dshqb_input", type: "number", step: "any", value: metric.scale ?? 1, onChange: (e) => patchMetric(metricIndex, "scale", Number(e.target.value)) })),
+												react.createElement(FieldRow, { t, key: "scale", label: t("settings.metricScale"), hint: t("settings.metricScaleHint") + " " + t("settings.metricFormula." + calculation), disabled: savingCard === "quota" }, react.createElement("input", { className: "dshqb_input", type: "number", step: "any", value: metric.scale ?? 1, onChange: (e) => patchMetric(metricIndex, "scale", Number(e.target.value)) })),
 												react.createElement(FieldRow, { t, key: "offset", label: t("settings.metricOffset"), hint: t("settings.metricOffsetHint"), disabled: savingCard === "quota" }, react.createElement("input", { className: "dshqb_input", type: "number", step: "any", value: metric.offset ?? 0, onChange: (e) => patchMetric(metricIndex, "offset", Number(e.target.value)) })),
 											])
 										]);
 									})),
-									react.createElement("div", { className: "dshqb_source_actions", key: "add_metric" }, react.createElement("button", { type: "button", className: "dshqb_btn dshqb_btn_outline", onClick: () => patchSource("response", { metrics: [...metrics, { key: nextMetricKey, label: "额度 " + nextMetricIndex, valuePath: "", usedPath: "", totalPath: "", resetsAtPath: "", unit: "", aggregate: "value", scale: 1, offset: 0 }] }, true) }, t("settings.addMetric")))
+									react.createElement("div", { className: "dshqb_source_actions", key: "add_metric" }, react.createElement("button", { type: "button", className: "dshqb_btn dshqb_btn_outline", onClick: () => patchSource("response", { metrics: [...metrics, { key: nextMetricKey, label: "指标 " + nextMetricIndex, calculation: "direct", valuePath: "", usedPath: "", totalPath: "", resetsAtPath: "", unit: "", aggregate: "value", scale: 1, offset: 0 }] }, true) }, t("settings.addMetric")))
 								])
 							]) : react.createElement("div", { className: "dshqb_provider_template_test", key: "template_test" }, [
 								selectedTemplate?.autoEnable === false && selectedTemplate.description
