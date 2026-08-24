@@ -52,20 +52,35 @@ OpenCode Go 模式下，卡片改成三个窗口的用量百分比与重置时�
 
 ## 数据源
 
+内置额度源：
+
 | provider | 说明 | 上游接口 | 密钥 |
 | :--- | :--- | :--- | :--- |
 | `deepseek` | DeepSeek 官方余额 | `GET /user/balance` | `DEEPSEEK_API_KEY` |
 | `opencode-go` | OpenCode Go 订阅用量 | `GET https://opencode.ai/zen/go/v1/usage` | `OPENCODE_GO_API_KEY` 或 OpenCode `auth.json` |
 
-服务端会**同时缓存**官方余额和 Go 用量；切模型时底部直接换展示，不必再等一轮查询。
+自定义额度源支持 `quotaSources` 配置，有三种数据形态：
+
+- `balance`：DeepSeek 风格多币种余额
+- `usage`：OpenCode Go 风格多窗口用量
+- `metric`：任意单指标/多指标剩余额度（HTTP + JSONPath）
+- `manual`：手动/静态额度，不请求上游
+
+服务端会缓存所有已启用额度源；切模型时底部直接换展示，不必再等一轮查询。
 
 | 当前对话模型的供应商 | 底部展示 |
 | :--- | :--- |
 | `opencode-go` | OpenCode Go 订阅用量（5 小时 / 周 / 月） |
 | `deepseek` | DeepSeek 官方余额 |
-| 其他（Anthropic、OpenAI、OpenCode Zen 等） | DeepSeek 官方余额（默认） |
+| 与某个 `quotaSources` 的 `providerIds`/`providerPatterns` 匹配 | 对应自定义额度源 |
+| 其他（Anthropic、OpenAI、OpenCode Zen 等） | 默认额度源（`default: true`；没有则第一个） |
 
-配置项 `provider`（以及设置里的「额度数据源」）只在还认不出当前模型时作为回退，**不会覆盖**已经识别到的模型供应商。默认回退是 `deepseek`。
+`quotaMode` 决定选择逻辑：
+
+- `follow`：当前对话模型供应商 → 自动匹配额度源；没命中再用 `default: true` 的默认源
+- `custom`：固定展示 `provider` 指定的额度源，忽略当前模型
+
+配置项 `provider`（以及设置里的「额度数据源」）在 follow 模式下作为“模型未知时的回退/默认源”，在 custom 模式下作为固定源。默认回退是 `deepseek`。
 
 OpenCode Go 密钥解析顺序：`opencodeApiKey` → `OPENCODE_GO_API_KEY`（credentials / 环境变量）→ `~/.local/share/opencode/auth.json`。
 
@@ -203,13 +218,58 @@ dsh plugin --profile web remove dsh-balance
 
 `prices` 是「当前 `currency` 下每 1M token」的单价。V4 可写 `peak` / `offPeak`（高峰 / 低谷）。内置 `deepseek-v4-flash` / `deepseek-v4-pro` 如果只有三个刊例字段，插件仍按官方峰谷表计价（兼容涨价前旧配置）。自行添加的模型只写三字段则全天按该价计，等效峰谷倍率 1。高峰为北京时间周一至周五 09:00–12:00、14:00–18:00，其余时段（含周末）为低谷。DeepSeek 账户的 CNY / USD 是两套独立钱包：底部会列出选定货币，以及其它仍有余额的钱包；悬停卡片列出全部钱包。计价货币只影响本会话/累计估算和状态灯，不会把其它钱包藏掉。切换货币时会套用该币种官方刊例单价，**不会做汇率换算**。V4 在 2026-08-17 之后按北京时间走峰谷价，人民币和美元同步切换（美元 = 人民币官方价 × 0.14）。
 
+### 自定义额度源
+
+适合“其他套餐 / 自定义供应商”的额度展示。设置页「额度查询」卡片可可视化添加 `metric` / `manual` 源；高级 `usage` / `balance` 可使用 YAML：
+
+```yaml
+- id: dsh-credits
+  config:
+    quotaMode: follow
+    provider: custom-metric
+    quotaSources:
+      - id: custom-metric
+        name: My Plan
+        kind: metric                 # balance / usage / metric / manual
+        providerIds: [my-provider]  # 自动匹配当前模型供应商
+        providerPatterns: ["my-.*"] # 可选正则匹配
+        default: true
+        request:
+          method: GET
+          url: https://example.com/quota
+          authRef: MY_PLAN_KEY
+          authStyle: bearer
+        response:
+          metrics:
+            - key: remaining
+              label: 剩余额度
+              valuePath: $.data.remaining
+              totalPath: $.data.total
+              unit: USD
+              resetsAtPath: $.data.resetsAt
+```
+
+手动/静态额度源示例：
+
+```yaml
+quotaSources:
+  - id: manual-plan
+    name: Manual Plan
+    kind: manual
+    providerIds: [manual-provider]
+    default: true
+    manual: { value: 33, total: 100, label: 手动额度, unit: "%", resetsAt: "2026-09-01T00:00:00.000Z" }
+```
+
+OpenRouter 等平台也可以用 `metric` 型自定义源接入：`https://openrouter.ai/api/v1/credits` 返回的是 `total_credits` 与 `total_usage`，剩余额度需要相减；当前内置解析器只支持取值路径、不执行表达式，因此这类“需要计算”的接口建议用一个本地小脚本/代理转成“剩余/总量”后再接入，或用 `manual` 源手动维护。
+
 ## 架构
 
 浏览器只读本地缓存，不直连上游：
 
 | 路径 | 作用 |
 | :--- | :--- |
-| `GET /query-credits` | 账户额度缓存。响应里同时带 `views.deepseek` 与 `views['opencode-go']`；`?source=` 只决定顶层摊平哪一套，`?force=1` 强刷 |
+| `GET /query-credits` | 账户额度缓存。响应里同时带所有已启用额度源的 `views`；`?source=` 只决定顶层摊平哪一套，`?force=1` 强刷 |
 | `GET /query-credits/spend?range=today` | 跨会话累计消耗。`range` 可为 `today` / `yesterday` / `week` / `month` / `custom`；自定义时再带 `from`、`to`（`YYYY-MM-DD` 或 ISO） |
 | `GET /query-credits/config` | 读当前配置 |
 | `POST /query-credits/config` | 保存配置并立即生效 |
@@ -220,6 +280,16 @@ dsh plugin --profile web remove dsh-balance
 密钥走 Harness `credentials`，默认不写进配置文件。
 
 ## 更新记录
+
+### 未发布（额度源适配器）
+
+- 将内置 `deepseek` / `opencode-go` 抽象为额度源适配器注册表
+- 支持自定义 HTTP / JSONPath 额度源：`balance` / `usage` / `metric`
+- 支持手动/静态额度源：`manual`
+- 额度源可通过 `providerIds` / `providerPatterns` 自动匹配当前模型供应商
+- 保持 `follow`（自动匹配）/ `custom`（固定展示）/ 默认源配置
+- 设置页「额度查询」新增可视化添加/编辑/删除自定义额度源
+- 服务端与客户端统一按 `kind` 渲染，不再写死 `opencode-go`
 
 ### 0.2.4
 
@@ -297,7 +367,7 @@ A: 请求头带你的 API Key。DeepSeek 默认复用聊天用的 `DEEPSEEK_API_
 A: DeepSeek 按余额金额对比 `warningThreshold` / `dangerThreshold`。OpenCode Go 按剩余额度百分比对比同一组阈值。🟢 ≥ 预警线；🟡 告急线～预警线；🔴 < 告急线或接口不可用。
 
 **Q: 切模型后底部读数会跟着变吗？**  
-A: 会，跟着输入框当前模型的供应商走。只有供应商 id 恰好是 `opencode-go` 时才显示订阅用量；`deepseek`、Anthropic、OpenAI、普通 OpenCode Zen 等都走官方余额。设置里的数据源不会盖过已经识别到的模型。
+A: 会。`quotaMode: follow` 时会按当前模型供应商自动匹配额度源：`opencode-go` → Go 用量，`deepseek` → 官方余额，也支持在自定义 `quotaSources` 里配置 `providerIds` / `providerPatterns` 匹配 Anthropic、OpenAI、OpenCode Zen、其他供应商。没命中时回退到 `default: true` 的默认源；`quotaMode: custom` 则固定显示 `provider` 指定的源。
 
 **Q: 8 月 17 日峰谷价会自动切吗？**  
 A: 会。北京时间 2026-08-17 00:00 之后，V4 Flash / Pro 按 09:00–12:00、14:00–18:00 高峰价；谷时段是 00:00–09:00、12:00–14:00、18:00–24:00，其余时段半价。
