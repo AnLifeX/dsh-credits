@@ -33,13 +33,44 @@ export const QUOTA_MODES = ['follow', 'custom']
 export const DOCK_LAYOUTS = ['own', 'shared']
 export const OPENCODE_GO_DEFAULT_BASE_URL = 'https://opencode.ai/zen/go/v1/usage'
 
+/**
+ * 内置额度源适配器注册表。
+ * - `kind: 'balance'` 表示余额型（DeepSeek /user/balance 风格）
+ * - `kind: 'usage'` 表示订阅用量型（OpenCode Go 多窗口百分比风格）
+ * - `providerIds` 是自动匹配时识别当前模型供应商的规则（阶段 3 会全面启用）
+ * - `default: true` 表示无法识别当前模型时使用的默认额度源
+ */
+export const BUILTIN_QUOTA_ADAPTERS = [
+  {
+    id: 'deepseek',
+    kind: 'balance',
+    name: 'DeepSeek 官方余额',
+    providerIds: ['deepseek'],
+    default: true,
+  },
+  {
+    id: 'opencode-go',
+    kind: 'usage',
+    name: 'OpenCode Go 订阅用量',
+    providerIds: ['opencode-go'],
+    default: false,
+  },
+]
+export const QUOTA_ADAPTER_IDS = BUILTIN_QUOTA_ADAPTERS.map((adapter) => adapter.id)
+
+/** 按适配器 id 查内置适配器。 */
+export const getBuiltinQuotaAdapter = (id) =>
+  BUILTIN_QUOTA_ADAPTERS.find((adapter) => adapter.id === id) ?? null
+
 /** own=额度单独一行; shared=与底部已有统计同一行靠后。 */
 export const normalizeDockLayout = (value) =>
   String(value ?? 'own').trim().toLowerCase() === 'shared' ? 'shared' : 'own'
 
-/** 对话模型供应商 → 额度展示。仅 OpenCode Go 走订阅用量, 其余一律官方余额。 */
-export const quotaSourceFromProvider = (provider) =>
-  String(provider ?? '').trim().toLowerCase() === 'opencode-go' ? 'opencode-go' : 'deepseek'
+/** 对话模型供应商 → 额度展示。目前仅内置两个适配器, 未命中回退 deepseek。 */
+export const quotaSourceFromProvider = (provider) => {
+  const normalized = String(provider ?? '').trim().toLowerCase()
+  return QUOTA_ADAPTER_IDS.includes(normalized) ? normalized : 'deepseek'
+}
 
 /** follow: 跟当前模型; custom: 固定用 config.provider, 忽略当前模型。 */
 export const resolveQuotaSource = (modelProvider, config = {}) => {
@@ -680,37 +711,46 @@ export function apply(ctx, config) {
     return ''
   }
 
-  const emptyQuotaCache = () => ({ state: 'empty', payload: null, error: null, fetchedAt: 0, lastErrorAt: 0 })
-  const caches = {
-    deepseek: emptyQuotaCache(),
-    'opencode-go': emptyQuotaCache(),
+  const getQuotaAdapter = (providerOrId) => {
+    const id = quotaSourceFromProvider(providerOrId)
+    return getBuiltinQuotaAdapter(id) ?? BUILTIN_QUOTA_ADAPTERS[0]
   }
-  const inflights = { deepseek: null, 'opencode-go': null }
-  const consecutiveFailures = { deepseek: 0, 'opencode-go': 0 }
+  const quotaAdapterIds = QUOTA_ADAPTER_IDS.filter((id) => getBuiltinQuotaAdapter(id) !== null)
+
+  const emptyQuotaCache = () => ({ state: 'empty', payload: null, error: null, fetchedAt: 0, lastErrorAt: 0 })
+  const caches = Object.fromEntries(quotaAdapterIds.map((id) => [id, emptyQuotaCache()]))
+  const inflights = Object.fromEntries(quotaAdapterIds.map((id) => [id, null]))
+  const consecutiveFailures = Object.fromEntries(quotaAdapterIds.map((id) => [id, 0]))
 
   const refreshOne = (provider) => {
     const source = quotaSourceFromProvider(provider)
-    if (inflights[source] !== null) return inflights[source]
-    inflights[source] = (async () => {
-      const key = source === 'opencode-go' ? await resolveOpencodeKey() : await resolveKey()
+    const adapter = getQuotaAdapter(source)
+    if (!adapter || !quotaAdapterIds.includes(adapter.id)) return Promise.resolve()
+    if (inflights[adapter.id] !== null) return inflights[adapter.id]
+    inflights[adapter.id] = (async () => {
+      const key = adapter.kind === 'usage' ? await resolveOpencodeKey() : await resolveKey()
       if (key === '') {
-        caches[source] = { state: 'error', payload: null, error: 'api-key-missing', fetchedAt: 0, lastErrorAt: Date.now() }
-        consecutiveFailures[source]++
+        caches[adapter.id] = { state: 'error', payload: null, error: 'api-key-missing', fetchedAt: 0, lastErrorAt: Date.now() }
+        consecutiveFailures[adapter.id]++
         return
       }
       const controller = new AbortController()
       const timer = setTimeout(() => controller.abort(), runtimeConfig.timeoutMs)
       try {
-        if (source === 'opencode-go') {
+        if (adapter.kind === 'usage') {
           const res = await fetch(runtimeConfig.opencodeBaseUrl.replace(/\/+$/, ''), {
             headers: { Authorization: `Bearer ${key}`, Accept: 'application/json' },
             signal: controller.signal,
           })
           if (!res.ok) throw new Error(`OpenCode Go API HTTP ${res.status}`)
           const data = await res.json()
-          caches[source] = {
+          caches[adapter.id] = {
             state: 'ok',
-            payload: { provider: 'opencode-go', usage: normalizeOpencodeUsage(data) },
+            payload: {
+              provider: adapter.id,
+              kind: adapter.kind,
+              usage: normalizeOpencodeUsage(data),
+            },
             error: null,
             fetchedAt: Date.now(),
             lastErrorAt: 0,
@@ -722,10 +762,11 @@ export function apply(ctx, config) {
           })
           if (!res.ok) throw new Error(`DeepSeek API HTTP ${res.status}`)
           const data = await res.json()
-          caches[source] = {
+          caches[adapter.id] = {
             state: 'ok',
             payload: {
-              provider: 'deepseek',
+              provider: adapter.id,
+              kind: adapter.kind,
               isAvailable: data?.is_available === true,
               balances: normalizeBalances(data),
             },
@@ -734,13 +775,13 @@ export function apply(ctx, config) {
             lastErrorAt: 0,
           }
         }
-        consecutiveFailures[source] = 0
+        consecutiveFailures[adapter.id] = 0
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
-        consecutiveFailures[source]++
-        if (consecutiveFailures[source] === 1) ctx.logger.warn(`[dsh-credits] quota fetch failed (${source}): ${message}`)
-        const prev = caches[source]
-        caches[source] = {
+        consecutiveFailures[adapter.id]++
+        if (consecutiveFailures[adapter.id] === 1) ctx.logger.warn(`[dsh-credits] quota fetch failed (${adapter.id}): ${message}`)
+        const prev = caches[adapter.id]
+        caches[adapter.id] = {
           state: prev.state === 'ok' ? 'ok' : 'error',
           payload: prev.payload,
           error: message,
@@ -751,15 +792,15 @@ export function apply(ctx, config) {
         clearTimeout(timer)
       }
     })().finally(() => {
-      inflights[source] = null
+      inflights[adapter.id] = null
     })
-    return inflights[source]
+    return inflights[adapter.id]
   }
 
   const refresh = (provider = null) => {
     if (runtimeConfig.enabled === false) return Promise.resolve()
     if (provider) return refreshOne(provider)
-    return Promise.all([refreshOne('deepseek'), refreshOne('opencode-go')])
+    return Promise.all(quotaAdapterIds.map((id) => refreshOne(id)))
   }
 
   let loopTimer = null
@@ -774,7 +815,7 @@ export function apply(ctx, config) {
         return
       }
       void refresh().then(() => {
-        const bothMissing = PROVIDERS.every((p) => caches[p].state === 'error' && caches[p].error === 'api-key-missing')
+        const bothMissing = quotaAdapterIds.every((id) => caches[id].state === 'error' && caches[id].error === 'api-key-missing')
         const delay = bothMissing ? 5000 : runtimeConfig.refreshIntervalMs
         loopTimer = setTimeout(run, delay)
       })
@@ -827,12 +868,15 @@ export function apply(ctx, config) {
   // 可选 webServer: 提供浏览器读取的缓存端点与设置端点
   ctx.inject(['webServer'], (webCtx) => {
     const serializeView = (source) => {
-      const cache = caches[source]
-      if (cache.state === 'ok' && cache.payload?.provider === source) {
-        if (source === 'opencode-go') {
+      const adapter = getQuotaAdapter(source)
+      const cache = caches[adapter.id]
+      if (cache.state === 'ok' && cache.payload?.provider === adapter.id) {
+        if (adapter.kind === 'usage') {
           return {
             ok: true,
-            provider: source,
+            provider: adapter.id,
+            kind: adapter.kind,
+            name: adapter.name,
             usage: cache.payload.usage,
             fetchedAt: cache.fetchedAt,
             ...(cache.error !== null ? { error: cache.error, stale: true } : {}),
@@ -840,7 +884,9 @@ export function apply(ctx, config) {
         }
         return {
           ok: true,
-          provider: source,
+          provider: adapter.id,
+          kind: adapter.kind,
+          name: adapter.name,
           isAvailable: cache.payload.isAvailable,
           balances: cache.payload.balances,
           fetchedAt: cache.fetchedAt,
@@ -849,7 +895,9 @@ export function apply(ctx, config) {
       }
       return {
         ok: false,
-        provider: source,
+        provider: adapter.id,
+        kind: adapter.kind,
+        name: adapter.name,
         error: cache.error ?? 'unknown',
         fetchedAt: cache.fetchedAt,
       }
@@ -858,6 +906,7 @@ export function apply(ctx, config) {
     const serialize = (source = quotaSourceFromProvider(runtimeConfig.provider)) => {
       const picked = quotaSourceFromProvider(source)
       const view = serializeView(picked)
+      const views = Object.fromEntries(quotaAdapterIds.map((id) => [id, serializeView(id)]))
       return {
         ok: view.ok,
         enabled: runtimeConfig.enabled !== false,
@@ -884,10 +933,14 @@ export function apply(ctx, config) {
           'deepseek-v4-pro': resolveModelPrice(runtimeConfig, 'deepseek-v4-pro'),
         },
         defaultPrices: runtimeConfig.defaultPrices,
-        views: {
-          deepseek: serializeView('deepseek'),
-          'opencode-go': serializeView('opencode-go'),
-        },
+        quotaSources: BUILTIN_QUOTA_ADAPTERS.map((adapter) => ({
+          id: adapter.id,
+          kind: adapter.kind,
+          name: adapter.name,
+          providerIds: adapter.providerIds,
+          default: adapter.default,
+        })),
+        views,
         ...(view.usage ? { usage: view.usage } : {}),
         ...(view.balances ? { isAvailable: view.isAvailable, balances: view.balances } : {}),
         ...(view.error ? { error: view.error, ...(view.stale ? { stale: true } : {}) } : {}),
@@ -922,7 +975,7 @@ export function apply(ctx, config) {
           : quotaSourceFromProvider(runtimeConfig.provider)
         if (force) {
           const now = Date.now()
-          const targets = sourceParam ? [source] : PROVIDERS
+          const targets = sourceParam ? [source] : quotaAdapterIds
           await Promise.all(targets.map((p) => {
             const c = caches[p]
             if (now - c.fetchedAt > 2000 || c.state !== 'ok') return refreshOne(p)
