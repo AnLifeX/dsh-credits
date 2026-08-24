@@ -238,9 +238,11 @@ const normalizeQuotaSourceConfig = (source) => {
   const headers = merged.request?.headers && typeof merged.request.headers === 'object' && !Array.isArray(merged.request.headers)
     ? Object.fromEntries(Object.entries(merged.request.headers).map(([key, value]) => [String(key).trim(), String(value)]).filter(([key]) => key))
     : {}
-  const credentialMode = ['provider', 'reference', 'direct', 'none'].includes(merged.request?.credentialMode)
+  let credentialMode = ['provider', 'reference', 'direct', 'none'].includes(merged.request?.credentialMode)
     ? merged.request.credentialMode
     : (merged.request?.dshProvider ? 'provider' : (merged.request?.authValue ? 'direct' : (authStyle === 'none' ? 'none' : 'reference')))
+  // 旧设置页默认创建了一个空的“凭证引用”；它没有可用信息，升级后直接转为密码框。
+  if (credentialMode === 'reference' && !String(merged.request?.authRef ?? '').trim() && authStyle !== 'none') credentialMode = 'direct'
   const normalized = {
     ...merged,
     id,
@@ -270,6 +272,7 @@ const normalizeQuotaSourceConfig = (source) => {
     },
     response: { ...(merged.response ?? {}) },
   }
+  delete normalized.request.credentialConfigured
   delete normalized.manual
   return normalized
 }
@@ -290,6 +293,21 @@ const mergeMaskedQuotaRequest = (previous = {}, incoming = {}) => {
       : (incoming.authValue === '***' ? (previous.authValue ?? '') : (incoming.authValue ?? '')),
     headers,
   }
+}
+
+/**
+ * 为设置页直接填写的额度凭证生成稳定、合法且不易碰撞的 DSH credential ref。
+ * 原始 provider/source id 只参与生成引用名，不包含任何秘密。
+ */
+const quotaCredentialRef = (scope) => {
+  const raw = String(scope ?? 'quota')
+  const stem = raw.toUpperCase().replace(/[^A-Z0-9_]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 40) || 'QUOTA'
+  let hash = 2166136261
+  for (let i = 0; i < raw.length; i += 1) {
+    hash ^= raw.charCodeAt(i)
+    hash = Math.imul(hash, 16777619)
+  }
+  return `DSH_CREDITS_${stem}_${(hash >>> 0).toString(16).toUpperCase().padStart(8, '0')}`
 }
 
 export const providerQuotaAdapterId = (providerId) => `provider:${String(providerId ?? '').trim()}`
@@ -465,9 +483,9 @@ const QuotaRequest = Schema.object({
   url: Schema.string().default(''),
   /** 复用 DSH 模型供应商已有凭证；存在时优先于 authRef。 */
   dshProvider: Schema.string().default(''),
-  credentialMode: Schema.union(['provider', 'reference', 'direct', 'none']).default('reference'),
+  credentialMode: Schema.union(['provider', 'reference', 'direct', 'none']).default('direct'),
   authRef: Schema.string().default(''),
-  /** 直接凭证值；设置接口始终脱敏，优先于 DSH 供应商和 authRef。 */
+  /** 仅接收设置页本次写入的直接凭证；保存后迁移到 DSH credentials，不进入配置或响应。 */
   authValue: Schema.string().default(''),
   authStyle: Schema.union(['bearer', 'token', 'basic', 'header', 'cookie', 'query', 'json', 'form', 'none']).default('none'),
   authHeader: Schema.string().default('Authorization'),
@@ -1570,6 +1588,35 @@ export function apply(ctx, config) {
     return process.env[ref] ?? ''
   }
 
+  /**
+   * 设置页允许直接输入 Token/Cookie，但持久配置中只保留引用名。
+   * 旧版本曾把 authValue 留在运行时配置；用户下一次保存时一并迁移。
+   */
+  const persistDirectQuotaCredential = async (previousRequest, incomingRequest, scope) => {
+    const merged = mergeMaskedQuotaRequest(previousRequest ?? {}, incomingRequest ?? {})
+    if (merged.credentialMode !== 'direct') return merged
+
+    const previousRef = previousRequest?.credentialMode === 'direct' ? String(previousRequest.authRef ?? '').trim() : ''
+    const ref = String(merged.authRef ?? '').trim() || previousRef || quotaCredentialRef(scope)
+    const entered = String(incomingRequest?.authValue ?? '')
+    const legacy = previousRequest?.credentialMode === 'direct' ? String(previousRequest.authValue ?? '') : ''
+    const valueToStore = entered && entered !== '***'
+      ? entered
+      : (!previousRef && legacy && legacy !== '***' ? legacy : '')
+
+    if (valueToStore) {
+      const credentials = ctx.get('credentials')
+      if (!credentials?.set) throw new Error('quota-credential-store-unavailable')
+      await credentials.set(ref, valueToStore)
+    }
+    return {
+      ...merged,
+      dshProvider: '',
+      authRef: ref,
+      authValue: '',
+    }
+  }
+
   /** 复用 DSH 供应商已保存的 credential-ref 或 llm-pi-ai API-key record。 */
   const resolveDshProviderCredential = async (providerId) => {
     const id = String(providerId ?? '').trim()
@@ -1854,13 +1901,31 @@ export function apply(ctx, config) {
     return k.slice(0, 4) + '****' + k.slice(-4)
   }
 
-  const sanitizeQuotaSource = (rawSource) => {
+  const describeQuotaCredential = async (request) => {
+    if (request?.credentialMode !== 'direct') return false
+    if (request?.authValue && request.authValue !== '***') return true
+    const ref = String(request?.authRef ?? '').trim()
+    if (!ref) return false
+    const credentials = ctx.get('credentials')
+    if (credentials?.describe) {
+      try {
+        const info = await credentials.describe(ref)
+        return info?.configured === true
+      } catch {
+        return false
+      }
+    }
+    return Boolean(process.env[ref])
+  }
+
+  const sanitizeQuotaSource = async (rawSource) => {
     const source = mergeQuotaSourceTemplate(rawSource)
     return {
       ...source,
       request: {
         ...(source.request ?? {}),
-        authValue: source.request?.authValue ? '***' : '',
+        authValue: '',
+        credentialConfigured: await describeQuotaCredential(source.request),
         headers: Object.fromEntries(
           Object.entries(source.request?.headers ?? {})
             .map(([k, v]) => [k, isSensitiveHeader(k) ? '***' : v]),
@@ -1869,24 +1934,24 @@ export function apply(ctx, config) {
     }
   }
 
-  const sanitizeCustomQuotaSources = () => (runtimeConfig.quotaSources ?? []).map(sanitizeQuotaSource)
+  const sanitizeCustomQuotaSources = () => Promise.all((runtimeConfig.quotaSources ?? []).map(sanitizeQuotaSource))
 
-  const sanitizeProviderQuotas = () => {
+  const sanitizeProviderQuotas = async () => {
     const bindings = getEffectiveProviderQuotas()
-    return bindings.map((binding) => ({
+    return Promise.all(bindings.map(async (binding) => ({
       providerId: binding.providerId,
       enabled: binding.enabled !== false,
       sourceType: binding.sourceType,
       templateId: binding.templateId || binding.provider?.templateId || '',
       sourceProviderId: binding.sourceProviderId || '',
-      ...(binding.source ? { source: sanitizeQuotaSource(binding.source) } : {}),
+      ...(binding.source ? { source: await sanitizeQuotaSource(binding.source) } : {}),
       adapterId: resolveProviderQuotaSource(binding.providerId, bindings),
       implicit: binding.implicit === true,
       migrated: binding.migrated === true,
-    }))
+    })))
   }
 
-  const getSanitizedConfig = () => {
+  const getSanitizedConfig = async () => {
     return {
       enabled: runtimeConfig.enabled !== false,
       quotaMode: runtimeConfig.quotaMode === 'custom' ? 'custom' : 'follow',
@@ -1912,8 +1977,8 @@ export function apply(ctx, config) {
       dangerThreshold: runtimeConfig.dangerThreshold,
       prices: { ...runtimeConfig.prices },
       defaultPrices: { ...runtimeConfig.defaultPrices },
-      quotaSources: sanitizeCustomQuotaSources(),
-      providerQuotas: sanitizeProviderQuotas(),
+      quotaSources: await sanitizeCustomQuotaSources(),
+      providerQuotas: await sanitizeProviderQuotas(),
       quotaTemplates: QUOTA_SOURCE_TEMPLATES.map((template) => ({
         id: template.id,
         category: template.category,
@@ -2072,7 +2137,7 @@ export function apply(ctx, config) {
         if (req.method === 'GET') {
           sendJson(res, 200, {
             ok: true,
-            config: getSanitizedConfig(),
+            config: await getSanitizedConfig(),
           })
           return
         }
@@ -2097,14 +2162,15 @@ export function apply(ctx, config) {
               if (typeof body.opencodeBaseUrl === 'string' && body.opencodeBaseUrl.trim()) runtimeConfig.opencodeBaseUrl = body.opencodeBaseUrl.trim()
               if (Array.isArray(body.quotaSources)) {
                 const prevSources = runtimeConfig.quotaSources ?? []
-                const nextSources = body.quotaSources.map((s) => {
+                const nextSources = []
+                for (const s of body.quotaSources) {
                   const prev = prevSources.find((p) => p.id === s.id)
-                  if (!prev) return normalizeQuotaSourceConfig(s)
-                  return normalizeQuotaSourceConfig({
+                  const request = await persistDirectQuotaCredential(prev?.request, s.request, `source:${s.id}`)
+                  nextSources.push(normalizeQuotaSourceConfig({
                     ...s,
-                    request: mergeMaskedQuotaRequest(prev.request, s.request),
-                  })
-                })
+                    request,
+                  }))
+                }
                 if (new Set(nextSources.map((source) => source.id)).size !== nextSources.length) {
                   throw new Error('quota-source-id-duplicate')
                 }
@@ -2112,19 +2178,26 @@ export function apply(ctx, config) {
               }
               if (Array.isArray(body.providerQuotas)) {
                 const prevBindings = runtimeConfig.providerQuotas ?? []
-                const nextBindings = body.providerQuotas.map((rawBinding) => {
+                const nextBindings = []
+                for (const rawBinding of body.providerQuotas) {
                   const prev = prevBindings.find((binding) => normalizeProvider(binding.providerId) === normalizeProvider(rawBinding?.providerId))
-                  if (rawBinding?.sourceType !== 'custom' || !rawBinding.source || !prev?.source) {
-                    return normalizeProviderQuotaConfig(rawBinding)
+                  if (rawBinding?.sourceType !== 'custom' || !rawBinding.source) {
+                    nextBindings.push(normalizeProviderQuotaConfig(rawBinding))
+                    continue
                   }
-                  return normalizeProviderQuotaConfig({
+                  const request = await persistDirectQuotaCredential(
+                    prev?.source?.request,
+                    rawBinding.source.request,
+                    `provider:${rawBinding.providerId}`,
+                  )
+                  nextBindings.push(normalizeProviderQuotaConfig({
                     ...rawBinding,
                     source: {
                       ...rawBinding.source,
-                      request: mergeMaskedQuotaRequest(prev.source.request, rawBinding.source.request),
+                      request,
                     },
-                  })
-                })
+                  }))
+                }
                 const normalizedProviderIds = nextBindings.map((binding) => normalizeProvider(binding.providerId))
                 if (new Set(normalizedProviderIds).size !== normalizedProviderIds.length) {
                   throw new Error('provider-quota-provider-duplicate')
@@ -2155,7 +2228,7 @@ export function apply(ctx, config) {
             sendJson(res, 200, {
               ok: true,
               message: 'Config updated successfully',
-              config: getSanitizedConfig(),
+              config: await getSanitizedConfig(),
             })
           } catch (err) {
             sendJson(res, 400, {

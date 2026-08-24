@@ -20,6 +20,7 @@ import {
 
 // 模拟 webServer 上下文与注册表
 const routes = new Map()
+const credentialSecrets = new Map()
 
 const mockCtx = {
   get(key) {
@@ -27,7 +28,14 @@ const mockCtx = {
       return {
         async resolve(ref) {
           if (ref === 'DEEPSEEK_API_KEY') return { value: 'sk-mock-key-from-credentials' }
+          if (credentialSecrets.has(ref)) return { value: credentialSecrets.get(ref), source: 'local' }
           return undefined
+        },
+        async describe(ref) {
+          return { configured: credentialSecrets.has(ref), source: credentialSecrets.has(ref) ? 'local' : undefined, writable: true }
+        },
+        async set(ref, value) {
+          credentialSecrets.set(ref, value)
         },
         async readRecord(key) {
           if (key === 'llm-pi-ai/opencode-go') return { kind: 'api-key', key: 'sk-mock-opencode-record' }
@@ -349,7 +357,10 @@ assert.equal(resGetConfig.data.config.showPopover, true)
   })
   assert.equal(resCustomPost.data.ok, true)
   const savedCustomBinding = resCustomPost.data.config.providerQuotas.find((binding) => binding.providerId === 'unsupported-route')
-  assert.equal(savedCustomBinding.source.request.authValue, '***', 'direct custom credentials must be masked')
+  assert.equal(savedCustomBinding.source.request.authValue, '', 'direct custom credentials must never be returned')
+  assert.equal(savedCustomBinding.source.request.credentialConfigured, true, 'settings response should only report configured state')
+  assert.match(savedCustomBinding.source.request.authRef, /^DSH_CREDITS_PROVIDER_UNSUPPORTED_ROUTE_[0-9A-F]{8}$/)
+  assert.equal(credentialSecrets.get(savedCustomBinding.source.request.authRef), '__SF_auth.session-token=session-secret')
   assert.equal(savedCustomBinding.source.request.headers['x-subject-id'], 'subject-123')
   assert.equal(customRequests.at(-1).options.headers.Cookie, '__SF_auth.session-token=session-secret')
   assert.equal(customRequests.at(-1).options.headers['x-subject-id'], 'subject-123')
@@ -376,6 +387,22 @@ assert.equal(resGetConfig.data.config.showPopover, true)
   assert.ok(resCustomConn.data.availableFields.some((field) => field.path === '$.data.remaining'))
   assert.ok(resCustomConn.data.availableFields.some((field) => field.path === '$.data.wallets[*].remaining'))
   console.log('POST /query-credits/test-connection (custom-metric) passed')
+
+  const overwriteBinding = structuredClone(customBinding)
+  overwriteBinding.source.request.authValue = '__SF_auth.session-token=replaced-secret'
+  const resOverwrite = await invokeRoute('/query-credits/config', 'POST', { providerQuotas: [overwriteBinding] })
+  const overwrittenBinding = resOverwrite.data.config.providerQuotas.find((binding) => binding.providerId === 'unsupported-route')
+  assert.equal(overwrittenBinding.source.request.authValue, '', 'overwritten credentials must remain write-only')
+  assert.equal(overwrittenBinding.source.request.credentialConfigured, true)
+  assert.equal(credentialSecrets.get(overwrittenBinding.source.request.authRef), '__SF_auth.session-token=replaced-secret')
+
+  const resKeep = await invokeRoute('/query-credits/config', 'POST', { providerQuotas: [overwrittenBinding] })
+  const keptBinding = resKeep.data.config.providerQuotas.find((binding) => binding.providerId === 'unsupported-route')
+  assert.equal(credentialSecrets.get(keptBinding.source.request.authRef), '__SF_auth.session-token=replaced-secret', 'blank input must preserve the saved credential')
+  const resOverwriteConn = await invokeRoute('/query-credits/test-connection', 'POST', { binding: keptBinding })
+  assert.equal(resOverwriteConn.status, 200)
+  assert.equal(customRequests.at(-1).options.headers.Cookie, '__SF_auth.session-token=replaced-secret')
+  console.log('direct custom credential overwrite / blank-preserve passed')
 
   // 清空显式绑定，恢复按 DSH 供应商自动识别。
   const resResetConfig = await invokeRoute('/query-credits/config', 'POST', {

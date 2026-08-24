@@ -325,6 +325,7 @@ window.__ModuleLoader__.load({
 				".dshqb_header_row{display:grid;grid-template-columns:minmax(120px,.8fr) minmax(160px,1.2fr) auto;gap:7px;align-items:center}",
 				".dshqb_metric_editor{display:flex;flex-direction:column;gap:4px;padding:8px 10px;border:1px solid var(--dsw-alias-border-l3,rgba(128,128,128,.12));border-radius:8px;background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.035))}",
 				".dshqb_metric_editor_head{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11.5px;font-weight:600;color:var(--dsw-alias-label-secondary)}",
+				".dshqb_secret_input{display:flex;flex-direction:column;gap:5px}.dshqb_secret_status{font-size:11px;line-height:1.35;color:var(--dsw-alias-success,#16a34a)}",
 				"@media (max-width:620px){.dshqb_template_grid{grid-template-columns:1fr}.dshqb_custom_source_row{grid-template-columns:minmax(0,1fr) auto}.dshqb_custom_source_row>.dshqb_btn:last-child{grid-column:2}.dshqb_source_head{flex-direction:column;align-items:stretch}.dshqb_settings_intro{gap:12px}.dshqb_settings_title_control_label{display:none}}",
 				"@media (max-width:620px){.dshqb_header_row{grid-template-columns:1fr auto}.dshqb_header_row>.dshqb_input:nth-child(2){grid-column:1}}",
 				".dshqb_confirm_mask{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;background:var(--dsw-alias-bg-mask-1,rgba(0,0,0,0.45));backdrop-filter:blur(6px)}",
@@ -948,13 +949,15 @@ window.__ModuleLoader__.load({
 			"settings.providerQuota.credential": "请求凭证",
 			"settings.providerQuota.credentialCurrent": "当前供应商：{name}",
 			"settings.providerQuota.credentialOther": "DSH 供应商：{name}",
-			"settings.providerQuota.credentialRef": "凭证引用 / 环境变量",
-			"settings.providerQuota.credentialDirect": "直接填写 Token / Cookie",
+			"settings.providerQuota.credentialRef": "高级：凭证引用 / 环境变量",
+			"settings.providerQuota.credentialDirect": "直接填写 Token / Cookie（推荐）",
 			"settings.providerQuota.credentialNone": "无需鉴权",
 			"settings.providerQuota.endpoint": "额度接口 URL",
 			"settings.requestMethod": "请求方法",
 			"settings.directCredential": "Token / Cookie / Auth 凭证",
-			"settings.directCredentialHint": "作为敏感信息保存在本地配置中，设置接口不会回显；留空保留已经保存的值。",
+			"settings.directCredentialHint": "直接输入即可。保存到 DSH 本地凭证库，页面和配置接口都不会回显；再次输入并保存就是覆盖。",
+			"settings.directCredentialConfigured": "已设置（原值不可查看，只能覆盖）",
+			"settings.directCredentialPlaceholder": "已设置；输入新值将覆盖",
 			"settings.authHeader": "鉴权请求头名称",
 			"settings.authParam": "鉴权参数名称",
 			"settings.requestHeaders": "附加请求头",
@@ -1235,13 +1238,15 @@ window.__ModuleLoader__.load({
 			"settings.providerQuota.credential": "Request credentials",
 			"settings.providerQuota.credentialCurrent": "Current provider: {name}",
 			"settings.providerQuota.credentialOther": "DSH provider: {name}",
-			"settings.providerQuota.credentialRef": "Credential ref / environment variable",
-			"settings.providerQuota.credentialDirect": "Enter token / cookie directly",
+			"settings.providerQuota.credentialRef": "Advanced: credential ref / environment variable",
+			"settings.providerQuota.credentialDirect": "Enter token / cookie directly (recommended)",
 			"settings.providerQuota.credentialNone": "No authentication",
 			"settings.providerQuota.endpoint": "Quota endpoint URL",
 			"settings.requestMethod": "HTTP method",
 			"settings.directCredential": "Token / cookie / auth credential",
-			"settings.directCredentialHint": "Stored as a local secret and never returned by the settings API. Leave blank to keep the saved value.",
+			"settings.directCredentialHint": "Enter it here. DSH stores it in the local credential vault and never returns it; enter a new value to overwrite it.",
+			"settings.directCredentialConfigured": "Configured (the saved value cannot be viewed, only overwritten)",
+			"settings.directCredentialPlaceholder": "Configured; enter a new value to overwrite",
 			"settings.authHeader": "Authentication header",
 			"settings.authParam": "Authentication parameter",
 			"settings.requestHeaders": "Additional headers",
@@ -1437,6 +1442,10 @@ window.__ModuleLoader__.load({
 					delete clean.implicit;
 					delete clean.migrated;
 					delete clean._edited;
+					if (clean.source?.request) {
+						delete clean.source.request.authValue;
+						delete clean.source.request.credentialConfigured;
+					}
 					return clean;
 				}) : [];
 			const lines = [
@@ -1684,9 +1693,10 @@ window.__ModuleLoader__.load({
 					...source,
 					request: {
 						...(source.request ?? {}),
+						authValue: "",
 						headers: Object.fromEntries(
 							Object.entries(source.request?.headers ?? {})
-								.map(([k, v]) => [k, /authorization|token|api[-_]?key|secret/i.test(k) ? "***" : v]),
+								.map(([k, v]) => [k, /authorization|token|api[-_]?key|secret|cookie|session/i.test(k) ? "***" : v]),
 						),
 					},
 				}));
@@ -1699,9 +1709,10 @@ window.__ModuleLoader__.load({
 							...binding.source,
 							request: {
 								...(binding.source.request ?? {}),
+								authValue: "",
 								headers: Object.fromEntries(
 									Object.entries(binding.source.request?.headers ?? {})
-										.map(([k, v]) => [k, /authorization|token|api[-_]?key|secret/i.test(k) ? "***" : v]),
+										.map(([k, v]) => [k, /authorization|token|api[-_]?key|secret|cookie|session/i.test(k) ? "***" : v]),
 								),
 							},
 						},
@@ -2092,10 +2103,12 @@ window.__ModuleLoader__.load({
 					});
 					const data = await res.json();
 					if (data.ok) {
-						const nextBase = cloneSettings(baseline);
-						for (const [key, value] of Object.entries(payload)) {
-							if (SECRET_FIELDS.includes(key)) continue;
-							nextBase[key] = value;
+						const nextBase = data.config ? configToForm(data.config) : cloneSettings(baseline);
+						if (!data.config) {
+							for (const [key, value] of Object.entries(payload)) {
+								if (SECRET_FIELDS.includes(key)) continue;
+								nextBase[key] = value;
+							}
 						}
 						const nextDrafts = { ...drafts, [cardId]: null };
 						settingsDraftMem.baseline = nextBase;
@@ -2155,7 +2168,7 @@ window.__ModuleLoader__.load({
 				providerIds: [provider.id],
 				providerPatterns: [],
 				enabled: true,
-				request: { method: "GET", url: "", dshProvider: provider.id, credentialMode: "provider", authRef: "", authValue: "", authStyle: "bearer", authHeader: "Authorization", authParam: "api_key", headers: {}, bodyType: "none", body: "" },
+				request: { method: "GET", url: "", dshProvider: "", credentialMode: "direct", authRef: "", authValue: "", credentialConfigured: false, authStyle: "bearer", authHeader: "Authorization", authParam: "api_key", headers: {}, bodyType: "none", body: "" },
 				response: {
 					metrics: [{ key: "remaining", label: "剩余额度", valuePath: "", usedPath: "", totalPath: "", unit: "", resetsAtPath: "", aggregate: "value", scale: 1, offset: 0 }],
 				},
@@ -2233,7 +2246,7 @@ window.__ModuleLoader__.load({
 				providerIds: "",
 				providerPatterns: [],
 				enabled: true,
-				request: { method: "GET", url: "", dshProvider: "", credentialMode: "reference", authRef: "", authValue: "", authStyle: "bearer", authHeader: "Authorization", authParam: "api_key", headers: {}, bodyType: "none", body: "" },
+				request: { method: "GET", url: "", dshProvider: "", credentialMode: "direct", authRef: "", authValue: "", credentialConfigured: false, authStyle: "bearer", authHeader: "Authorization", authParam: "api_key", headers: {}, bodyType: "none", body: "" },
 				response: {
 					metrics: [{ key: "remaining", label: "剩余额度", valuePath: "", usedPath: "", totalPath: "", unit: "", resetsAtPath: "", aggregate: "value", scale: 1, offset: 0 }],
 				},
@@ -2529,7 +2542,7 @@ window.__ModuleLoader__.load({
 						const selectedTemplate = quotaTemplates.find((item) => item.id === selectedTemplateId);
 						const credentialChoice = source.request?.credentialMode === "direct" ? "__value" : source.request?.credentialMode === "none" ? "__none" : requestDshProvider
 							? requestDshProvider
-							: (source.request?.authValue ? "__value" : (source.request?.authStyle === "none" ? "__none" : "__ref"));
+							: ((source.request?.authValue || source.request?.credentialConfigured) ? "__value" : (source.request?.authStyle === "none" ? "__none" : "__ref"));
 						const authStyle = source.request?.authStyle || "bearer";
 						const hasCredential = credentialChoice !== "__none";
 						const authNeedsHeader = ["bearer", "token", "basic", "header"].includes(authStyle);
@@ -2598,24 +2611,27 @@ window.__ModuleLoader__.load({
 									react.createElement(FieldRow, { t, key: "credential", wide: true, label: t("settings.providerQuota.credential"), disabled: savingCard === "quota" },
 										react.createElement("select", {
 											className: "dshqb_select", value: credentialChoice,
-											onChange: (e) => {
-												const choice = e.target.value;
-												const nextStyle = source.request?.authStyle === "none" ? "bearer" : (source.request?.authStyle || "bearer");
-												if (choice === "__none") patchSource("request", { credentialMode: "none", dshProvider: "", authRef: "", authValue: "", authStyle: "none" });
-												else if (choice === "__ref") patchSource("request", { credentialMode: "reference", dshProvider: "", authValue: "", authStyle: nextStyle });
-												else if (choice === "__value") patchSource("request", { credentialMode: "direct", dshProvider: "", authRef: "", authValue: source.request?.authValue || "", authStyle: nextStyle });
-												else patchSource("request", { credentialMode: "provider", dshProvider: choice, authRef: "", authValue: "", authStyle: nextStyle });
-											}
-										}, [
-											react.createElement("option", { value: provider.id, key: provider.id }, t("settings.providerQuota.credentialCurrent", { name: provider.name })),
-											...dshProviderDirectory.filter((item) => item.id !== provider.id && item.configured === true).map((item) => react.createElement("option", { value: item.id, key: item.id }, t("settings.providerQuota.credentialOther", { name: item.name }))),
-											react.createElement("option", { value: "__value", key: "__value" }, t("settings.providerQuota.credentialDirect")),
+										onChange: (e) => {
+											const choice = e.target.value;
+											const nextStyle = source.request?.authStyle === "none" ? "bearer" : (source.request?.authStyle || "bearer");
+											if (choice === "__none") patchSource("request", { credentialMode: "none", dshProvider: "", authRef: "", authValue: "", credentialConfigured: false, authStyle: "none" });
+											else if (choice === "__ref") patchSource("request", { credentialMode: "reference", dshProvider: "", authValue: "", authStyle: nextStyle });
+											else if (choice === "__value") patchSource("request", { credentialMode: "direct", dshProvider: "", authRef: source.request?.credentialMode === "direct" ? (source.request?.authRef || "") : "", authValue: "", credentialConfigured: source.request?.credentialMode === "direct" && source.request?.credentialConfigured === true, authStyle: nextStyle });
+											else patchSource("request", { credentialMode: "provider", dshProvider: choice, authRef: "", authValue: "", authStyle: nextStyle });
+										}
+									}, [
+										react.createElement("option", { value: "__value", key: "__value" }, t("settings.providerQuota.credentialDirect")),
+										react.createElement("option", { value: provider.id, key: provider.id }, t("settings.providerQuota.credentialCurrent", { name: provider.name })),
+										...dshProviderDirectory.filter((item) => item.id !== provider.id && item.configured === true).map((item) => react.createElement("option", { value: item.id, key: item.id }, t("settings.providerQuota.credentialOther", { name: item.name }))),
 											react.createElement("option", { value: "__ref", key: "__ref" }, t("settings.providerQuota.credentialRef")),
 											react.createElement("option", { value: "__none", key: "__none" }, t("settings.providerQuota.credentialNone")),
 										])
 									),
 									credentialChoice === "__value" ? react.createElement(FieldRow, { t, key: "auth_value", label: t("settings.directCredential"), hint: t("settings.directCredentialHint"), disabled: savingCard === "quota" },
-										react.createElement("input", { className: "dshqb_input", type: "password", autoComplete: "off", value: source.request?.authValue === "***" ? "" : (source.request?.authValue || ""), placeholder: source.request?.authValue === "***" ? "••••••••" : "", onChange: (e) => patchSource("request", { authValue: e.target.value }) })
+										react.createElement("div", { className: "dshqb_secret_input" }, [
+											react.createElement("input", { className: "dshqb_input", key: "input", type: "password", autoComplete: "new-password", value: source.request?.authValue || "", placeholder: source.request?.credentialConfigured ? t("settings.directCredentialPlaceholder") : "", onChange: (e) => patchSource("request", { authValue: e.target.value }) }),
+											source.request?.credentialConfigured ? react.createElement("span", { className: "dshqb_secret_status", key: "status" }, t("settings.directCredentialConfigured")) : null
+										])
 									) : null,
 									credentialChoice === "__ref" ? react.createElement(FieldRow, { t, key: "auth_ref", label: t("settings.quotaAuthRef"), hint: t("settings.quotaAuthRefHint"), disabled: savingCard === "quota" },
 										react.createElement("input", { className: "dshqb_input", type: "text", value: source.request?.authRef || "", onChange: (e) => patchSource("request", { authRef: e.target.value }) })
