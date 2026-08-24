@@ -206,7 +206,8 @@ window.__ModuleLoader__.load({
 				".dshqb_settings_head_copy{display:flex;flex-direction:column;gap:4px;min-width:0}",
 				".dshqb_settings_desc{font-size:12.5px;font-weight:400;color:var(--dsw-alias-label-tertiary);line-height:1.45;white-space:normal}",
 				".dshqb_unsaved{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:500;line-height:16px;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,0.1));border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.16));flex-shrink:0;white-space:nowrap}",
-				".dshqb_toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:var(--dsw-alias-state-success-primary,#10b981);color:#ffffff;padding:8px 18px;border-radius:999px;box-shadow:var(--dsw-shadow-lv3,0 8px 24px rgba(0,0,0,0.3));font-size:12.5px;font-weight:500;z-index:100000;animation:dshqb-toast-in .2s ease-out;display:flex;align-items:center;gap:6px}",
+				".dshqb_toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);max-width:min(680px,calc(100vw - 32px));background:var(--dsw-alias-state-success-primary,#10b981);color:#ffffff;padding:9px 16px;border-radius:10px;box-shadow:var(--dsw-shadow-lv3,0 8px 24px rgba(0,0,0,0.3));font-size:12.5px;font-weight:500;line-height:1.45;white-space:normal;z-index:100000;animation:dshqb-toast-in .2s ease-out;display:flex;align-items:center;gap:6px}",
+				".dshqb_toast_error{background:var(--dsw-alias-state-error-primary,#dc2626)}",
 				".dshqb_settings_page{position:relative;display:flex;flex-direction:column;gap:12px;min-width:0;width:100%;max-width:760px;box-sizing:border-box;white-space:normal}",
 				".dshqb_settings_intro{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:0 2px}",
 				".dshqb_settings_intro_copy{display:flex;flex-direction:column;gap:4px;min-width:0}",
@@ -297,10 +298,14 @@ window.__ModuleLoader__.load({
 				".dshqb_custom_source_meta{font-size:11px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
 				".dshqb_custom_source_form{display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid color-mix(in srgb,var(--dsw-alias-brand-primary,#3b82f6) 32%,transparent);border-radius:10px;background:color-mix(in srgb,var(--dsw-alias-brand-primary,#3b82f6) 4%,transparent)}",
 				".dshqb_source_form_head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}",
-				".dshqb_source_test{display:flex;align-items:flex-start;gap:8px;padding:9px 10px;border-radius:8px;font-size:11.5px;line-height:1.45}",
+				".dshqb_source_test{display:flex;flex-direction:column;align-items:stretch;gap:8px;padding:9px 10px;border-radius:8px;font-size:11.5px;line-height:1.45;min-width:0}",
 				".dshqb_source_test_ok{background:rgba(16,185,129,.1);color:var(--dsw-alias-state-success-primary,#10b981)}",
 				".dshqb_source_test_warn{background:rgba(245,158,11,.1);color:var(--dsw-alias-state-warning-primary,#d97706)}",
 				".dshqb_source_test_bad{background:rgba(239,68,68,.1);color:var(--dsw-alias-state-error-primary,#ef4444)}",
+				".dshqb_source_test_head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px;min-width:0}",
+				".dshqb_source_test_message{min-width:0;overflow-wrap:anywhere}",
+				".dshqb_diagnostic_preview{margin:0;max-height:150px;overflow:auto;padding:8px 9px;border-radius:6px;background:rgba(0,0,0,.06);color:var(--dsw-alias-label-secondary);font:11px/1.45 ui-monospace,SFMono-Regular,Consolas,monospace;white-space:pre-wrap;overflow-wrap:anywhere}",
+				".dshqb_diagnostic_copy{flex:0 0 auto;border:0;background:transparent;color:inherit;font:inherit;font-weight:600;cursor:pointer;text-decoration:underline;text-underline-offset:2px;padding:0}",
 				".dshqb_source_actions{display:flex;align-items:center;justify-content:flex-end;gap:8px;padding-top:2px}",
 				".dshqb_source_advanced{border-top:1px solid var(--dsw-alias-border-l3,rgba(128,128,128,.12));padding-top:8px}",
 				".dshqb_source_advanced>summary{cursor:pointer;color:var(--dsw-alias-label-secondary);font-size:12px;user-select:none}",
@@ -958,6 +963,8 @@ window.__ModuleLoader__.load({
 			"settings.requestMethod": "请求方法",
 			"settings.directCredential": "Token / Cookie / Auth 凭证",
 			"settings.directCredentialHint": "直接输入即可。保存到 DSH 本地凭证库，页面和配置接口都不会回显；再次输入并保存就是覆盖。",
+			"settings.cookieCredentialHint": "只填写 Cookie 内容，不要包含“Cookie:”前缀。硅基流动网页接口通常还需要单独添加 x-subject-id 请求头。保存后原值不可查看，只能覆盖。",
+			"settings.cookieCredentialPlaceholder": "例如：__SF_auth.session-token=…; other=value",
 			"settings.directCredentialConfigured": "已设置（原值不可查看，只能覆盖）",
 			"settings.directCredentialPlaceholder": "已设置；输入新值将覆盖",
 			"settings.authHeader": "鉴权请求头名称",
@@ -976,6 +983,12 @@ window.__ModuleLoader__.load({
 			"settings.body.raw": "原始文本",
 			"settings.providerQuota.testParsed": "连接成功，解析到 {count} 项：{details}",
 			"settings.providerQuota.testFields": "连接成功，读取到 {count} 个可选返回字段。请在下方选择需要展示的字段。",
+			"settings.providerQuota.testFailedToast": "测试失败：{error}",
+			"settings.providerQuota.copyDiagnostics": "复制诊断信息",
+			"settings.providerQuota.diagnosticsCopied": "诊断信息已复制（Cookie、Token 等敏感凭证已脱敏）",
+			"settings.providerQuota.copyDiagnosticsFailed": "复制失败，请手动选择错误详情",
+			"settings.providerQuota.diagnosticStatus": "HTTP {status} {statusText}",
+			"settings.providerQuota.diagnosticNoBody": "响应体为空",
 			"settings.providerQuota.mapping": "返回字段映射",
 			"settings.template.balance": "余额查询",
 			"settings.template.subscription": "订阅套餐",
@@ -1248,6 +1261,8 @@ window.__ModuleLoader__.load({
 			"settings.requestMethod": "HTTP method",
 			"settings.directCredential": "Token / cookie / auth credential",
 			"settings.directCredentialHint": "Enter it here. DSH stores it in the local credential vault and never returns it; enter a new value to overwrite it.",
+			"settings.cookieCredentialHint": "Enter the cookie value only, without the “Cookie:” prefix. SiliconFlow's web endpoint usually also needs an x-subject-id header. Once saved, the value can only be overwritten.",
+			"settings.cookieCredentialPlaceholder": "For example: __SF_auth.session-token=…; other=value",
 			"settings.directCredentialConfigured": "Configured (the saved value cannot be viewed, only overwritten)",
 			"settings.directCredentialPlaceholder": "Configured; enter a new value to overwrite",
 			"settings.authHeader": "Authentication header",
@@ -1266,6 +1281,12 @@ window.__ModuleLoader__.load({
 			"settings.body.raw": "Raw text",
 			"settings.providerQuota.testParsed": "Connected. Parsed {count} item(s): {details}",
 			"settings.providerQuota.testFields": "Connected. Read {count} selectable response field(s). Choose the fields to display below.",
+			"settings.providerQuota.testFailedToast": "Test failed: {error}",
+			"settings.providerQuota.copyDiagnostics": "Copy diagnostics",
+			"settings.providerQuota.diagnosticsCopied": "Diagnostics copied (cookies, tokens, and other credentials were redacted)",
+			"settings.providerQuota.copyDiagnosticsFailed": "Copy failed; select the error details manually",
+			"settings.providerQuota.diagnosticStatus": "HTTP {status} {statusText}",
+			"settings.providerQuota.diagnosticNoBody": "Empty response body",
 			"settings.providerQuota.mapping": "Response field mapping",
 			"settings.template.balance": "Balance queries",
 			"settings.template.subscription": "Subscription plans",
@@ -2021,9 +2042,19 @@ window.__ModuleLoader__.load({
 				return () => { cancelled = true; };
 			}, []);
 
-			const showToast = (msg) => {
-				setToast(msg);
-				setTimeout(() => setToast(null), 2500);
+			const showToast = (msg, tone = "success", durationMs = 2500) => {
+				const nextToast = { message: msg, tone };
+				setToast(nextToast);
+				setTimeout(() => setToast((current) => current === nextToast ? null : current), durationMs);
+			};
+			const copyTestDiagnostics = async (message, diagnostics) => {
+				try {
+					if (!globalThis.navigator?.clipboard?.writeText) throw new Error("clipboard unavailable");
+					await globalThis.navigator.clipboard.writeText(JSON.stringify({ error: message, ...diagnostics }, null, 2));
+					showToast(t("settings.providerQuota.diagnosticsCopied"));
+				} catch (_error) {
+					showToast(t("settings.providerQuota.copyDiagnosticsFailed"), "error");
+				}
 			};
 
 			const discardCard = (cardId) => {
@@ -2058,7 +2089,7 @@ window.__ModuleLoader__.load({
 					void spendStore.refresh();
 				} catch (_err) {
 					setEnabledOverride(null);
-					showToast(t("settings.saveFailed"));
+					showToast(t("settings.saveFailed"), "error");
 				} finally {
 					setSavingEnabled(false);
 				}
@@ -2208,7 +2239,7 @@ window.__ModuleLoader__.load({
 					: (template?.name || templateId || "—");
 			};
 			const testProviderBinding = async (provider, binding) => {
-				setSourceTest({ state: "testing", fields: [], message: "", providerId: provider.id });
+				setSourceTest({ state: "testing", fields: [], message: "", diagnostics: null, providerId: provider.id });
 				try {
 					const clean = cloneSettings(binding);
 					delete clean.adapterId;
@@ -2221,7 +2252,12 @@ window.__ModuleLoader__.load({
 						body: JSON.stringify({ binding: clean })
 					});
 					const data = await res.json();
-					if (!data.ok) throw new Error(data.error || "connection failed");
+					if (!data.ok) {
+						const message = data.error || "connection failed";
+						setSourceTest({ state: "error", fields: [], message, diagnostics: data.diagnostics ?? null, providerId: provider.id });
+						showToast(t("settings.providerQuota.testFailedToast", { error: message }), "error", 5000);
+						return;
+					}
 					const fields = Array.isArray(data.availableFields) ? data.availableFields : [];
 					const details = [
 						...Object.entries(data.usage ?? {}).map(([key, window]) => opencodeWindowName(key, t) + " " + formatPercent(window?.percent)),
@@ -2231,13 +2267,16 @@ window.__ModuleLoader__.load({
 					setSourceTest({
 						state: "ok",
 						fields,
+						diagnostics: null,
 						providerId: provider.id,
 						message: details.length
 							? t("settings.providerQuota.testParsed", { count: details.length, details: details.join(" · ") })
 							: t("settings.providerQuota.testFields", { count: fields.length }),
 					});
 				} catch (error) {
-					setSourceTest({ state: "error", fields: [], message: error instanceof Error ? error.message : String(error), providerId: provider.id });
+					const message = error instanceof Error ? error.message : String(error);
+					setSourceTest({ state: "error", fields: [], message, diagnostics: null, providerId: provider.id });
+					showToast(t("settings.providerQuota.testFailedToast", { error: message }), "error", 5000);
 				}
 			};
 
@@ -2352,7 +2391,7 @@ window.__ModuleLoader__.load({
 					return;
 				}
 				setCustomSourceError("");
-				setSourceTest({ state: "testing", fields: [], message: "" });
+				setSourceTest({ state: "testing", fields: [], message: "", diagnostics: null });
 				try {
 					const res = await fetch("/query-credits/test-connection", {
 						method: "POST",
@@ -2360,7 +2399,12 @@ window.__ModuleLoader__.load({
 						body: JSON.stringify({ source: draftToSource(draft) })
 					});
 					const data = await res.json();
-					if (!data.ok) throw new Error(data.error || "connection failed");
+					if (!data.ok) {
+						const message = data.error || "connection failed";
+						setSourceTest({ state: "error", fields: [], message, diagnostics: data.diagnostics ?? null });
+						showToast(t("settings.providerQuota.testFailedToast", { error: message }), "error", 5000);
+						return;
+					}
 					const fields = Array.isArray(data.availableFields) ? data.availableFields : [];
 					const parsedCount = Object.keys(data.usage ?? {}).length + (data.metrics?.length ?? 0) + (data.balances?.length ?? 0);
 					const parsedDetails = [
@@ -2380,13 +2424,16 @@ window.__ModuleLoader__.load({
 					setSourceTest({
 						state: "ok",
 						fields,
+						diagnostics: null,
 						message: t(draft.template ? "settings.testSuccessTemplate" : "settings.testSuccess", {
 							count: draft.template ? parsedCount : fields.length,
 							details: parsedDetails || "—",
 						})
 					});
 				} catch (error) {
-					setSourceTest({ state: "error", fields: [], message: error instanceof Error ? error.message : String(error) });
+					const message = error instanceof Error ? error.message : String(error);
+					setSourceTest({ state: "error", fields: [], message, diagnostics: null });
+					showToast(t("settings.providerQuota.testFailedToast", { error: message }), "error", 5000);
 				}
 			};
 			const saveCustomSource = async () => {
@@ -2559,12 +2606,30 @@ window.__ModuleLoader__.load({
 							const entries = requestHeaders.map(([name, value], rowIndex) => rowIndex === index ? [nextName, nextValue] : [name, value]);
 							patchHeaders(Object.fromEntries(entries.filter(([name]) => String(name).trim())));
 						};
+						const diagnosticResponse = testState.diagnostics?.response;
+						const diagnosticBody = diagnosticResponse?.body
+							? (typeof diagnosticResponse.body === "string" ? diagnosticResponse.body : JSON.stringify(diagnosticResponse.body, null, 2))
+							: t("settings.providerQuota.diagnosticNoBody");
+						const diagnosticPreview = diagnosticResponse
+							? t("settings.providerQuota.diagnosticStatus", { status: diagnosticResponse.status ?? "—", statusText: diagnosticResponse.statusText || "" }).trim() + "\n" + diagnosticBody
+							: "";
 						const testResult = testState.state === "ok" || testState.state === "error"
 							? react.createElement("div", {
 								className: "dshqb_source_test " + (testState.state === "ok" ? "dshqb_source_test_ok" : "dshqb_source_test_bad"),
 								role: "status",
 								key: "test_result"
-							}, testState.message)
+							}, [
+								react.createElement("div", { className: "dshqb_source_test_head", key: "head" }, [
+									react.createElement("span", { className: "dshqb_source_test_message", key: "message" }, testState.message),
+									testState.diagnostics ? react.createElement("button", {
+										type: "button",
+										className: "dshqb_diagnostic_copy",
+										onClick: () => { void copyTestDiagnostics(testState.message, testState.diagnostics); },
+										key: "copy"
+									}, t("settings.providerQuota.copyDiagnostics")) : null,
+								]),
+								diagnosticPreview ? react.createElement("pre", { className: "dshqb_diagnostic_preview", key: "preview" }, diagnosticPreview) : null,
+							])
 							: null;
 						const editor = editing ? react.createElement("div", { className: "dshqb_provider_quota_editor", key: "editor" }, [
 							react.createElement(FieldGrid, { key: "source_type_grid" }, [
@@ -2631,9 +2696,9 @@ window.__ModuleLoader__.load({
 											react.createElement("option", { value: "__none", key: "__none" }, t("settings.providerQuota.credentialNone")),
 										])
 									),
-									credentialChoice === "__value" ? react.createElement(FieldRow, { t, key: "auth_value", label: t("settings.directCredential"), hint: t("settings.directCredentialHint"), disabled: savingCard === "quota" },
+									credentialChoice === "__value" ? react.createElement(FieldRow, { t, key: "auth_value", label: t("settings.directCredential"), hint: t(authStyle === "cookie" ? "settings.cookieCredentialHint" : "settings.directCredentialHint"), disabled: savingCard === "quota" },
 										react.createElement("div", { className: "dshqb_secret_input" }, [
-											react.createElement("input", { className: "dshqb_input", key: "input", type: "password", autoComplete: "new-password", value: source.request?.authValue || "", placeholder: source.request?.credentialConfigured ? t("settings.directCredentialPlaceholder") : "", onChange: (e) => patchSource("request", { authValue: e.target.value }) }),
+											react.createElement("input", { className: "dshqb_input", key: "input", type: "password", autoComplete: "new-password", value: source.request?.authValue || "", placeholder: source.request?.credentialConfigured ? t("settings.directCredentialPlaceholder") : (authStyle === "cookie" ? t("settings.cookieCredentialPlaceholder") : ""), onChange: (e) => patchSource("request", { authValue: e.target.value }) }),
 											source.request?.credentialConfigured ? react.createElement("span", { className: "dshqb_secret_status", key: "status" }, t("settings.directCredentialConfigured")) : null
 										])
 									) : null,
@@ -3224,7 +3289,7 @@ window.__ModuleLoader__.load({
 						exportCard
 					])
 				]),
-				toast ? react.createElement("div", { className: "dshqb_toast", key: "toast" }, toast) : null
+				toast ? react.createElement("div", { className: "dshqb_toast" + (toast.tone === "error" ? " dshqb_toast_error" : ""), key: "toast" }, toast.message) : null
 			]);
 		}
 

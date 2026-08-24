@@ -710,6 +710,144 @@ export const buildCustomHttpRequest = (request = {}, credential = '') => {
   return { url, init: { method, headers, ...(body === undefined ? {} : { body }) } }
 }
 
+const HTTP_DIAGNOSTIC_BODY_LIMIT = 32768
+const redactKnownSecrets = (value, secrets = []) => secrets
+  .map((secret) => String(secret ?? ''))
+  .filter((secret) => secret.length >= 4)
+  .sort((a, b) => b.length - a.length)
+  .reduce((text, secret) => text.replaceAll(secret, '***'), String(value ?? ''))
+
+const credentialDiagnosticSecrets = (credential, authStyle) => {
+  const raw = String(credential ?? '')
+  if (!raw) return []
+  const secrets = [raw]
+  if (normalizeProvider(authStyle) === 'cookie') {
+    for (const part of raw.split(';')) {
+      const value = part.includes('=') ? part.slice(part.indexOf('=') + 1).trim() : ''
+      if (value) secrets.push(value)
+    }
+  }
+  if (normalizeProvider(authStyle) === 'basic') secrets.push(Buffer.from(raw).toString('base64'))
+  return [...new Set(secrets)]
+}
+
+const redactDiagnosticValue = (value, extraSensitiveKeys = new Set(), secrets = []) => {
+  if (Array.isArray(value)) return value.map((item) => redactDiagnosticValue(item, extraSensitiveKeys, secrets))
+  if (typeof value === 'string') return redactKnownSecrets(value, secrets)
+  if (!value || typeof value !== 'object') return value
+  return Object.fromEntries(Object.entries(value).map(([key, child]) => [
+    key,
+    isSensitiveHeader(key) || extraSensitiveKeys.has(key.toLowerCase())
+      ? '***'
+      : redactDiagnosticValue(child, extraSensitiveKeys, secrets),
+  ]))
+}
+
+const diagnosticHeaders = (headers, extraSensitiveKeys = [], secrets = []) => {
+  const sensitive = new Set(extraSensitiveKeys.map((key) => String(key).toLowerCase()))
+  const entries = []
+  if (headers?.forEach) headers.forEach((value, key) => entries.push([key, value]))
+  else entries.push(...Object.entries(headers ?? {}))
+  return Object.fromEntries(entries.map(([key, value]) => [
+    key,
+    isSensitiveHeader(key) || sensitive.has(String(key).toLowerCase())
+      ? '***'
+      : redactKnownSecrets(value, secrets),
+  ]))
+}
+
+const limitDiagnosticBody = (value) => {
+  const text = String(value ?? '')
+  if (text.length <= HTTP_DIAGNOSTIC_BODY_LIMIT) return { text, truncated: false }
+  return { text: `${text.slice(0, HTTP_DIAGNOSTIC_BODY_LIMIT)}\n…[truncated]`, truncated: true }
+}
+
+const diagnosticBody = (body, contentType = '', extraSensitiveKeys = [], secrets = []) => {
+  const raw = redactKnownSecrets(body, secrets)
+  if (!raw) return { text: '', truncated: false }
+  const sensitive = new Set(extraSensitiveKeys.map((key) => String(key).toLowerCase()))
+  try {
+    if (/json/i.test(contentType) || /^[\s]*[\[{]/.test(raw)) {
+      return limitDiagnosticBody(JSON.stringify(redactDiagnosticValue(JSON.parse(raw), sensitive, secrets), null, 2))
+    }
+    if (/x-www-form-urlencoded/i.test(contentType)) {
+      const form = new URLSearchParams(raw)
+      for (const key of [...form.keys()]) {
+        if (isSensitiveHeader(key) || sensitive.has(key.toLowerCase())) form.set(key, '***')
+      }
+      return limitDiagnosticBody(form.toString())
+    }
+  } catch {
+    /* 保留无法解析的上游文本，仍受长度限制。 */
+  }
+  return limitDiagnosticBody(raw)
+}
+
+const diagnosticUrl = (rawUrl, request, secrets = []) => {
+  try {
+    const parsed = new URL(rawUrl)
+    const authParam = String(request?.authParam || 'api_key').toLowerCase()
+    for (const key of [...parsed.searchParams.keys()]) {
+      if (isSensitiveHeader(key) || key.toLowerCase() === authParam) parsed.searchParams.set(key, '***')
+    }
+    return redactKnownSecrets(parsed.toString(), secrets)
+  } catch {
+    return redactKnownSecrets(rawUrl, secrets)
+  }
+}
+
+const buildHttpDiagnostics = (customRequest, request, response, responseBody, secrets = []) => {
+  const authStyle = normalizeProvider(request?.authStyle)
+  const authHeader = authStyle === 'header' ? [String(request?.authHeader || 'Authorization')] : []
+  const requestHeaders = diagnosticHeaders(customRequest.init?.headers, authHeader, secrets)
+  const requestContentType = Object.entries(requestHeaders).find(([key]) => key.toLowerCase() === 'content-type')?.[1] ?? ''
+  const authParam = ['json', 'form', 'query'].includes(authStyle)
+    ? [String(request?.authParam || 'api_key')]
+    : []
+  const safeRequestBody = diagnosticBody(customRequest.init?.body, requestContentType, authParam, secrets)
+  const responseHeaders = diagnosticHeaders(response?.headers, [], secrets)
+  const responseContentType = Object.entries(responseHeaders).find(([key]) => key.toLowerCase() === 'content-type')?.[1] ?? ''
+  const safeResponseBody = diagnosticBody(responseBody, responseContentType, [], secrets)
+  return {
+    redacted: true,
+    request: {
+      method: String(customRequest.init?.method || 'GET'),
+      url: diagnosticUrl(customRequest.url, request, secrets),
+      headers: requestHeaders,
+      body: safeRequestBody.text,
+      bodyTruncated: safeRequestBody.truncated,
+    },
+    response: {
+      status: Number(response?.status ?? 0),
+      statusText: String(response?.statusText ?? ''),
+      headers: responseHeaders,
+      body: safeResponseBody.text,
+      bodyTruncated: safeResponseBody.truncated,
+    },
+  }
+}
+
+const readFetchResponseBody = async (response) => {
+  if (typeof response?.text === 'function') return response.text()
+  if (typeof response?.json === 'function') return JSON.stringify(await response.json())
+  return ''
+}
+
+const upstreamErrorSummary = (body) => {
+  const text = String(body ?? '').trim()
+  if (!text) return ''
+  try {
+    const data = JSON.parse(text)
+    const candidate = data?.message ?? data?.msg ?? data?.detail ?? data?.error?.message ?? data?.error ?? data?.code
+    if (candidate !== undefined && candidate !== null) {
+      return String(typeof candidate === 'object' ? JSON.stringify(candidate) : candidate).replace(/\s+/g, ' ').slice(0, 240)
+    }
+  } catch {
+    /* 非 JSON 错误体直接摘要。 */
+  }
+  return text.replace(/\s+/g, ' ').slice(0, 240)
+}
+
 /** 归一化 `/user/balance` 响应体。 */
 const normalizeBalances = (data) => {
   const infos = Array.isArray(data?.balance_infos) ? data.balance_infos : []
@@ -1733,6 +1871,7 @@ export function apply(ctx, config) {
     const authStyle = normalizeProvider(request.authStyle ?? 'none')
     if (authStyle !== 'none' && key === '') throw new Error('quota-credential-missing')
     const customRequest = buildCustomHttpRequest(request, key)
+    const diagnosticSecrets = credentialDiagnosticSecrets(key, authStyle)
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), runtimeConfig.timeoutMs)
     try {
@@ -1740,8 +1879,23 @@ export function apply(ctx, config) {
         ...customRequest.init,
         signal: controller.signal,
       })
-      if (!res.ok) throw new Error(`${adapter.name || adapter.id} API HTTP ${res.status}`)
-      const data = await res.json()
+      const responseBody = await readFetchResponseBody(res)
+      if (!res.ok) {
+        const statusLabel = `${res.status}${res.statusText ? ` ${res.statusText}` : ''}`
+        const diagnostics = buildHttpDiagnostics(customRequest, request, res, responseBody, diagnosticSecrets)
+        const summary = upstreamErrorSummary(diagnostics.response.body)
+        const error = new Error(`${adapter.name || adapter.id} API HTTP ${statusLabel}${summary ? `：${summary}` : ''}`)
+        error.diagnostics = diagnostics
+        throw error
+      }
+      let data
+      try {
+        data = responseBody ? JSON.parse(responseBody) : null
+      } catch {
+        const error = new Error(`${adapter.name || adapter.id} API 返回的不是有效 JSON`)
+        error.diagnostics = buildHttpDiagnostics(customRequest, request, res, responseBody, diagnosticSecrets)
+        throw error
+      }
       const preview = options.includePreview === true ? { availableFields: collectQuotaFields(data) } : {}
       if (adapter.kind === 'balance') {
         if (adapter.template === 'deepseek') {
@@ -2283,12 +2437,17 @@ export function apply(ctx, config) {
             const saved = (runtimeConfig.quotaSources ?? []).find((source) => source?.id === rawDraftSource.id)
             if (saved?.request) rawDraftSource = { ...rawDraftSource, request: mergeMaskedQuotaRequest(saved.request, rawDraftSource.request) }
           }
+          const draftRequested = rawDraftBinding !== null || rawDraftSource !== null
           const draftAdapter = draftBinding
-            ? buildProviderQuotaAdapter(bindingProvider, draftBinding)
+            ? buildProviderQuotaAdapter(bindingProvider, { ...draftBinding, enabled: true })
             : (rawDraftSource
                 ? { ...normalizeQuotaSourceConfig(rawDraftSource), builtin: false }
                 : null)
-          const adapter = draftAdapter ?? (typeof body.provider === 'string' && getQuotaAdapter(body.provider)
+          if (draftRequested && !draftAdapter) {
+            sendJson(res, 400, { ok: false, error: 'quota-source-draft-invalid' })
+            return
+          }
+          const adapter = draftRequested ? draftAdapter : (typeof body.provider === 'string' && getQuotaAdapter(body.provider)
             ? getQuotaAdapter(body.provider)
             : (getQuotaAdapter(runtimeConfig.provider) ?? defaultQuotaAdapter(getRuntimeAdapters())))
           if (!adapter) {
@@ -2364,6 +2523,7 @@ export function apply(ctx, config) {
           sendJson(res, 200, {
             ok: false,
             error: err instanceof Error ? err.message : String(err),
+            ...(err?.diagnostics ? { diagnostics: err.diagnostics } : {}),
           })
         }
       },

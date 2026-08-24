@@ -141,6 +141,24 @@ globalThis.fetch = async (url, options = {}) => {
       }),
     }
   }
+  if (target.includes('custom-error.example.com')) {
+    customRequests.push({ url: target, options })
+    return {
+      ok: false,
+      status: 400,
+      statusText: 'Bad Request',
+      headers: new Headers({
+        'content-type': 'application/json',
+        'set-cookie': 'upstream-session=must-not-leak',
+        'x-request-id': 'request-debug-123',
+      }),
+      text: async () => JSON.stringify({
+        code: 'INVALID_SUBJECT',
+        message: 'x-subject-id is required; received diagnostic-secret',
+        session_token: 'response-secret-must-not-leak',
+      }),
+    }
+  }
   if (target.includes('custom.example.com')) {
     customRequests.push({ url: target, options })
     return {
@@ -387,6 +405,58 @@ assert.equal(resGetConfig.data.config.showPopover, true)
   assert.ok(resCustomConn.data.availableFields.some((field) => field.path === '$.data.remaining'))
   assert.ok(resCustomConn.data.availableFields.some((field) => field.path === '$.data.wallets[*].remaining'))
   console.log('POST /query-credits/test-connection (custom-metric) passed')
+
+  const resDisabledDraftError = await invokeRoute('/query-credits/test-connection', 'POST', {
+    binding: {
+      providerId: 'siliconflow-cn',
+      enabled: false,
+      sourceType: 'custom',
+      source: {
+        id: 'siliconflow-debug',
+        name: '硅基流动-国内',
+        kind: 'metric',
+        enabled: true,
+        providerIds: [],
+        request: {
+          method: 'POST',
+          url: 'https://custom-error.example.com/quota',
+          credentialMode: 'direct',
+          authValue: '__SF_auth.session-token=diagnostic-secret',
+          authStyle: 'cookie',
+          headers: { 'x-subject-id': 'subject-123' },
+          bodyType: 'json',
+          body: '{"pageSize":1,"authorization":"body-secret"}',
+        },
+        response: {
+          metrics: [{ key: 'remaining', label: '余额', valuePath: '$.balance', unit: 'CNY' }],
+        },
+      },
+    },
+  })
+  assert.equal(resDisabledDraftError.status, 200)
+  assert.equal(resDisabledDraftError.data.ok, false)
+  assert.match(resDisabledDraftError.data.error, /SiliconFlow CN API HTTP 400 Bad Request/)
+  assert.match(resDisabledDraftError.data.error, /x-subject-id is required/)
+  assert.doesNotMatch(resDisabledDraftError.data.error, /diagnostic-secret/)
+  assert.equal(resDisabledDraftError.data.diagnostics.redacted, true)
+  assert.equal(resDisabledDraftError.data.diagnostics.request.url, 'https://custom-error.example.com/quota')
+  assert.equal(resDisabledDraftError.data.diagnostics.request.method, 'POST')
+  assert.equal(resDisabledDraftError.data.diagnostics.request.headers.Cookie, '***')
+  assert.equal(resDisabledDraftError.data.diagnostics.request.headers['x-subject-id'], 'subject-123')
+  assert.deepEqual(JSON.parse(resDisabledDraftError.data.diagnostics.request.body), { pageSize: 1, authorization: '***' })
+  assert.equal(resDisabledDraftError.data.diagnostics.response.status, 400)
+  assert.equal(resDisabledDraftError.data.diagnostics.response.statusText, 'Bad Request')
+  assert.equal(resDisabledDraftError.data.diagnostics.response.headers['set-cookie'], '***')
+  assert.equal(resDisabledDraftError.data.diagnostics.response.headers['x-request-id'], 'request-debug-123')
+  assert.deepEqual(JSON.parse(resDisabledDraftError.data.diagnostics.response.body), {
+    code: 'INVALID_SUBJECT',
+    message: 'x-subject-id is required; received ***',
+    session_token: '***',
+  })
+  const serializedDiagnostics = JSON.stringify(resDisabledDraftError.data.diagnostics)
+  assert.doesNotMatch(serializedDiagnostics, /diagnostic-secret|body-secret|response-secret|upstream-session/)
+  assert.equal(customRequests.at(-1).url, 'https://custom-error.example.com/quota', 'disabled draft must be tested directly instead of falling back to DeepSeek')
+  console.log('disabled provider draft / redacted HTTP diagnostics passed')
 
   const overwriteBinding = structuredClone(customBinding)
   overwriteBinding.source.request.authValue = '__SF_auth.session-token=replaced-secret'

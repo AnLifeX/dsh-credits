@@ -154,6 +154,11 @@ if (!code.includes('settings.btnDiscard')) throw new Error('discard action missi
 if (!code.includes('dshqb_pcard')) throw new Error('plugin card shell missing')
 if (!code.includes('settings.card.display')) throw new Error('display card i18n missing')
 if (/\.dshqb_root\{[^}]*width:100%/.test(code)) throw new Error('shared dock root must not take full width by default')
+if (!code.includes('copyTestDiagnostics')) throw new Error('quota test diagnostics copy action missing')
+if (!code.includes('data.diagnostics ?? null')) throw new Error('quota test error diagnostics are not retained')
+if (!code.includes('dshqb_diagnostic_preview')) throw new Error('quota test response preview missing')
+if (!code.includes('settings.cookieCredentialHint')) throw new Error('cookie credential format hint missing')
+if (!code.includes('dshqb_toast_error')) throw new Error('error toast styling missing')
 
 const capturedRegister = []
 api.apply(makeSlotCtx(capturedRegister))
