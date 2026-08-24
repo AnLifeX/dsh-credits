@@ -159,8 +159,18 @@ dsh plugin --profile web remove dsh-balance
     timeoutMs: 8000
     currency: CNY
     prices:
-      deepseek-v4-flash: { cacheHit: 0.02, cacheMiss: 1, output: 2 }
-      deepseek-v4-pro: { cacheHit: 0.025, cacheMiss: 3, output: 6 }
+      deepseek-v4-flash:
+        cacheHit: 0.1
+        cacheMiss: 3
+        output: 9
+        peak: { cacheHit: 0.1, cacheMiss: 3, output: 9 }
+        offPeak: { cacheHit: 0.05, cacheMiss: 1.5, output: 4.5 }
+      deepseek-v4-pro:
+        cacheHit: 0.3
+        cacheMiss: 9
+        output: 27
+        peak: { cacheHit: 0.3, cacheMiss: 9, output: 27 }
+        offPeak: { cacheHit: 0.15, cacheMiss: 4.5, output: 13.5 }
       deepseek-chat: { cacheHit: 0.1, cacheMiss: 1, output: 2 }
       deepseek-reasoner: { cacheHit: 1, cacheMiss: 4, output: 16 }
 ```
@@ -177,11 +187,21 @@ dsh plugin --profile web remove dsh-balance
     dangerThreshold: 0.5
     currency: USD
     prices:
-      deepseek-v4-flash: { cacheHit: 0.0028, cacheMiss: 0.14, output: 0.28 }
-      deepseek-v4-pro: { cacheHit: 0.0035, cacheMiss: 0.42, output: 0.84 }
+      deepseek-v4-flash:
+        cacheHit: 0.014
+        cacheMiss: 0.42
+        output: 1.26
+        peak: { cacheHit: 0.014, cacheMiss: 0.42, output: 1.26 }
+        offPeak: { cacheHit: 0.007, cacheMiss: 0.21, output: 0.63 }
+      deepseek-v4-pro:
+        cacheHit: 0.042
+        cacheMiss: 1.26
+        output: 3.78
+        peak: { cacheHit: 0.042, cacheMiss: 1.26, output: 3.78 }
+        offPeak: { cacheHit: 0.021, cacheMiss: 0.63, output: 1.89 }
 ```
 
-`prices` 是「当前 `currency` 下每 1M token」的刊例单价。DeepSeek 账户的 CNY / USD 是两套独立钱包：底部会列出选定货币，以及其它仍有余额的钱包；悬停卡片列出全部钱包。计价货币只影响本会话/累计估算和状态灯，不会把其它钱包藏掉。切换货币时会套用该币种官方刊例单价，**不会做汇率换算**。V4 在 2026-08-17 之后按北京时间走峰谷价，人民币和美元同步切换（美元 = 人民币官方价 × 0.14）。
+`prices` 是「当前 `currency` 下每 1M token」的单价。V4 可写 `peak` / `offPeak`（高峰 / 低谷）。内置 `deepseek-v4-flash` / `deepseek-v4-pro` 如果只有三个刊例字段，插件仍按官方峰谷表计价（兼容涨价前旧配置）。自行添加的模型只写三字段则全天按该价计，等效峰谷倍率 1。高峰为北京时间周一至周五 09:00–12:00、14:00–18:00，其余时段（含周末）为低谷。DeepSeek 账户的 CNY / USD 是两套独立钱包：底部会列出选定货币，以及其它仍有余额的钱包；悬停卡片列出全部钱包。计价货币只影响本会话/累计估算和状态灯，不会把其它钱包藏掉。切换货币时会套用该币种官方刊例单价，**不会做汇率换算**。V4 在 2026-08-17 之后按北京时间走峰谷价，人民币和美元同步切换（美元 = 人民币官方价 × 0.14）。
 
 ## 架构
 

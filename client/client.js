@@ -166,11 +166,21 @@ window.__ModuleLoader__.load({
 				/* Pricing Table & Model Add */
 				".dshqb_pricing_table{width:100%;border-collapse:collapse;font-size:12px;margin-top:6px}",
 				".dshqb_pricing_table th{text-align:left;padding:6px 8px;color:var(--dsw-alias-label-tertiary);font-weight:500;border-bottom:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.12))}",
-				".dshqb_pricing_table td{padding:6px 8px;border-bottom:1px solid var(--dsw-alias-border-l3,rgba(128,128,128,0.06))}",
+				".dshqb_pricing_table td{padding:6px 8px;border-bottom:1px solid var(--dsw-alias-border-l3,rgba(128,128,128,0.06));vertical-align:middle}",
+				".dshqb_period_tag{display:inline-flex;align-items:center;padding:1px 7px;border-radius:999px;font-size:11px;font-weight:500;white-space:nowrap}",
+				".dshqb_period_peak{background:rgba(245,158,11,0.14);color:var(--dsw-alias-state-warn-primary,var(--dsw-alias-state-warning-primary,#f59e0b))}",
+				".dshqb_period_offpeak{background:rgba(16,185,129,0.14);color:var(--dsw-alias-state-success-primary,#10b981)}",
+				".dshqb_period_flat{background:rgba(128,128,128,0.12);color:var(--dsw-alias-label-secondary)}",
+				".dshqb_pricing_reset_bar{display:flex;justify-content:flex-end;margin-top:6px}",
+				".dshqb_pricing_tier_row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums}",
 				".dshqb_input_num{width:80px;padding:4px 8px;font-size:12px}",
 				".dshqb_btn_del{color:var(--dsw-alias-state-error-primary,#ef4444);background:transparent;border:none;cursor:pointer;padding:2px 6px;border-radius:4px;font-size:13px;line-height:1;transition:background-color .15s ease}",
 				".dshqb_btn_del:hover{background:rgba(239,68,68,0.12)}",
-				".dshqb_add_model_box{display:flex;gap:8px;align-items:center;background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,0.03));border:1px dashed var(--dsw-alias-border-l2,rgba(128,128,128,0.2));border-radius:6px;padding:8px 10px;margin-top:8px}",
+				".dshqb_add_model_box{display:flex;flex-direction:column;gap:8px;align-items:stretch;background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,0.03));border:1px dashed var(--dsw-alias-border-l2,rgba(128,128,128,0.2));border-radius:6px;padding:8px 10px;margin-top:8px}",
+				".dshqb_add_model_row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}",
+				".dshqb_add_model_hint{font-size:11px;color:var(--dsw-alias-label-tertiary);line-height:1.45;white-space:normal}",
+				".dshqb_add_model_label{font-size:11px;color:var(--dsw-alias-label-secondary);white-space:nowrap}",
+				".dshqb_input_mult{width:64px;padding:4px 8px;font-size:12px}",
 				".dshqb_code_wrap{position:relative;margin-top:4px}",
 				".dshqb_code_block{background:var(--dsw-alias-markdown-code-block,var(--dsw-alias-bg-layer-2,rgba(128,128,128,0.06)));border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.15));border-radius:8px;margin:0;padding:12px 46px 12px 12px;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:11.5px;color:var(--dsw-alias-label-primary);overflow-x:auto;white-space:pre;line-height:1.5;max-height:220px}",
 				".dshqb_code_copy_wrap{position:absolute;top:8px;right:8px}",
@@ -373,18 +383,83 @@ window.__ModuleLoader__.load({
 		}
 		/** 与服务端 src/pricing.js 同一套 V4 峰谷表; 客户端按每笔 legs[].t 计价。 */
 		const V4_CUTOFF_MS = 1786896000000;
+		const PINNED_V4_MODELS = ["deepseek-v4-flash", "deepseek-v4-pro"];
 		const V4_CNY = {
 			"deepseek-v4-flash": { listed: { cacheHit: 0.02, cacheMiss: 1, output: 2 }, peak: { cacheHit: 0.10, cacheMiss: 3.0, output: 9.0 }, offPeak: { cacheHit: 0.05, cacheMiss: 1.5, output: 4.5 } },
-			"deepseek-v4-pro": { listed: { cacheHit: 0.025, cacheMiss: 3, output: 6 }, peak: { cacheHit: 0.30, cacheMiss: 9.0, output: 27.0 }, offPeak: { cacheHit: 0.15, cacheMiss: 4.5, output: 13.5 } }
+			"deepseek-v4-pro": { listed: { cacheHit: 0.025, cacheMiss: 3, output: 6 }, peak: { cacheHit: 0.30, cacheMiss: 9.0, output: 27.0 }, offPeak: { cacheHit: 0.15, cacheMiss: 4.5, output: 13.5 } },
+			"deepseek-v4-flash-vision-exp": { listed: { cacheHit: 0.02, cacheMiss: 1, output: 2 }, peak: { cacheHit: 0.10, cacheMiss: 3.0, output: 9.0 }, offPeak: { cacheHit: 0.05, cacheMiss: 1.5, output: 4.5 } }
 		};
 		const scaleUsd = (p) => ({ cacheHit: Math.round(p.cacheHit * 0.14 * 1e6) / 1e6, cacheMiss: Math.round(p.cacheMiss * 0.14 * 1e6) / 1e6, output: Math.round(p.output * 0.14 * 1e6) / 1e6 });
-		const V4_USD = {
-			"deepseek-v4-flash": { listed: scaleUsd(V4_CNY["deepseek-v4-flash"].listed), peak: scaleUsd(V4_CNY["deepseek-v4-flash"].peak), offPeak: scaleUsd(V4_CNY["deepseek-v4-flash"].offPeak) },
-			"deepseek-v4-pro": { listed: scaleUsd(V4_CNY["deepseek-v4-pro"].listed), peak: scaleUsd(V4_CNY["deepseek-v4-pro"].peak), offPeak: scaleUsd(V4_CNY["deepseek-v4-pro"].offPeak) }
-		};
+		const V4_USD = Object.fromEntries(Object.entries(V4_CNY).map(([model, tiers]) => [model, {
+			listed: scaleUsd(tiers.listed),
+			peak: scaleUsd(tiers.peak),
+			offPeak: scaleUsd(tiers.offPeak)
+		}]));
+		function v4TableFor(currency) {
+			return currency === "USD" ? V4_USD : V4_CNY;
+		}
+		function isFiniteRate(p) {
+			return p && [p.cacheHit, p.cacheMiss, p.output].every((n) => Number.isFinite(Number(n)));
+		}
+		function hasTariffTiers(p) {
+			return isFiniteRate(p?.peak) && isFiniteRate(p?.offPeak);
+		}
+		function cloneRate(p) {
+			return { cacheHit: Number(p.cacheHit), cacheMiss: Number(p.cacheMiss), output: Number(p.output) };
+		}
+		function roundPrice(n) {
+			return Math.round(Number(n) * 1e6) / 1e6;
+		}
+		function scaleRate(p, m) {
+			return { cacheHit: roundPrice(p.cacheHit * m), cacheMiss: roundPrice(p.cacheMiss * m), output: roundPrice(p.output * m) };
+		}
+		function normalizeMultiplier(n) {
+			const m = Number(n);
+			if (!Number.isFinite(m) || m <= 0) return 1;
+			return m;
+		}
+		function isFlatMultiplier(n) {
+			return Math.abs(normalizeMultiplier(n) - 1) < 1e-9;
+		}
+		function withTiers(peak, offPeak) {
+			const p = cloneRate(peak);
+			const o = cloneRate(offPeak);
+			return { ...p, peak: p, offPeak: o };
+		}
+		function buildAddedModelPrice(multiplier, peakRates) {
+			const peak = cloneRate(peakRates);
+			if (isFlatMultiplier(multiplier)) return peak;
+			return withTiers(peak, scaleRate(peak, normalizeMultiplier(multiplier)));
+		}
+		function v4SettingsFromTable(tiers) {
+			return { ...cloneRate(tiers.peak), peak: cloneRate(tiers.peak), offPeak: cloneRate(tiers.offPeak) };
+		}
+		function snapshotModelPrice(p) {
+			const base = { cacheHit: Number(p?.cacheHit), cacheMiss: Number(p?.cacheMiss), output: Number(p?.output) };
+			if (hasTariffTiers(p)) return { ...base, peak: cloneRate(p.peak), offPeak: cloneRate(p.offPeak) };
+			return base;
+		}
+		function hydrateModelPrice(model, rates, currency) {
+			if (hasTariffTiers(rates)) {
+				return { ...cloneRate(rates.peak), peak: cloneRate(rates.peak), offPeak: cloneRate(rates.offPeak) };
+			}
+			if (PINNED_V4_MODELS.includes(model)) {
+				const table = v4TableFor(currency)?.[model];
+				if (table) return v4SettingsFromTable(table);
+			}
+			return { cacheHit: Number(rates?.cacheHit ?? 0), cacheMiss: Number(rates?.cacheMiss ?? 0), output: Number(rates?.output ?? 0) };
+		}
+		function hydratePrices(prices, currency) {
+			const next = {};
+			for (const [model, rates] of Object.entries(prices || {})) next[model] = hydrateModelPrice(model, rates, currency);
+			return next;
+		}
 		function isPeakBeijing(timestamp) {
-			const hourBJT = (new Date(timestamp).getUTCHours() + 8) % 24;
-			return (hourBJT >= 9 && hourBJT < 12) || (hourBJT >= 14 && hourBJT < 18);
+			const beijing = new Date(Number(timestamp) + 8 * 3600 * 1000);
+			const hour = beijing.getUTCHours();
+			const dow = beijing.getUTCDay();
+			if (dow === 0 || dow === 6) return false;
+			return (hour >= 9 && hour < 12) || (hour >= 14 && hour < 18);
 		}
 		/** 当前北京时间峰谷时段; 与 V4 计价时段保持一致。 */
 		function currentTariffPeriod(timestamp = Date.now()) {
@@ -392,12 +467,20 @@ window.__ModuleLoader__.load({
 		}
 		function resolveClientPrice(cfg, model, timestamp) {
 			const currency = cfg.currency || "CNY";
-			const table = (currency === "USD" ? V4_USD : currency === "CNY" ? V4_CNY : null)?.[model];
+			const table = v4TableFor(currency)?.[model];
+			const configured = cfg.prices?.[model];
+			if (hasTariffTiers(configured)) {
+				if (table && timestamp < V4_CUTOFF_MS) return table.listed;
+				return cloneRate(isPeakBeijing(timestamp) ? configured.peak : configured.offPeak);
+			}
+			if (isFiniteRate(configured) && !(table && PINNED_V4_MODELS.includes(model))) {
+				return cloneRate(configured);
+			}
 			if (table) {
 				if (timestamp < V4_CUTOFF_MS) return table.listed;
 				return isPeakBeijing(timestamp) ? table.peak : table.offPeak;
 			}
-			return cfg.prices?.[model] ?? cfg.defaultPrices ?? { cacheHit: 0, cacheMiss: 0, output: 0 };
+			return configured ?? cfg.defaultPrices ?? { cacheHit: 0, cacheMiss: 0, output: 0 };
 		}
 		function priceLeg(cfg, leg) {
 			const p = resolveClientPrice(cfg, leg.model, Number(leg.t) || 0);
@@ -650,8 +733,8 @@ window.__ModuleLoader__.load({
 			"card.pricingHint": "💡 计价规则与单价请见右侧 [?]",
 			"tariff.peak": "梁文峰时刻",
 			"tariff.offPeak": "梁文谷时刻",
-			"tariff.peakTitle": "梁文峰时刻：（北京时间）09:00–12:00、14:00–18:00\n梁文谷时刻：（北京时间）00:00–09:00、12:00–14:00、18:00–24:00",
-			"tariff.offPeakTitle": "梁文峰时刻：（北京时间）09:00–12:00、14:00–18:00\n梁文谷时刻：（北京时间）00:00–09:00、12:00–14:00、18:00–24:00",
+			"tariff.peakTitle": "梁文峰时刻：北京时间周一至周五 09:00–12:00、14:00–18:00\n梁文谷时刻：其余时段（含周末）",
+			"tariff.offPeakTitle": "梁文峰时刻：北京时间周一至周五 09:00–12:00、14:00–18:00\n梁文谷时刻：其余时段（含周末）",
 			"card.error": "【账户余额】异常: {error}",
 			/* OpenCode Go quota translations */
 			"quota.readout": "Go 额度 月 {monthly} · 周 {weekly} · 5h {rolling}",
@@ -693,7 +776,7 @@ window.__ModuleLoader__.load({
 			"settings.card.thresholds": "阈值与刷新",
 			"settings.card.thresholdsDesc": "状态灯阈值与后台查询频率。",
 			"settings.card.pricing": "模型单价",
-			"settings.card.pricingDesc": "各模型每 1M Token 的命中 / 未命中 / 输出价。",
+			"settings.card.pricingDesc": "各模型每 1M Token 的命中 / 未命中 / 输出价。添加时填写高峰价；峰谷倍率默认为 1（无峰谷），0.5 表示低谷 = 高峰 × 0.5。",
 			"settings.card.export": "YAML 导出",
 			"settings.card.exportDesc": "复制到 cordis.patch.yml 做持久覆盖。",
 			"settings.enabled": "启用额度功能",
@@ -746,9 +829,19 @@ window.__ModuleLoader__.load({
 			"settings.pricingHit": "缓存命中",
 			"settings.pricingMiss": "未命中",
 			"settings.pricingOut": "输出",
+			"settings.pricingPeriod": "时段",
+			"settings.pricingPeak": "高峰",
+			"settings.pricingOffPeak": "低谷",
+			"settings.pricingFlat": "固定",
+			"settings.removeModel": "移除该模型",
 			"settings.pricingReset": "恢复官方默认单价",
 			"settings.addModel": "➕ 添加自定义模型",
 			"settings.addModelName": "模型名称 (如 deepseek-chat)",
+			"settings.addFillingPeak": "当前填写：高峰价",
+			"settings.peakMultiplier": "峰谷倍率",
+			"settings.addModelHint": "三个价格是高峰价。倍率为 1 时无峰谷；否则低谷 = 高峰 × 倍率（官方 V4 为 0.5）。",
+			"settings.enableTiers": "按 0.5 启用峰谷",
+			"settings.disableTiers": "改为固定价",
 			"settings.btnAdd": "添加",
 			"settings.btnCopy": "复制 YAML 配置",
 			"settings.copied": "已复制到剪贴板",
@@ -796,8 +889,8 @@ window.__ModuleLoader__.load({
 			"card.pricingHint": "💡 View pricing & rates via [?]",
 			"tariff.peak": "Liangwen Peak Time",
 			"tariff.offPeak": "Liangwen Valley Time",
-			"tariff.peakTitle": "Peak period: (Beijing time) 09:00–12:00, 14:00–18:00\nValley period: (Beijing time) 00:00–09:00, 12:00–14:00, 18:00–24:00",
-			"tariff.offPeakTitle": "Peak period: (Beijing time) 09:00–12:00, 14:00–18:00\nValley period: (Beijing time) 00:00–09:00, 12:00–14:00, 18:00–24:00",
+			"tariff.peakTitle": "Peak period: (Beijing time) Mon–Fri 09:00–12:00, 14:00–18:00\nValley period: all other times, including weekends",
+			"tariff.offPeakTitle": "Peak period: (Beijing time) Mon–Fri 09:00–12:00, 14:00–18:00\nValley period: all other times, including weekends",
 			"card.error": "【Account Balance】Error: {error}",
 			/* OpenCode Go quota translations */
 			"quota.readout": "Go quota M {monthly} · W {weekly} · 5h {rolling}",
@@ -839,7 +932,7 @@ window.__ModuleLoader__.load({
 			"settings.card.thresholds": "Thresholds & refresh",
 			"settings.card.thresholdsDesc": "Status-light thresholds and backend poll interval.",
 			"settings.card.pricing": "Model pricing",
-			"settings.card.pricingDesc": "Cache hit / miss / output price per 1M tokens.",
+			"settings.card.pricingDesc": "Cache hit / miss / output price per 1M tokens. The three add-model fields are peak rates. Multiplier 1 means no peak/off-peak split; 0.5 means off-peak = peak × 0.5.",
 			"settings.card.export": "YAML export",
 			"settings.card.exportDesc": "Copy into cordis.patch.yml for a durable override.",
 			"settings.enabled": "Enable quota features",
@@ -892,9 +985,19 @@ window.__ModuleLoader__.load({
 			"settings.pricingHit": "Cache Hit",
 			"settings.pricingMiss": "Cache Miss",
 			"settings.pricingOut": "Output",
+			"settings.pricingPeriod": "Period",
+			"settings.pricingPeak": "Peak",
+			"settings.pricingOffPeak": "Off-peak",
+			"settings.pricingFlat": "Flat",
+			"settings.removeModel": "Remove this model",
 			"settings.pricingReset": "Reset to Default Rates",
 			"settings.addModel": "➕ Add Custom Model",
 			"settings.addModelName": "Model Name (e.g. deepseek-chat)",
+			"settings.addFillingPeak": "Currently filling: peak",
+			"settings.peakMultiplier": "Off-peak multiplier",
+			"settings.addModelHint": "The three prices are peak rates. Multiplier 1 means no peak/off-peak split; otherwise off-peak = peak × multiplier (official V4 is 0.5).",
+			"settings.enableTiers": "Enable peak/off-peak at 0.5",
+			"settings.disableTiers": "Use flat rate",
 			"settings.btnAdd": "Add",
 			"settings.btnCopy": "Copy YAML",
 			"settings.copied": "Copied to clipboard",
@@ -921,14 +1024,14 @@ window.__ModuleLoader__.load({
 
 		//#region settings modal component
 		const DEFAULT_PRICES_CNY = {
-			"deepseek-v4-flash": { cacheHit: 0.02, cacheMiss: 1, output: 2 },
-			"deepseek-v4-pro": { cacheHit: 0.025, cacheMiss: 3, output: 6 },
+			"deepseek-v4-flash": v4SettingsFromTable(V4_CNY["deepseek-v4-flash"]),
+			"deepseek-v4-pro": v4SettingsFromTable(V4_CNY["deepseek-v4-pro"]),
 			"deepseek-chat": { cacheHit: 0.1, cacheMiss: 1, output: 2 },
 			"deepseek-reasoner": { cacheHit: 1, cacheMiss: 4, output: 16 }
 		};
 		const DEFAULT_PRICES_USD = {
-			"deepseek-v4-flash": { cacheHit: 0.0028, cacheMiss: 0.14, output: 0.28 },
-			"deepseek-v4-pro": { cacheHit: 0.0035, cacheMiss: 0.42, output: 0.84 },
+			"deepseek-v4-flash": v4SettingsFromTable(V4_USD["deepseek-v4-flash"]),
+			"deepseek-v4-pro": v4SettingsFromTable(V4_USD["deepseek-v4-pro"]),
 			"deepseek-chat": { cacheHit: 0.014, cacheMiss: 0.14, output: 0.28 },
 			"deepseek-reasoner": { cacheHit: 0.14, cacheMiss: 0.55, output: 2.19 }
 		};
@@ -995,7 +1098,11 @@ window.__ModuleLoader__.load({
 			}
 			lines.push("    prices:");
 			for (const [m, p] of Object.entries(config.prices || {})) {
-				lines.push(`      ${m}: { cacheHit: ${p.cacheHit}, cacheMiss: ${p.cacheMiss}, output: ${p.output} }`);
+				if (hasTariffTiers(p)) {
+					lines.push(`      ${m}: { cacheHit: ${p.cacheHit}, cacheMiss: ${p.cacheMiss}, output: ${p.output}, peak: { cacheHit: ${p.peak.cacheHit}, cacheMiss: ${p.peak.cacheMiss}, output: ${p.peak.output} }, offPeak: { cacheHit: ${p.offPeak.cacheHit}, cacheMiss: ${p.offPeak.cacheMiss}, output: ${p.offPeak.output} } }`);
+				} else {
+					lines.push(`      ${m}: { cacheHit: ${p.cacheHit}, cacheMiss: ${p.cacheMiss}, output: ${p.output} }`);
+				}
 			}
 			return lines.join("\n");
 		}
@@ -1147,7 +1254,7 @@ window.__ModuleLoader__.load({
 				opencodeApiKeyRef: c.opencodeApiKeyRef || "OPENCODE_GO_API_KEY",
 				opencodeApiKey: "",
 				opencodeBaseUrl: c.opencodeBaseUrl || "https://opencode.ai/zen/go/v1/usage",
-				prices: loadedPrices,
+				prices: hydratePrices(loadedPrices, c.currency ?? "CNY"),
 				defaultPrices: c.defaultPrices ?? officialDefaultPrices(c.currency ?? "CNY")
 			};
 		}
@@ -1176,12 +1283,8 @@ window.__ModuleLoader__.load({
 			if (field === "prices") {
 				const pa = {};
 				const pb = {};
-				for (const [model, rates] of Object.entries(a || {})) {
-					pa[model] = { cacheHit: Number(rates?.cacheHit), cacheMiss: Number(rates?.cacheMiss), output: Number(rates?.output) };
-				}
-				for (const [model, rates] of Object.entries(b || {})) {
-					pb[model] = { cacheHit: Number(rates?.cacheHit), cacheMiss: Number(rates?.cacheMiss), output: Number(rates?.output) };
-				}
+				for (const [model, rates] of Object.entries(a || {})) pa[model] = snapshotModelPrice(rates);
+				for (const [model, rates] of Object.entries(b || {})) pb[model] = snapshotModelPrice(rates);
 				return JSON.stringify(pa) === JSON.stringify(pb);
 			}
 			if (field === "defaultPrices") return JSON.stringify(a || {}) === JSON.stringify(b || {});
@@ -1203,9 +1306,7 @@ window.__ModuleLoader__.load({
 		}
 
 		function pricesEqualModel(a, b) {
-			return Number(a?.cacheHit) === Number(b?.cacheHit)
-				&& Number(a?.cacheMiss) === Number(b?.cacheMiss)
-				&& Number(a?.output) === Number(b?.output);
+			return JSON.stringify(snapshotModelPrice(a)) === JSON.stringify(snapshotModelPrice(b));
 		}
 
 		function overlayWithoutSecrets(overlay) {
@@ -1430,6 +1531,7 @@ window.__ModuleLoader__.load({
 			const [newModelHit, setNewModelHit] = react.useState(0.1);
 			const [newModelMiss, setNewModelMiss] = react.useState(1.0);
 			const [newModelOut, setNewModelOut] = react.useState(2.0);
+			const [newModelMultiplier, setNewModelMultiplier] = react.useState(1);
 
 			const baseView = mergeView(baseline, drafts);
 			const view = enabledOverride === null ? baseView : { ...baseView, enabled: enabledOverride };
@@ -1919,6 +2021,51 @@ window.__ModuleLoader__.load({
 			]);
 
 			const official = officialPricesFor(currency);
+			const patchModelRates = (model, nextRates) => {
+				patchCard("pricing", { prices: { ...view.prices, [model]: nextRates } });
+			};
+			const rateInput = (model, rates, field, step, tierKey) => {
+				const slice = tierKey ? (rates[tierKey] || { cacheHit: 0, cacheMiss: 0, output: 0 }) : rates;
+				return react.createElement("input", {
+					type: "number",
+					step,
+					className: "dshqb_input dshqb_input_num",
+					value: slice[field],
+					onChange: (e) => {
+						const n = Number(e.target.value);
+						if (!tierKey) {
+							patchModelRates(model, { ...rates, [field]: n });
+							return;
+						}
+						const nextTier = { ...slice, [field]: n };
+						const next = { ...rates, [tierKey]: nextTier };
+						if (tierKey === "peak") {
+							next.cacheHit = nextTier.cacheHit;
+							next.cacheMiss = nextTier.cacheMiss;
+							next.output = nextTier.output;
+						}
+						patchModelRates(model, next);
+					}
+				});
+			};
+			const periodTag = (kind) => react.createElement("span", {
+				className: "dshqb_period_tag " + (kind === "peak" ? "dshqb_period_peak" : kind === "offPeak" ? "dshqb_period_offpeak" : "dshqb_period_flat")
+			}, t(kind === "peak" ? "settings.pricingPeak" : kind === "offPeak" ? "settings.pricingOffPeak" : "settings.pricingFlat"));
+			const addNewModel = () => {
+				const name = newModelName.trim();
+				if (!name) return;
+				patchCard("pricing", {
+					prices: {
+						...view.prices,
+						[name]: buildAddedModelPrice(newModelMultiplier, {
+							cacheHit: newModelHit,
+							cacheMiss: newModelMiss,
+							output: newModelOut
+						})
+					}
+				});
+				setNewModelName("");
+			};
 			const pricingCard = react.createElement(PluginCard, {
 				t,
 				title: t("settings.card.pricing"),
@@ -1936,6 +2083,7 @@ window.__ModuleLoader__.load({
 					react.createElement("thead", { key: "th" }, [
 						react.createElement("tr", { key: "r" }, [
 							react.createElement("th", { key: "m" }, "Model"),
+							react.createElement("th", { key: "period" }, t("settings.pricingPeriod")),
 							react.createElement("th", { key: "hit" }, t("settings.pricingHit") + " (" + currency + ")"),
 							react.createElement("th", { key: "miss" }, t("settings.pricingMiss") + " (" + currency + ")"),
 							react.createElement("th", { key: "out" }, t("settings.pricingOut") + " (" + currency + ")"),
@@ -1943,134 +2091,157 @@ window.__ModuleLoader__.load({
 						])
 					]),
 					react.createElement("tbody", { key: "tb" },
-						Object.entries(view.prices || {}).map(([model, rates]) => {
+						Object.entries(view.prices || {}).flatMap(([model, stored]) => {
+							const rates = hydrateModelPrice(model, stored, currency);
 							const officialRates = official[model];
 							const overridden = !officialRates || !pricesEqualModel(rates, officialRates);
-							return react.createElement("tr", { key: model }, [
-								react.createElement("td", { style: { fontWeight: "600" }, key: "m_name" }, [
-									react.createElement("div", { key: "n" }, model),
-									overridden ? react.createElement("button", {
-										type: "button",
-										className: "dshqb_model_reset",
-										onClick: () => {
-											const next = { ...(view.prices || {}) };
-											if (officialRates) next[model] = { ...officialRates };
-											else delete next[model];
-											patchCard("pricing", { prices: next });
-										},
-										key: "rst"
-									}, t("settings.resetField")) : null
+							const canDelete = !PINNED_V4_MODELS.includes(model);
+							const resetBtn = overridden ? react.createElement("button", {
+								type: "button",
+								className: "dshqb_model_reset",
+								onClick: () => {
+									const next = { ...(view.prices || {}) };
+									if (officialRates) next[model] = JSON.parse(JSON.stringify(officialRates));
+									else delete next[model];
+									patchCard("pricing", { prices: next });
+								},
+								key: "rst"
+							}, t("settings.resetField")) : null;
+							const delBtn = canDelete ? react.createElement("button", {
+								type: "button",
+								className: "dshqb_btn_del",
+								onClick: () => {
+									const next = { ...view.prices };
+									delete next[model];
+									patchCard("pricing", { prices: next });
+								},
+								title: t("settings.removeModel"),
+								key: "del"
+							}, "🗑️") : null;
+							const enableTiersBtn = react.createElement("button", {
+								type: "button",
+								className: "dshqb_model_reset",
+								onClick: () => patchModelRates(model, withTiers(rates, scaleRate(rates, 0.5))),
+								key: "enable_tiers"
+							}, t("settings.enableTiers"));
+							const disableTiersBtn = canDelete ? react.createElement("button", {
+								type: "button",
+								className: "dshqb_model_reset",
+								onClick: () => patchModelRates(model, cloneRate(rates.peak || rates)),
+								key: "disable_tiers"
+							}, t("settings.disableTiers")) : null;
+							if (!hasTariffTiers(rates)) {
+								return [react.createElement("tr", { key: model }, [
+									react.createElement("td", { style: { fontWeight: "600" }, key: "m_name" }, [
+										react.createElement("div", { key: "n" }, model),
+										resetBtn,
+										enableTiersBtn
+									]),
+									react.createElement("td", { key: "period" }, periodTag("flat")),
+									react.createElement("td", { key: "m_hit" }, rateInput(model, rates, "cacheHit", "0.001")),
+									react.createElement("td", { key: "m_miss" }, rateInput(model, rates, "cacheMiss", "0.01")),
+									react.createElement("td", { key: "m_out" }, rateInput(model, rates, "output", "0.01")),
+									react.createElement("td", { key: "m_del" }, delBtn)
+								])];
+							}
+							return [
+								react.createElement("tr", { key: model + "-peak" }, [
+									react.createElement("td", { rowSpan: 2, style: { fontWeight: "600", verticalAlign: "top" }, key: "m_name" }, [
+										react.createElement("div", { key: "n" }, model),
+										resetBtn,
+										disableTiersBtn
+									]),
+									react.createElement("td", { key: "period" }, periodTag("peak")),
+									react.createElement("td", { key: "m_hit" }, rateInput(model, rates, "cacheHit", "0.001", "peak")),
+									react.createElement("td", { key: "m_miss" }, rateInput(model, rates, "cacheMiss", "0.01", "peak")),
+									react.createElement("td", { key: "m_out" }, rateInput(model, rates, "output", "0.01", "peak")),
+									react.createElement("td", { rowSpan: 2, style: { verticalAlign: "top" }, key: "m_del" }, delBtn)
 								]),
-								react.createElement("td", { key: "m_hit" }, [
-									react.createElement("input", {
-										type: "number",
-										step: "0.001",
-										className: "dshqb_input dshqb_input_num",
-										value: rates.cacheHit,
-										onChange: (e) => patchCard("pricing", {
-											prices: { ...view.prices, [model]: { ...rates, cacheHit: Number(e.target.value) } }
-										})
-									})
-								]),
-								react.createElement("td", { key: "m_miss" }, [
-									react.createElement("input", {
-										type: "number",
-										step: "0.01",
-										className: "dshqb_input dshqb_input_num",
-										value: rates.cacheMiss,
-										onChange: (e) => patchCard("pricing", {
-											prices: { ...view.prices, [model]: { ...rates, cacheMiss: Number(e.target.value) } }
-										})
-									})
-								]),
-								react.createElement("td", { key: "m_out" }, [
-									react.createElement("input", {
-										type: "number",
-										step: "0.01",
-										className: "dshqb_input dshqb_input_num",
-										value: rates.output,
-										onChange: (e) => patchCard("pricing", {
-											prices: { ...view.prices, [model]: { ...rates, output: Number(e.target.value) } }
-										})
-									})
-								]),
-								react.createElement("td", { key: "m_del" }, [
-									!model.toLowerCase().includes("v4") ? react.createElement("button", {
-										type: "button",
-										className: "dshqb_btn_del",
-										onClick: () => {
-											const next = { ...view.prices };
-											delete next[model];
-											patchCard("pricing", { prices: next });
-										},
-										title: "移除该模型",
-										key: "del"
-									}, "🗑️") : null
+								react.createElement("tr", { key: model + "-off" }, [
+									react.createElement("td", { key: "period" }, periodTag("offPeak")),
+									react.createElement("td", { key: "m_hit" }, rateInput(model, rates, "cacheHit", "0.001", "offPeak")),
+									react.createElement("td", { key: "m_miss" }, rateInput(model, rates, "cacheMiss", "0.01", "offPeak")),
+									react.createElement("td", { key: "m_out" }, rateInput(model, rates, "output", "0.01", "offPeak"))
 								])
-							]);
+							];
 						})
 					)
 				]),
-				react.createElement("div", { className: "dshqb_add_model_box", key: "add_box" }, [
-					react.createElement("input", {
-						type: "text",
-						className: "dshqb_input",
-						style: { flex: 2 },
-						placeholder: t("settings.addModelName"),
-						value: newModelName,
-						onChange: (e) => setNewModelName(e.target.value),
-						key: "inp_name"
-					}),
-					react.createElement("input", {
-						type: "number",
-						step: "0.01",
-						className: "dshqb_input dshqb_input_num",
-						title: t("settings.pricingHit"),
-						placeholder: "命中",
-						value: newModelHit,
-						onChange: (e) => setNewModelHit(Number(e.target.value)),
-						key: "inp_hit"
-					}),
-					react.createElement("input", {
-						type: "number",
-						step: "0.01",
-						className: "dshqb_input dshqb_input_num",
-						title: t("settings.pricingMiss"),
-						placeholder: "未命中",
-						value: newModelMiss,
-						onChange: (e) => setNewModelMiss(Number(e.target.value)),
-						key: "inp_miss"
-					}),
-					react.createElement("input", {
-						type: "number",
-						step: "0.01",
-						className: "dshqb_input dshqb_input_num",
-						title: t("settings.pricingOut"),
-						placeholder: "输出",
-						value: newModelOut,
-						onChange: (e) => setNewModelOut(Number(e.target.value)),
-						key: "inp_out"
-					}),
+				react.createElement("div", { className: "dshqb_pricing_reset_bar", key: "reset_bar" },
 					react.createElement("button", {
 						type: "button",
-						className: "dshqb_btn dshqb_btn_secondary",
+						className: "dshqb_model_reset",
 						onClick: () => {
-							const name = newModelName.trim();
-							if (!name) return;
-							patchCard("pricing", {
-								prices: {
-									...view.prices,
-									[name]: {
-										cacheHit: Number(newModelHit),
-										cacheMiss: Number(newModelMiss),
-										output: Number(newModelOut)
-									}
-								}
-							});
-							setNewModelName("");
-						},
-						key: "btn_add"
-					}, t("settings.btnAdd"))
+							const next = { ...(view.prices || {}) };
+							for (const m of PINNED_V4_MODELS) {
+								const table = v4TableFor(currency)?.[m];
+								if (table) next[m] = v4SettingsFromTable(table);
+							}
+							patchCard("pricing", { prices: next });
+						}
+					}, t("settings.pricingReset"))
+				),
+				react.createElement("div", { className: "dshqb_add_model_box", key: "add_box" }, [
+					react.createElement("div", { className: "dshqb_add_model_row", key: "row" }, [
+						react.createElement("input", {
+							type: "text",
+							className: "dshqb_input",
+							style: { flex: 2, minWidth: "140px" },
+							placeholder: t("settings.addModelName"),
+							value: newModelName,
+							onChange: (e) => setNewModelName(e.target.value),
+							key: "inp_name"
+						}),
+						react.createElement("span", { className: "dshqb_add_model_label", key: "peak_label" }, t("settings.addFillingPeak")),
+						react.createElement("input", {
+							type: "number",
+							step: "0.01",
+							className: "dshqb_input dshqb_input_num",
+							title: t("settings.pricingPeak") + " · " + t("settings.pricingHit"),
+							placeholder: t("settings.pricingHit"),
+							value: newModelHit,
+							onChange: (e) => setNewModelHit(Number(e.target.value)),
+							key: "inp_hit"
+						}),
+						react.createElement("input", {
+							type: "number",
+							step: "0.01",
+							className: "dshqb_input dshqb_input_num",
+							title: t("settings.pricingPeak") + " · " + t("settings.pricingMiss"),
+							placeholder: t("settings.pricingMiss"),
+							value: newModelMiss,
+							onChange: (e) => setNewModelMiss(Number(e.target.value)),
+							key: "inp_miss"
+						}),
+						react.createElement("input", {
+							type: "number",
+							step: "0.01",
+							className: "dshqb_input dshqb_input_num",
+							title: t("settings.pricingPeak") + " · " + t("settings.pricingOut"),
+							placeholder: t("settings.pricingOut"),
+							value: newModelOut,
+							onChange: (e) => setNewModelOut(Number(e.target.value)),
+							key: "inp_out"
+						}),
+						react.createElement("span", { className: "dshqb_add_model_label", key: "mult_label" }, t("settings.peakMultiplier")),
+						react.createElement("input", {
+							type: "number",
+							min: "0",
+							step: "0.1",
+							className: "dshqb_input dshqb_input_mult",
+							title: t("settings.peakMultiplier"),
+							value: newModelMultiplier,
+							onChange: (e) => setNewModelMultiplier(e.target.value === "" ? 1 : Number(e.target.value)),
+							key: "mult"
+						}),
+						react.createElement("button", {
+							type: "button",
+							className: "dshqb_btn dshqb_btn_secondary",
+							onClick: addNewModel,
+							key: "btn_add"
+						}, t("settings.btnAdd"))
+					]),
+					react.createElement("div", { className: "dshqb_add_model_hint", key: "hint" }, t("settings.addModelHint"))
 				])
 			]);
 
@@ -2654,10 +2825,27 @@ window.__ModuleLoader__.load({
 				const currency = typeof payload.currency === "string" ? payload.currency : "CNY";
 				const prices = payload.prices !== null && typeof payload.prices === "object" ? payload.prices : {};
 				
-				const v4Entries = Object.entries(prices).filter(([model]) =>
-					model.toLowerCase().includes("v4")
-				);
-				const entriesToShow = v4Entries.length > 0 ? v4Entries : Object.entries(prices);
+				const table = v4TableFor(currency);
+				const names = [];
+				for (const m of PINNED_V4_MODELS) names.push(m);
+				for (const m of Object.keys(prices)) {
+					if (!names.includes(m) && (m.toLowerCase().includes("v4") || hasTariffTiers(prices[m]))) names.push(m);
+				}
+				const nowPeriod = currentTariffPeriod();
+				const rateLine = (kind, p) => react.createElement("div", {
+					className: "dshqb_pricing_tier_row" + (nowPeriod === kind ? " is-current" : ""),
+					key: kind
+				}, [
+					react.createElement("span", {
+						className: "dshqb_period_tag " + (kind === "peak" ? "dshqb_period_peak" : "dshqb_period_offpeak"),
+						key: "tag"
+					}, t(kind === "peak" ? "tariff.peak" : "tariff.offPeak")),
+					react.createElement("span", { key: "hit" }, t("pricing.hit", { price: formatPrice(p.cacheHit, currency) })),
+					react.createElement("span", { className: "dshqb_pricing_dot", key: "d1" }, "·"),
+					react.createElement("span", { key: "miss" }, t("pricing.miss", { price: formatPrice(p.cacheMiss, currency) })),
+					react.createElement("span", { className: "dshqb_pricing_dot", key: "d2" }, "·"),
+					react.createElement("span", { key: "out" }, t("pricing.output", { price: formatPrice(p.output, currency) }))
+				]);
 
 				const pricingPopover = react.createElement("div", {
 					className: "dshqb_pricing_popover",
@@ -2668,18 +2856,26 @@ window.__ModuleLoader__.load({
 						react.createElement("span", { className: "dshqb_card_badge dshqb_card_badge_info", key: "badge" }, t("pricing.rateBadge", { currency }))
 					]),
 					react.createElement("div", { className: "dshqb_pricing_models", key: "models" },
-						entriesToShow.map(([model, p], idx) =>
-							react.createElement("div", { className: "dshqb_pricing_card_item", key: idx }, [
+						names.map((model, idx) => {
+							const stored = prices[model];
+							const tiers = hasTariffTiers(stored)
+								? { peak: stored.peak, offPeak: stored.offPeak }
+								: (PINNED_V4_MODELS.includes(model) && table[model]
+									? { peak: table[model].peak, offPeak: table[model].offPeak }
+									: null);
+							return react.createElement("div", { className: "dshqb_pricing_card_item", key: idx }, [
 								react.createElement("div", { className: "dshqb_pricing_model_name", key: "name" }, "• " + model),
-								react.createElement("div", { className: "dshqb_pricing_rates", key: "rates" }, [
-									react.createElement("span", { key: "hit" }, t("pricing.hit", { price: formatPrice(p.cacheHit, currency) })),
-									react.createElement("span", { className: "dshqb_pricing_dot", key: "d1" }, "·"),
-									react.createElement("span", { key: "miss" }, t("pricing.miss", { price: formatPrice(p.cacheMiss, currency) })),
-									react.createElement("span", { className: "dshqb_pricing_dot", key: "d2" }, "·"),
-									react.createElement("span", { key: "out" }, t("pricing.output", { price: formatPrice(p.output, currency) }))
-								])
-							])
-						)
+								tiers
+									? [rateLine("peak", tiers.peak), rateLine("offPeak", tiers.offPeak)]
+									: react.createElement("div", { className: "dshqb_pricing_rates", key: "rates" }, [
+										react.createElement("span", { key: "hit" }, t("pricing.hit", { price: formatPrice(stored?.cacheHit, currency) })),
+										react.createElement("span", { className: "dshqb_pricing_dot", key: "d1" }, "·"),
+										react.createElement("span", { key: "miss" }, t("pricing.miss", { price: formatPrice(stored?.cacheMiss, currency) })),
+										react.createElement("span", { className: "dshqb_pricing_dot", key: "d2" }, "·"),
+										react.createElement("span", { key: "out" }, t("pricing.output", { price: formatPrice(stored?.output, currency) }))
+									])
+							]);
+						})
 					),
 					react.createElement("a", {
 						className: "dshqb_pricing_link",

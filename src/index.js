@@ -21,7 +21,7 @@ import { z } from 'zod'
 import { homedir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
-import { resolveModelPrice, priceBuckets } from './pricing.js'
+import { resolveModelPrice, priceBuckets, officialV4ConfigPrices } from './pricing.js'
 import { applySpendEvent, aggregateSpend, initSpendFold, resolveSpendRange } from './spend.js'
 
 export { resolveModelPrice } from './pricing.js'
@@ -48,14 +48,25 @@ export const resolveQuotaSource = (modelProvider, config = {}) => {
   return quotaSourceFromProvider(modelProvider ?? config.provider)
 }
 
-/** 每个模型每 100 万 token 的价格(以 `currency` 计价)。 */
+/** 一组命中 / 未命中 / 输出单价(每 1M token)。 */
+const TokenRate = Schema.object({
+  cacheHit: Schema.number().min(0),
+  cacheMiss: Schema.number().min(0),
+  output: Schema.number().min(0),
+})
+
+/** 每个模型每 100 万 token 的价格(以 `currency` 计价)。V4 另可配 peak / offPeak。 */
 const ModelPrice = Schema.object({
-  /** 缓存命中输入价 */
+  /** 缓存命中输入价(无峰谷时使用; 有峰谷时与高峰价对齐) */
   cacheHit: Schema.number().min(0).default(0.2),
   /** 缓存未命中输入价(含缓存写入) */
   cacheMiss: Schema.number().min(0).default(2),
   /** 输出价 */
   output: Schema.number().min(0).default(8),
+  /** 高峰时段单价; 缺省则 V4 走内置官方表 */
+  peak: TokenRate,
+  /** 低谷时段单价; 缺省则 V4 走内置官方表 */
+  offPeak: TokenRate,
 })
 
 export const Config = Schema.object({
@@ -95,10 +106,7 @@ export const Config = Schema.object({
   timeoutMs: Schema.number().min(1000).default(8000),
   /** 花费估算的计价货币(与 prices 一致) */
   currency: Schema.string().default('CNY'),
-  prices: Schema.dict(ModelPrice).default({
-    'deepseek-v4-flash': { cacheHit: 0.02, cacheMiss: 1, output: 2 },
-    'deepseek-v4-pro': { cacheHit: 0.025, cacheMiss: 3, output: 6 },
-  }),
+  prices: Schema.dict(ModelPrice).default(officialV4ConfigPrices('CNY')),
   /** 余额预警阈值(DeepSeek: 余额低于此值; OpenCode Go: 剩余额度低于此百分比) */
   warningThreshold: Schema.number().min(0).default(10),
   /** 余额告急阈值(DeepSeek: 余额低于此值; OpenCode Go: 剩余额度低于此百分比) */

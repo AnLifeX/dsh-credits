@@ -105,6 +105,43 @@ assert.equal(cnyPeak.cacheMiss, 3)
 assert.equal(usdPeak.cacheMiss, 0.42)
 assert.equal(usdPeak.output, 1.26)
 
+const weekend = Date.parse('2026-08-22T02:00:00.000Z') // 周六北京 10:00，应为低谷
+const weekendFlash = resolveModelPrice({ currency: 'CNY' }, 'deepseek-v4-flash', weekend)
+assert.equal(weekendFlash.cacheMiss, 1.5, 'weekend must use off-peak even during weekday peak hours')
+
+const customPeak = resolveModelPrice({
+  currency: 'CNY',
+  prices: {
+    'deepseek-v4-flash': {
+      cacheHit: 0.1,
+      cacheMiss: 3,
+      output: 9,
+      peak: { cacheHit: 1, cacheMiss: 10, output: 20 },
+      offPeak: { cacheHit: 0.5, cacheMiss: 5, output: 10 },
+    },
+  },
+}, 'deepseek-v4-flash', peak)
+assert.equal(customPeak.cacheMiss, 10, 'configured peak/offPeak must override the official V4 table')
+
+const visionOfficial = resolveModelPrice({ currency: 'CNY' }, 'deepseek-v4-flash-vision-exp', peak)
+assert.equal(visionOfficial.cacheMiss, 3, 'unconfigured vision-exp still uses the official V4 table')
+
+const visionFlat = resolveModelPrice({
+  currency: 'CNY',
+  prices: {
+    'deepseek-v4-flash-vision-exp': { cacheHit: 0.2, cacheMiss: 4, output: 8 },
+  },
+}, 'deepseek-v4-flash-vision-exp', peak)
+assert.equal(visionFlat.cacheMiss, 4, 'non-pinned V4 name with only three fields is a flat rate (multiplier 1)')
+
+const pinnedListed = resolveModelPrice({
+  currency: 'CNY',
+  prices: {
+    'deepseek-v4-flash': { cacheHit: 0.02, cacheMiss: 1, output: 2 },
+  },
+}, 'deepseek-v4-flash', peak)
+assert.equal(pinnedListed.cacheMiss, 3, 'pinned V4 with listed-only config still uses the official peak table')
+
 let v4 = { currency: 'CNY', prices: {}, defaultPrices: { cacheHit: 0, cacheMiss: 0, output: 0 }, pricingEpoch: 0 }
 const v4Def = makeCostProjection(() => v4)
 let v4State = v4Def.init()

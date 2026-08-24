@@ -235,8 +235,8 @@ const props = {
       'card.pricingHint': '💡 计价规则与单价请见右侧 [?]',
       'tariff.peak': '梁文峰时刻',
       'tariff.offPeak': '梁文谷时刻',
-      'tariff.peakTitle': '梁文峰时刻：（北京时间）09:00–12:00、14:00–18:00\n梁文谷时刻：（北京时间）00:00–09:00、12:00–14:00、18:00–24:00',
-      'tariff.offPeakTitle': '梁文峰时刻：（北京时间）09:00–12:00、14:00–18:00\n梁文谷时刻：（北京时间）00:00–09:00、12:00–14:00、18:00–24:00',
+      'tariff.peakTitle': '梁文峰时刻：北京时间周一至周五 09:00–12:00、14:00–18:00\n梁文谷时刻：其余时段（含周末）',
+      'tariff.offPeakTitle': '梁文峰时刻：北京时间周一至周五 09:00–12:00、14:00–18:00\n梁文谷时刻：其余时段（含周末）',
       'pricing.title': '📋 DeepSeek V4 定价参考',
       'pricing.rateBadge': '每 1M tokens · {currency}',
       'pricing.hit': '命中 {price}',
@@ -312,9 +312,12 @@ if (!htmlGreen.includes('dshqb_pricing_popover')) throw new Error('pricing popov
 if (!htmlGreen.includes('📋 DeepSeek V4 定价参考')) throw new Error('v4 pricing title missing')
 if (!htmlGreen.includes('deepseek-v4-flash')) throw new Error('v4 flash model missing')
 if (!htmlGreen.includes('deepseek-v4-pro')) throw new Error('v4 pro model missing')
-if (!htmlGreen.includes('命中 ¥0.02')) throw new Error('v4 hit rate missing')
-if (!htmlGreen.includes('未命中 ¥0.1')) throw new Error('v4 miss rate missing')
-if (!htmlGreen.includes('输出 ¥0.2')) throw new Error('v4 output rate missing')
+if (!htmlGreen.includes('命中 ¥0.1')) throw new Error('v4 peak hit rate missing')
+if (!htmlGreen.includes('未命中 ¥3')) throw new Error('v4 peak miss rate missing')
+if (!htmlGreen.includes('输出 ¥9')) throw new Error('v4 peak output rate missing')
+if (!htmlGreen.includes('命中 ¥0.05')) throw new Error('v4 off-peak hit rate missing')
+if (!htmlGreen.includes('未命中 ¥1.5')) throw new Error('v4 off-peak miss rate missing')
+if (!htmlGreen.includes('输出 ¥4.5')) throw new Error('v4 off-peak output rate missing')
 // 验证非 V4 模型被成功过滤不展示在定价气泡中
 if (htmlGreen.includes('• deepseek-chat</span><div class="dshqb_pricing_rates"')) throw new Error('non-v4 model should be filtered out')
 if (!htmlGreen.includes('CNY 钱包')) throw new Error('CNY wallet row missing')
@@ -323,7 +326,7 @@ if (!htmlGreen.includes('$0.00')) throw new Error('zero USD wallet should still 
 if (!htmlGreen.includes('dshqb_card_badge_btn')) throw new Error('balance status badge should be a refresh button')
 if (!htmlGreen.includes('梁文峰时刻') && !htmlGreen.includes('梁文谷时刻')) throw new Error('tariff badge should show current peak/valley period')
 if (htmlGreen.includes('dshqb_tariff_tooltip')) throw new Error('old tariff tooltip should be removed')
-if (!htmlGreen.includes('dshqb_hover_tip') || !htmlGreen.includes('梁文峰时刻：（北京时间）09:00–12:00、14:00–18:00') || !htmlGreen.includes('梁文谷时刻：（北京时间）00:00–09:00、12:00–14:00、18:00–24:00')) throw new Error('tariff badge should show the exact two-line Beijing-time tooltip')
+if (!htmlGreen.includes('dshqb_hover_tip') || !htmlGreen.includes('梁文峰时刻：北京时间周一至周五 09:00–12:00、14:00–18:00') || !htmlGreen.includes('梁文谷时刻：其余时段（含周末）')) throw new Error('tariff badge should show the exact two-line Beijing-time tooltip')
 if (htmlGreen.includes('title="梁文峰时刻') || htmlGreen.includes('title="梁文谷时刻')) throw new Error('tariff tooltip should not duplicate as a native title')
 if (!htmlGreen.includes('dshqb_tariff_badge dshqb_card_badge dshqb_card_badge_btn') && !htmlGreen.includes('dshqb_card_badge dshqb_card_badge_btn dshqb_tariff_badge')) throw new Error('tariff badge should use the same button format as status badges')
 if (htmlGreen.indexOf('梁文') > htmlGreen.indexOf('● 充足')) throw new Error('tariff badge should be left of balance status badge')
@@ -398,6 +401,19 @@ if (!code.includes('settings.enabled')) throw new Error('global quota enable swi
 if (!htmlSettings.includes('额度查询')) throw new Error('quota card title missing')
 if (!htmlSettings.includes('阈值与刷新')) throw new Error('thresholds card title missing')
 if (!htmlSettings.includes('模型单价')) throw new Error('pricing card title missing')
+if (!code.includes('settings.pricingPeak')) throw new Error('peak pricing i18n missing')
+if (!code.includes('settings.pricingOffPeak')) throw new Error('off-peak pricing i18n missing')
+if (!code.includes('settings.pricingPeriod')) throw new Error('period column i18n missing')
+if (!code.includes('settings.pricingFlat')) throw new Error('flat pricing i18n missing')
+if (!code.includes('settings.addFillingPeak')) throw new Error('add-form peak label missing')
+if (!code.includes('settings.peakMultiplier')) throw new Error('peak multiplier i18n missing')
+if (!code.includes('buildAddedModelPrice')) throw new Error('manual add-model price builder missing')
+if (!code.includes('isFlatMultiplier')) throw new Error('multiplier 1 must mean no peak/off-peak split')
+if (code.includes('settings.addFillKind')) throw new Error('add form must not use four fill kinds')
+if (code.includes('[name]: table')) throw new Error('adding a model must not auto-seed official peak/off-peak')
+if (!code.includes('dshqb_btn_del')) throw new Error('model delete button missing')
+if (!code.includes('PINNED_V4_MODELS')) throw new Error('pinned v4 models allowlist missing')
+if (code.includes('!model.toLowerCase().includes("v4")')) throw new Error('delete button must not key off the v4 substring')
 if (!htmlSettings.includes('YAML 导出')) throw new Error('export card title missing')
 if (htmlSettings.includes('未保存')) throw new Error('unsaved badge should stay hidden until dirty')
 if (htmlSettings.includes('放弃修改')) throw new Error('discard should stay hidden until a dirty card is open')
@@ -530,8 +546,8 @@ const quotaDict = {
   'quota.unavailable': 'OpenCode Go 额度不可用',
   'tariff.peak': '梁文峰时刻',
   'tariff.offPeak': '梁文谷时刻',
-  'tariff.peakTitle': '梁文峰时刻：（北京时间）09:00–12:00、14:00–18:00\n梁文谷时刻：（北京时间）00:00–09:00、12:00–14:00、18:00–24:00',
-  'tariff.offPeakTitle': '梁文峰时刻：（北京时间）09:00–12:00、14:00–18:00\n梁文谷时刻：（北京时间）00:00–09:00、12:00–14:00、18:00–24:00',
+  'tariff.peakTitle': '梁文峰时刻：北京时间周一至周五 09:00–12:00、14:00–18:00\n梁文谷时刻：其余时段（含周末）',
+  'tariff.offPeakTitle': '梁文峰时刻：北京时间周一至周五 09:00–12:00、14:00–18:00\n梁文谷时刻：其余时段（含周末）',
   'btn.refreshQuota': '点击立即刷新 OpenCode Go 额度',
   'btn.refreshingQuota': '正在刷新 OpenCode Go 额度...',
   'status.sufficient': '充足',

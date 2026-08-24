@@ -179,22 +179,40 @@ body {
     <div class="dshqb_pricing_models">
       <div class="dshqb_pricing_card_item">
         <div class="dshqb_pricing_model_name">• deepseek-v4-flash</div>
-        <div class="dshqb_pricing_rates">
-          <span>命中 ¥0.02</span>
+        <div class="dshqb_pricing_tier_row">
+          <span class="dshqb_period_tag dshqb_period_peak">梁文峰时刻</span>
+          <span>命中 ¥0.1</span>
           <span class="dshqb_pricing_dot">·</span>
-          <span>未命中 ¥1.00</span>
+          <span>未命中 ¥3</span>
           <span class="dshqb_pricing_dot">·</span>
-          <span>输出 ¥2.00</span>
+          <span>输出 ¥9</span>
+        </div>
+        <div class="dshqb_pricing_tier_row">
+          <span class="dshqb_period_tag dshqb_period_offpeak">梁文谷时刻</span>
+          <span>命中 ¥0.05</span>
+          <span class="dshqb_pricing_dot">·</span>
+          <span>未命中 ¥1.5</span>
+          <span class="dshqb_pricing_dot">·</span>
+          <span>输出 ¥4.5</span>
         </div>
       </div>
       <div class="dshqb_pricing_card_item">
         <div class="dshqb_pricing_model_name">• deepseek-v4-pro</div>
-        <div class="dshqb_pricing_rates">
-          <span>命中 ¥0.025</span>
+        <div class="dshqb_pricing_tier_row">
+          <span class="dshqb_period_tag dshqb_period_peak">梁文峰时刻</span>
+          <span>命中 ¥0.3</span>
           <span class="dshqb_pricing_dot">·</span>
-          <span>未命中 ¥3.00</span>
+          <span>未命中 ¥9</span>
           <span class="dshqb_pricing_dot">·</span>
-          <span>输出 ¥6.00</span>
+          <span>输出 ¥27</span>
+        </div>
+        <div class="dshqb_pricing_tier_row">
+          <span class="dshqb_period_tag dshqb_period_offpeak">梁文谷时刻</span>
+          <span>命中 ¥0.15</span>
+          <span class="dshqb_pricing_dot">·</span>
+          <span>未命中 ¥4.5</span>
+          <span class="dshqb_pricing_dot">·</span>
+          <span>输出 ¥13.5</span>
         </div>
       </div>
     </div>
