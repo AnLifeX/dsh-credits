@@ -338,15 +338,50 @@ window.__ModuleLoader__.load({
 			if (!Number.isFinite(num)) return currencySymbol(currency) + "?";
 			return currencySymbol(currency) + (num % 1 === 0 ? String(num) : String(Math.round(num * 1000) / 1000));
 		}
-		/** 仅 OpenCode Go 走订阅用量, 其余供应商(含 DeepSeek 官方)显示官方余额。 */
-		function quotaSourceFromProvider(provider) {
-			return String(provider ?? "").trim().toLowerCase() === "opencode-go" ? "opencode-go" : "deepseek";
+		const normalizeProvider = (value) => String(value ?? "").trim().toLowerCase();
+		const providerMatchesAdapter = (adapter, provider) => {
+			const p = normalizeProvider(provider);
+			if (!p) return false;
+			if (normalizeProvider(adapter?.id) === p) return true;
+			if ((adapter?.providerIds ?? []).some((id) => normalizeProvider(id) === p)) return true;
+			return (adapter?.providerPatterns ?? []).some((pattern) => {
+				try {
+					return new RegExp(pattern, "i").test(p);
+				} catch {
+					return false;
+				}
+			});
+		};
+		/** 在 payload 的配额源列表中匹配一个 provider / 源 id。 */
+		function matchQuotaAdapter(provider, quotaSources) {
+			const list = Array.isArray(quotaSources) && quotaSources.length > 0 ? quotaSources : null;
+			if (!list) {
+				const p = normalizeProvider(provider);
+				if (p === "opencode-go") return { id: "opencode-go" };
+				if (p === "deepseek") return { id: "deepseek" };
+				return null;
+			}
+			return list.find((adapter) => providerMatchesAdapter(adapter, provider)) ?? null;
+		}
+		/** 默认额度源。 */
+		function defaultQuotaAdapter(quotaSources) {
+			const list = Array.isArray(quotaSources) && quotaSources.length > 0 ? quotaSources : null;
+			if (list) return list.find((source) => source.default === true) ?? list[0] ?? null;
+			return { id: "deepseek" };
+		}
+		/** 供应商/源 id → 额度源 id。未命中时回退默认源。 */
+		function quotaSourceFromProvider(provider, quotaSources) {
+			return matchQuotaAdapter(provider, quotaSources)?.id ?? defaultQuotaAdapter(quotaSources)?.id ?? "deepseek";
 		}
 		/** follow: 跟当前模型; custom: 固定用 config.provider, 忽略当前模型。 */
-		function resolveQuotaSource(modelProvider, config) {
-			const selected = quotaSourceFromProvider(config?.provider);
-			if (String(config?.quotaMode ?? "follow").trim().toLowerCase() === "custom") return selected;
-			return quotaSourceFromProvider(modelProvider ?? config?.provider);
+		function resolveQuotaSource(modelProvider, config, quotaSources) {
+			if (String(config?.quotaMode ?? "follow").trim().toLowerCase() === "custom") {
+				return quotaSourceFromProvider(config?.provider, quotaSources);
+			}
+			if (modelProvider !== null && modelProvider !== undefined && normalizeProvider(modelProvider) !== "") {
+				return quotaSourceFromProvider(modelProvider, quotaSources);
+			}
+			return quotaSourceFromProvider(config?.provider, quotaSources);
 		}
 		function normalizeDockLayout(value) {
 			return String(value ?? "own").trim().toLowerCase() === "shared" ? "shared" : "own";
@@ -357,11 +392,18 @@ window.__ModuleLoader__.load({
 			const next = view && typeof view === "object"
 				? { ...payload, ...view, provider: source }
 				: { ...payload, provider: source };
-			if (source === "opencode-go") {
+			if (!view || typeof view !== "object") return next;
+			if (view.kind === "balance" || (!view.kind && view.balances)) {
+				delete next.usage;
+				delete next.metrics;
+			} else if (view.kind === "usage" || (!view.kind && view.usage)) {
 				delete next.balances;
 				delete next.isAvailable;
+				delete next.metrics;
 			} else {
 				delete next.usage;
+				delete next.balances;
+				delete next.isAvailable;
 			}
 			return next;
 		}
@@ -567,7 +609,7 @@ window.__ModuleLoader__.load({
 				try {
 					const params = [];
 					if (force) params.push("force=1");
-					if (source === "opencode-go" || source === "deepseek") params.push("source=" + encodeURIComponent(source));
+					if (source) params.push("source=" + encodeURIComponent(source));
 					const url = "/query-credits" + (params.length ? "?" + params.join("&") : "");
 					const res = await fetch(url, {
 						cache: "no-store",
@@ -624,7 +666,7 @@ window.__ModuleLoader__.load({
 				return snapshot;
 			},
 			forceRefresh(source) {
-				return refresh(true, source === "opencode-go" || source === "deepseek" ? source : null);
+				return refresh(true, source || null);
 			}
 		};
 
@@ -749,6 +791,13 @@ window.__ModuleLoader__.load({
 			"btn.refreshQuota": "点击立即刷新 OpenCode Go 额度",
 			"btn.refreshingQuota": "正在刷新 OpenCode Go 额度...",
 			"card.sessionHintQuota": "💡 本会话按设置单价估算，实际扣减以 Go 套餐窗口为准。",
+			"quota.cardTitleCustom": "🎯 额度用量",
+			"quota.valueTotal": "剩余 {value} / {total} {unit}",
+			"quota.errorCustom": "【额度用量】异常: {error}",
+			"quota.unavailableCustom": "额度用量不可用",
+			"btn.refreshCustom": "点击立即刷新额度",
+			"btn.refreshingCustom": "正在刷新额度...",
+			"card.sessionHintCustom": "💡 本会话按设置单价估算，实际扣减以所选套餐/额度为准。",
 			"pricing.title": "📋 DeepSeek V4 定价参考",
 			"pricing.rateBadge": "每 1M tokens · {currency}",
 			"pricing.hit": "命中 {price}",
@@ -905,6 +954,13 @@ window.__ModuleLoader__.load({
 			"btn.refreshQuota": "Click to refresh OpenCode Go quota",
 			"btn.refreshingQuota": "Refreshing OpenCode Go quota...",
 			"card.sessionHintQuota": "💡 Session cost uses configured prices; Go windows decide actual deductions.",
+			"quota.cardTitleCustom": "🎯 Quota Usage",
+			"quota.valueTotal": "{value} / {total} {unit} left",
+			"quota.errorCustom": "【Quota Usage】Error: {error}",
+			"quota.unavailableCustom": "Quota unavailable",
+			"btn.refreshCustom": "Click to refresh quota",
+			"btn.refreshingCustom": "Refreshing quota...",
+			"card.sessionHintCustom": "💡 Session cost uses configured prices; actual deductions depend on the selected plan.",
 			"pricing.title": "📋 DeepSeek V4 Pricing",
 			"pricing.rateBadge": "Per 1M tokens · {currency}",
 			"pricing.hit": "Hit {price}",
@@ -2354,6 +2410,35 @@ window.__ModuleLoader__.load({
 			if (!Number.isFinite(percent)) return "danger";
 			return getStatusLevel(Math.max(0, Math.min(100, 100 - percent)), true, thresholds);
 		}
+		/** 通用 metric 的剩余百分比（value/total），无 total 时回退 percent 字段。 */
+		function metricPercent(metric) {
+			const total = Number(metric?.total);
+			const value = Number(metric?.value);
+			if (Number.isFinite(total) && total > 0 && Number.isFinite(value)) {
+				return Math.max(0, Math.min(100, value / total * 100));
+			}
+			const direct = Number(metric?.percent);
+			return Number.isFinite(direct) ? Math.max(0, Math.min(100, direct)) : null;
+		}
+		/** 通用 metric 列表 → 剩余额度状态（取最小剩余）。 */
+		function metricsQuotaStatus(metrics, thresholds) {
+			const remaining = (metrics ?? [])
+				.map(metricPercent)
+				.filter(Number.isFinite);
+			if (remaining.length === 0) return { available: false, minRemaining: null, level: "danger" };
+			const minRemaining = Math.min(...remaining);
+			return { available: true, minRemaining, level: getStatusLevel(minRemaining, true, thresholds) };
+		}
+		function metricLevel(percent, thresholds) {
+			if (!Number.isFinite(percent)) return "danger";
+			return getStatusLevel(Math.max(0, Math.min(100, percent)), true, thresholds);
+		}
+		function formatMetricValue(metric) {
+			const value = Number(metric?.value);
+			const unit = typeof metric?.unit === "string" ? metric.unit : "";
+			if (!Number.isFinite(value)) return "—";
+			return String(value) + (unit ? " " + unit : "");
+		}
 
 		/** 多币种钱包: 底部列出选定货币 + 其他非零钱包; 卡片列出全部。 */
 		function selectWallets(balances, preferred) {
@@ -2548,7 +2633,9 @@ window.__ModuleLoader__.load({
 			const quotaSource = resolveQuotaSource(modelProvider, {
 				quotaMode: payload?.quotaMode,
 				provider: fallbackProvider
-			});
+			}, payload?.quotaSources);
+			const quotaSourceView = payload?.views?.[quotaSource];
+			const quotaSourceKind = quotaSourceView?.kind || (quotaSource === "opencode-go" ? "usage" : "balance");
 			const showDock = payload?.showDock !== false;
 			const dockLayout = normalizeDockLayout(payload?.dockLayout);
 			const showCapsule = payload?.showCapsule !== false;
@@ -2592,7 +2679,7 @@ window.__ModuleLoader__.load({
 			// 1. 账户余额读数节点与左栏卡片内容
 			if (balance.status === "ok") {
 				const info = mergeQuotaView(balance.payload, quotaSource);
-				if (info.provider === "opencode-go" && info.ok === true && info.usage) {
+				if (info.ok === true && info.usage && (quotaSourceKind === "usage" || info.kind === "usage")) {
 					const usage = info.usage || {};
 					const quota = opencodeQuotaStatus(usage, info.thresholds);
 					const level = quota.available ? quota.level : "danger";
@@ -2664,7 +2751,7 @@ window.__ModuleLoader__.load({
 							react.createElement("div", { key: "tip" }, t("card.refreshHint"))
 						])
 					]);
-				} else if (info.provider === "opencode-go") {
+				} else if (quotaSourceKind === "usage") {
 					const message = info.error === "api-key-missing" ? t("balanceMissing") : t("quota.unavailable");
 					const statusDot = react.createElement(HoverTooltip, {
 						content: isRefreshing ? t("btn.refreshingQuota") : t("btn.refreshQuota"),
@@ -2681,7 +2768,7 @@ window.__ModuleLoader__.load({
 						react.createElement("div", { className: "dshqb_card_header", key: "head" }, react.createElement("span", { className: "dshqb_card_title" }, t("quota.cardTitle"))),
 						react.createElement("div", { className: "dshqb_card_sub", key: "err" }, t("quota.error", { error: typeof info.error === "string" ? info.error : message }))
 					]);
-				} else if (info.ok === true && Array.isArray(info.balances) && info.balances.length > 0) {
+				} else if ((quotaSourceKind === "balance" || info.kind === "balance") && info.ok === true && Array.isArray(info.balances) && info.balances.length > 0) {
 					const wallets = selectWallets(info.balances, info.currency);
 					const primary = wallets.statusWallet ?? info.balances[0];
 					const amount = wallets.readout.map((w) => formatMoney(w.total, w.currency)).join(" · ");
@@ -2735,20 +2822,98 @@ window.__ModuleLoader__.load({
 							react.createElement("div", { key: "tip" }, t("card.refreshHint"))
 						])
 					]);
+				} else if ((quotaSourceKind === "metric" || quotaSourceKind === "manual" || info.kind === "metric" || info.kind === "manual") && info.ok === true && Array.isArray(info.metrics) && info.metrics.length > 0) {
+					const metrics = info.metrics || [];
+					const quota = metricsQuotaStatus(metrics, info.thresholds);
+					const level = quota.available ? quota.level : "danger";
+					const levelText = level === "success" ? t("status.sufficient") : level === "warning" ? t("status.warning") : t("status.danger");
+					const statusDot = react.createElement(HoverTooltip, {
+						content: isRefreshing ? t("btn.refreshingCustom") : t("btn.refreshCustom"),
+						key: "status_tip"
+					}, react.createElement("button", {
+						type: "button",
+						className: "dshqb_dot dshqb_dot_btn dshqb_dot_" + level + (isRefreshing ? " dshqb_dot_loading" : ""),
+						"aria-label": isRefreshing ? t("btn.refreshingCustom") : t("btn.refreshCustom"),
+						onClick: handleRefresh,
+						disabled: isRefreshing
+					}));
+					const readout = metrics
+						.map((m) => {
+							const p = metricPercent(m);
+							const label = m.label ? m.label + " " : "";
+							return p !== null ? label + formatPercent(p) : label + formatMetricValue(m);
+						})
+						.join(" · ");
+					balNode = react.createElement("span", { className: "dshqb_amount", key: "bal" }, statusDot, readout);
+					leftCol = react.createElement("div", { className: "dshqb_col", key: "left" }, [
+						react.createElement("div", { className: "dshqb_card_header", key: "head" }, [
+							react.createElement("span", { className: "dshqb_card_title", key: "title" }, t("quota.cardTitleCustom")),
+							react.createElement("span", { className: "dshqb_card_badges", key: "badges" }, [
+								tariffBadge,
+								react.createElement(HoverTooltip, {
+									content: isRefreshing ? t("btn.refreshingCustom") : t("btn.refreshCustom"),
+									key: "badge_tip"
+								}, react.createElement("button", {
+									type: "button",
+									className: "dshqb_card_badge dshqb_card_badge_btn dshqb_card_badge_" + level,
+									onClick: handleRefresh,
+									disabled: isRefreshing
+								}, quota.available ? t("quota.remaining", { percent: formatPercent(quota.minRemaining) }) : t("quota.unavailableCustom")))
+							])
+						]),
+						react.createElement("div", { className: "dshqb_quota_rows", key: "rows" },
+							metrics.map((m, i) => {
+								const pct = metricPercent(m);
+								const wLevel = metricLevel(pct, info.thresholds);
+								const bar = Number.isFinite(pct) ? Math.max(0, Math.min(100, pct)) : 0;
+								return react.createElement("div", { className: "dshqb_quota_row", key: m.key || i },
+									react.createElement("div", { className: "dshqb_quota_head", key: "head" }, [
+										react.createElement("span", { className: "dshqb_quota_name", key: "name" }, m.label || m.key || "Quota"),
+										react.createElement(HoverTooltip, {
+											content: isRefreshing ? t("btn.refreshingCustom") : t("btn.refreshCustom"),
+											key: "pct_tip"
+										}, react.createElement("button", {
+											type: "button",
+											className: "dshqb_quota_pct dshqb_quota_pct_btn",
+											onClick: handleRefresh,
+											disabled: isRefreshing
+										}, pct !== null ? formatPercent(pct) : formatMetricValue(m)))
+									]),
+									react.createElement("div", { className: "dshqb_quota_track", key: "track" },
+										react.createElement("div", {
+											className: "dshqb_quota_fill" + (wLevel === "danger" ? " dshqb_quota_fill_danger" : wLevel === "warning" ? " dshqb_quota_fill_warning" : ""),
+											style: { width: bar + "%" },
+											key: "fill"
+										})
+									),
+									react.createElement("div", { className: "dshqb_quota_meta", key: "meta" }, [
+										m.resetsAt
+											? react.createElement("span", { key: "reset" }, t("quota.resets", { time: formatResetTime(m.resetsAt) }))
+											: (Number(m.total) > 0 ? react.createElement("span", { key: "vt" }, t("quota.valueTotal", { value: m.value ?? "—", total: m.total, unit: m.unit || "" })) : null)
+									])
+								);
+							})
+						),
+						react.createElement("div", { className: "dshqb_card_hint", key: "hint" }, [
+							react.createElement("div", { key: "time" }, t("card.updated", { time: formatClock(info.fetchedAt), interval: formatInterval(info.refreshIntervalMs ?? DEFAULT_POLL_MS, t) })),
+							react.createElement("div", { key: "tip" }, t("card.refreshHint"))
+						])
+					]);
 				} else {
-					const message = info.error === "api-key-missing" ? t("balanceMissing") : t("balanceError");
+					const isCustom = quotaSourceKind === "metric" || quotaSourceKind === "manual";
+					const message = info.error === "api-key-missing" ? t("balanceMissing") : (isCustom ? t("quota.unavailableCustom") : t("balanceError"));
 					const statusDot = react.createElement("button", {
 						type: "button",
 						className: "dshqb_dot dshqb_dot_btn dshqb_dot_danger" + (isRefreshing ? " dshqb_dot_loading" : ""),
-						"aria-label": isRefreshing ? t("btn.refreshing") : t("btn.refresh"),
-						title: isRefreshing ? t("btn.refreshing") : t("btn.refresh"),
+						"aria-label": isRefreshing ? (isCustom ? t("btn.refreshingCustom") : t("btn.refreshing")) : t("btn.refresh"),
+						title: isRefreshing ? (isCustom ? t("btn.refreshingCustom") : t("btn.refreshing")) : t("btn.refresh"),
 						onClick: handleRefresh,
 						disabled: isRefreshing
 					});
 					balNode = react.createElement("span", { className: "dshqb_error", key: "bal" }, statusDot, message);
 					leftCol = react.createElement("div", { className: "dshqb_col", key: "left" }, [
-						react.createElement("div", { className: "dshqb_card_header", key: "head" }, react.createElement("span", { className: "dshqb_card_title" }, t("card.balanceTitle"))),
-						react.createElement("div", { className: "dshqb_card_sub", key: "err" }, t("card.error", { error: typeof info.error === "string" ? info.error : message }))
+						react.createElement("div", { className: "dshqb_card_header", key: "head" }, react.createElement("span", { className: "dshqb_card_title" }, isCustom ? t("quota.cardTitleCustom") : t("card.balanceTitle"))),
+						react.createElement("div", { className: "dshqb_card_sub", key: "err" }, isCustom ? t("quota.errorCustom", { error: typeof info.error === "string" ? info.error : message }) : t("card.error", { error: typeof info.error === "string" ? info.error : message }))
 					]);
 				}
 			} else if (balance.status === "error") {
@@ -2814,13 +2979,13 @@ window.__ModuleLoader__.load({
 							]);
 						})()
 						: null,
-					react.createElement("div", { key: "tip" }, quotaSource === "opencode-go" ? t("card.sessionHintQuota") : t("card.pricingHint"))
+					react.createElement("div", { key: "tip" }, quotaSourceKind === "usage" ? t("card.sessionHintQuota") : (quotaSourceKind === "metric" || quotaSourceKind === "manual") ? t("card.sessionHintCustom") : t("card.pricingHint"))
 				])
 			]);
 
-			// 3. 定价策略 "?" 图标与毛玻璃卡片 (展示 V4 系列)
+			// 3. 定价策略 "?" 图标与毛玻璃卡片 (仅 DeepSeek 官方余额展示)
 			let pricingNode = null;
-			if (balance.status === "ok" && balance.payload !== null && quotaSource !== "opencode-go") {
+			if (balance.status === "ok" && balance.payload !== null && quotaSourceKind === "balance") {
 				const payload = balance.payload;
 				const currency = typeof payload.currency === "string" ? payload.currency : "CNY";
 				const prices = payload.prices !== null && typeof payload.prices === "object" ? payload.prices : {};
