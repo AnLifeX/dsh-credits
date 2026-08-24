@@ -435,6 +435,8 @@ if (!code.includes('dshqb_provider_quota_list') || !code.includes('providerQuota
 if (!code.includes('settings.providerQuota.reuse') || !code.includes('settings.providerQuota.custom')) throw new Error('provider quota reuse/custom modes missing')
 if (!code.includes('直接填写 Token / Cookie（推荐）') || !code.includes('settings.directCredentialConfigured')) throw new Error('write-only direct credential UI missing')
 if (!code.includes('authValue: ""') || !code.includes('autoComplete: "new-password"')) throw new Error('direct credential draft must be cleared and use a password input')
+if (!code.includes('dshqb_provider_editor_footer') || !code.includes('settings.providerQuota.saveHint')) throw new Error('provider editor must expose local save actions')
+if (code.includes('key: "close_actions"')) throw new Error('provider editor should not duplicate the collapse action at the bottom')
 if (code.includes('key: "quotaMode"') || code.includes('key: "provider",\n\t\t\t\t\t\tlabel: t("settings.provider")')) throw new Error('legacy global quota mode/fallback controls should not render')
 console.log('SETTINGS SECTION SMOKE TEST PASSED')
 

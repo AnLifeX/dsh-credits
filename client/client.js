@@ -319,6 +319,7 @@ window.__ModuleLoader__.load({
 				".dshqb_provider_quota_summary{padding-top:8px;border-top:1px solid var(--dsw-alias-border-l3,rgba(128,128,128,.1))}",
 				".dshqb_provider_quota_source{min-width:0;color:var(--dsw-alias-label-secondary);font-size:11.5px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
 				".dshqb_provider_quota_editor{display:flex;flex-direction:column;gap:9px;padding:10px 11px;border:1px solid color-mix(in srgb,var(--dsw-alias-brand-primary,#3b82f6) 28%,transparent);border-radius:9px;background:color-mix(in srgb,var(--dsw-alias-brand-primary,#3b82f6) 4%,transparent)}",
+				".dshqb_provider_editor_footer{display:flex;align-items:center;justify-content:flex-end;gap:8px;margin-top:3px;padding-top:10px;border-top:1px solid var(--dsw-alias-border-l3,rgba(128,128,128,.12))}.dshqb_provider_editor_save_hint{margin-right:auto;color:var(--dsw-alias-label-tertiary);font-size:11px;line-height:1.4}.dshqb_provider_editor_save_hint_error{color:var(--dsw-alias-danger,#dc2626)}",
 				".dshqb_provider_custom,.dshqb_provider_mapping,.dshqb_provider_template_test{display:flex;flex-direction:column;gap:8px}",
 				".dshqb_textarea{min-height:88px;resize:vertical;line-height:1.45;font-family:ui-monospace,SFMono-Regular,Consolas,monospace}",
 				".dshqb_header_list,.dshqb_metric_list{display:flex;flex-direction:column;gap:8px}",
@@ -944,6 +945,7 @@ window.__ModuleLoader__.load({
 			"settings.providerQuota.templateHint": "模板自带官方查询地址和解析规则，凭证直接复用当前 DSH 供应商。",
 			"settings.providerQuota.reuseHint": "两个模型供应商实际使用同一账号时，可直接展示另一供应商已经查到的额度。",
 			"settings.providerQuota.customHint": "只需填写接口地址、选择凭证来源，再测试并选择返回字段。",
+			"settings.providerQuota.saveHint": "修改不会自动保存；点击“保存”后才会生效。",
 			"settings.providerQuota.templateSelect": "内置模板",
 			"settings.providerQuota.reuseSelect": "额度来自",
 			"settings.providerQuota.credential": "请求凭证",
@@ -1233,6 +1235,7 @@ window.__ModuleLoader__.load({
 			"settings.providerQuota.templateHint": "The template owns the official endpoint and parser; credentials come from this DSH provider.",
 			"settings.providerQuota.reuseHint": "Use this when two model providers actually share the same account and quota.",
 			"settings.providerQuota.customHint": "Enter an endpoint, choose credentials, test it, then select response fields.",
+			"settings.providerQuota.saveHint": "Changes are not saved automatically. Click Save to apply them.",
 			"settings.providerQuota.templateSelect": "Built-in template",
 			"settings.providerQuota.reuseSelect": "Quota comes from",
 			"settings.providerQuota.credential": "Request credentials",
@@ -2497,6 +2500,7 @@ window.__ModuleLoader__.load({
 				failed: failedCard === "quota",
 				onDiscard: () => { discardCard("quota"); setEditingProviderId(null); setSourceTest({ state: "idle", fields: [], message: "" }); },
 				onSave: () => { void saveCard("quota"); },
+				hideFooter: editingProviderId !== null,
 				key: "quota"
 			}, [
 				react.createElement("div", { className: "dshqb_provider_quota_intro", key: "intro" }, t("settings.providerQuota.intro")),
@@ -2732,7 +2736,27 @@ window.__ModuleLoader__.load({
 								}, t(testState.state === "testing" ? "settings.btnTesting" : "settings.btnTest"))),
 								testResult
 							]),
-							react.createElement("div", { className: "dshqb_source_actions", key: "close_actions" }, react.createElement("button", { type: "button", className: "dshqb_btn dshqb_btn_outline", onClick: () => setEditingProviderId(null) }, t("settings.collapse")))
+							react.createElement("div", { className: "dshqb_provider_editor_footer", key: "save_actions" }, [
+								react.createElement("span", {
+									className: "dshqb_provider_editor_save_hint" + (failedCard === "quota" ? " dshqb_provider_editor_save_hint_error" : ""),
+									role: failedCard === "quota" ? "status" : undefined,
+									key: "hint"
+								}, failedCard === "quota" ? t("settings.saveFailed") : t("settings.providerQuota.saveHint")),
+								react.createElement("button", {
+									type: "button",
+									className: "dshqb_btn dshqb_btn_outline",
+									disabled: !dirtyOf("quota") || savingCard === "quota",
+									onClick: () => { discardCard("quota"); setEditingProviderId(null); setSourceTest({ state: "idle", fields: [], message: "" }); },
+									key: "discard"
+								}, t("settings.btnDiscard")),
+								react.createElement("button", {
+									type: "button",
+									className: "dshqb_btn dshqb_btn_primary",
+									disabled: !dirtyOf("quota") || savingCard === "quota",
+									onClick: () => { void saveCard("quota"); },
+									key: "save"
+								}, t(savingCard === "quota" ? "settings.saving" : "settings.btnSave"))
+							])
 						]) : null;
 						return react.createElement("div", { className: "dshqb_provider_quota_item" + (enabled ? "" : " dshqb_provider_quota_item_off"), key: provider.id }, [
 							react.createElement("div", { className: "dshqb_provider_quota_head", key: "head" }, [
