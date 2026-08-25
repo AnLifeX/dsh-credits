@@ -54,6 +54,10 @@ OpenCode Go 模式下，卡片改成三个窗口的用量百分比与重置时�
 
 ![内置额度模板设置](./assets/settings-quota-template.png)
 
+没有适合的模板时，可使用自定义 HTTP 接口配置请求、鉴权、返回字段与数值换算：
+
+![自定义 HTTP 额度设置](./assets/settings-quota-custom.png)
+
 ![阈值与刷新卡片](./assets/settings-thresholds.png)
 
 ## 供应商额度怎么用
