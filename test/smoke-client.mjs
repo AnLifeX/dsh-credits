@@ -167,6 +167,7 @@ if (!code.includes('settings.metricCalculation.subtract')) throw new Error('subt
 if (!code.includes('calculation === "direct" ? fieldInput("valuePath"')) throw new Error('direct metric fields are not conditional')
 if (!code.includes('calculation === "subtract" ? fieldInput("usedPath"')) throw new Error('subtractive metric fields are not conditional')
 if (!code.includes('settings.metricBaselinePath')) throw new Error('generic percentage baseline wording missing')
+if (!code.includes('"settings.providerQuota.configured": "供应商已启用"')) throw new Error('provider enabled status wording missing')
 if ((code.match(/formatMetricSummary\(metric\)/g) ?? []).length < 2) throw new Error('metric test summaries do not use card percentage semantics')
 if (!code.includes('formatPercent(percent) + "（"')) throw new Error('metric test summary percentage details missing')
 if (!code.includes('支持科学计数法，例如 1e-12。')) throw new Error('scientific notation guidance missing')
