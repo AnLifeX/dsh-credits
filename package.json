@@ -1,7 +1,7 @@
 {
   "name": "dsh-credits",
-  "version": "0.2.4",
-  "description": "DeepSeek Harness 额度插件：跟随当前模型切换官方余额 / OpenCode Go 订阅用量、本会话估算、跨会话累计消耗、可视化设置",
+  "version": "0.3.0",
+  "description": "DeepSeek Harness 额度插件：按供应商展示内置套餐、余额或自定义 HTTP 额度，并提供模型计价、本会话估算与累计消耗",
   "keywords": [
     "dsh",
     "dsh-plugin",
