@@ -7,7 +7,7 @@ DeepSeek Harness（`dsh web`）额度插件：在输入框下方显示账户额�
 - **账户额度 + 状态灯**  
   DeepSeek 模式如 `🟢 余额 ¥97.69`；OpenCode Go 模式如 `🟢 Go 额度 月 6% · 周 12% · 5h 9%`。点击圆点可立即强刷。
 - **跟随当前对话模型**  
-  底部读数跟输入框选中的模型供应商走。优先识别 DSH 已配置供应商并复用其地址和凭据；也可改成「固定展示一个额度源」。
+  底部读数跟输入框选中的模型供应商走。每个 DSH 供应商独立选择内置模板、复用另一供应商的额度，或配置自定义 HTTP 接口；未配置或已关闭时不显示额度。
 - **底部条布局**  
   默认独立换行，额度单独占底下一行；也可改成跟底部已有统计共用一行、排在最后。底部条、累计胶囊、悬停卡片都可以关掉。
 - **本会话估算消耗**  
@@ -46,20 +46,42 @@ OpenCode Go 模式下，卡片改成三个窗口的用量百分比与重置时�
 
 ![展示卡片](./assets/settings-display.png)
 
-![额度查询卡片](./assets/settings-quota.png)
+额度查询现在以 DSH 供应商列表为主体：每个供应商都有独立的额度开关、信息来源和保存按钮。
 
 ![阈值与刷新卡片](./assets/settings-thresholds.png)
 
-## 额度源怎么用
+## 供应商额度怎么用
 
 在「设置 → 额度 → 额度查询」中：
 
 1. 页面以 DSH 已启用的供应商为列表，每个供应商独立开启或关闭额度展示。
-2. 能识别的供应商默认用「自动识别」：复用这个供应商在 DSH 保存的 Base URL 和 Key，并选择匹配的解析模板。
-3. 也可以明确选择一个「内置模板」，或让两个模型供应商「复用另一供应商的额度」。
-4. 最后才用「自定义 HTTP 接口」：填 URL 后可以直接在密码框输入 Token/Cookie（推荐），也可以复用 DSH Key；凭证引用放在高级选项。需要时添加请求头、JSON/Form 请求体。点「测试并读取字段」后可直接选择字段，也可以填写 JSONPath 并设置求和、计数、乘数或偏移。
+2. 插件会在后台按供应商 ID 和 Base URL 匹配模板。匹配成功时，页面直接显示对应的「内置模板」，不会再出现单独的「自动识别」选项。
+3. 如需调整，可点「编辑」，在「额度信息来源」中选择：
+   - **内置模板**：使用模板的查询地址和解析规则，并复用当前 DSH 供应商保存的 Key；模板仍可手动切换。
+   - **复用另一供应商的额度**：两个模型供应商实际共用同一账号时，直接展示另一项已经查询到的额度。
+   - **自定义 HTTP 接口**：自行填写 URL、鉴权和返回字段映射。
+4. 未识别出模板的供应商默认进入「自定义 HTTP 接口」；接口尚未填写时保持关闭，不会随意套用其他供应商的模板。
+5. 修改后点击当前供应商编辑区底部的「保存」。测试按钮使用当前草稿，不要求先开启该供应商的额度展示。
 
-切换模型时只查看当前 DSH 供应商自己的绑定；没有配置或已关闭的供应商不显示额度，也不会回退到无关账户。每个绑定有独立缓存，因此可以在 DSH 里用多个自定义供应商添加多个 OpenCode Go 账号，它们会分别查询和展示。设置修改会立即作用于当前 `dsh web` 进程；需要跨重启保留时，请再从 YAML 导出卡片复制到 profile 配置。
+切换模型时只查看当前 DSH 供应商自己的绑定；没有配置或已关闭的供应商不显示额度，也不会回退到无关账户。本会话消耗和 TPS 不受影响。每个供应商拥有独立的查询与缓存，因此可以在 DSH 中添加多个指向 OpenCode Go 的自定义供应商，并为每个账号分别配置同一个模板。
+
+### 自定义 HTTP 操作流程
+
+自定义接口不要求编写整段 JSON 配置，常用设置都可以在页面完成：
+
+1. 填写额度接口 URL 和请求方法。
+2. 选择请求凭证：直接填写凭证、复用当前/其他 DSH 供应商的 Key、使用凭证引用，或无需鉴权。
+3. 选择鉴权方式：Bearer、Token、Basic、任意请求头、Cookie、URL 参数、JSON 参数或 Form 参数。需要时再添加普通请求头和请求体。
+4. 点击「测试并读取字段」。成功提示会列出实际解析出的指标；失败时可以复制请求方法、脱敏后的请求头与请求体、响应状态码和响应体。
+5. 为每个展示指标选择计算方式并映射字段：
+   - **直接读取指标值**：读取余额、剩余次数或任意数值；可选总量字段用于显示百分比。
+   - **总量减已用量**：分别选择总量和已用量字段，插件计算剩余量。
+6. 字段返回数组时可取第一项、求和、计数、最小值或最大值；换算乘数支持科学计数法，例如 `1e-12`。重置时间字段只用于显示。
+7. 测试结果正确后保存，再开启「展示该供应商额度」。
+
+直接填写的 Token 或 Cookie 保存到 DSH credentials，不写入导出的普通配置；页面只显示「已设置」，可输入新值覆盖。附加请求头中的 Cookie、Authorization、Token、API Key 等敏感字段也会脱敏。
+
+设置页保存后会立即更新当前 `dsh web` 进程。若要让额度绑定在服务重启后仍然保留，请从「YAML 导出」卡片复制配置到当前 profile 的 `cordis.patch.yml`；直接填写的敏感凭证无需写入 YAML。
 
 ### 内置与官方模板
 
@@ -134,11 +156,13 @@ dsh plugin --profile web remove dsh-balance
 
 覆盖文件：`$DSH_HOME/profiles/web/cordis.patch.yml`。也可在设置 → 额度 改完后按卡片点「保存」。
 
+新配置以 `providerQuotas` 为准，不再需要全局的额度查询模式、默认展示源或未匹配回退项。`providerId` 必须与 DSH 供应商列表中的实际 ID 一致。旧版 `quotaMode`、`provider`、`quotaSources` 等字段仍会兼容读取，但新配置不建议继续使用。
+
 常用展示项：
 
 | 配置 | 默认 | 说明 |
 | :--- | :--- | :--- |
-| `providerQuotas` | `[]` | 每个 DSH 供应商独立的额度来源绑定；设置页会为能识别的已启用供应商自动生成推荐项 |
+| `providerQuotas` | `[]` | 每个 DSH 供应商独立的额度来源绑定；未显式配置时会在后台匹配内置模板，失败则准备一份关闭的自定义 HTTP 配置 |
 | `showDock` | `true` | 是否显示底部额度读数 |
 | `dockLayout` | `own` | `own` 独立换行；`shared` 与底部已有统计共用一行 |
 | `showCapsule` | `true` | 右下角累计消耗胶囊 |
@@ -158,10 +182,12 @@ dsh plugin --profile web remove dsh-balance
     providerQuotas:
       - providerId: opencode-go
         enabled: true
-        sourceType: auto
+        sourceType: template
+        templateId: opencode-go
       - providerId: go-personal  # DSH 中另一个自定义供应商，使用另一份 Key
         enabled: true
-        sourceType: auto
+        sourceType: template
+        templateId: opencode-go
     warningThreshold: 10          # Go 套餐剩余额度 < 10% 黄灯
     dangerThreshold: 5            # 剩余额度 < 5% 红灯
     refreshIntervalMs: 300000
@@ -180,7 +206,8 @@ dsh plugin --profile web remove dsh-balance
     providerQuotas:
       - providerId: deepseek-official
         enabled: true
-        sourceType: auto
+        sourceType: template
+        templateId: deepseek
     warningThreshold: 10
     dangerThreshold: 5
     refreshIntervalMs: 300000
@@ -209,9 +236,11 @@ dsh plugin --profile web remove dsh-balance
 ```yaml
 - id: dsh-credits
   config:
-    provider: deepseek
-    apiKeyRef: DEEPSEEK_API_KEY
-    baseUrl: https://api.deepseek.com
+    providerQuotas:
+      - providerId: deepseek-official
+        enabled: true
+        sourceType: template
+        templateId: deepseek
     warningThreshold: 2.0
     dangerThreshold: 0.5
     currency: USD
@@ -232,9 +261,9 @@ dsh plugin --profile web remove dsh-balance
 
 `prices` 是「当前 `currency` 下每 1M token」的单价。V4 可写 `peak` / `offPeak`（高峰 / 低谷）。内置 `deepseek-v4-flash` / `deepseek-v4-pro` 如果只有三个刊例字段，插件仍按官方峰谷表计价（兼容涨价前旧配置）。自行添加的模型只写三字段则全天按该价计，等效峰谷倍率 1。高峰为北京时间周一至周五 09:00–12:00、14:00–18:00，其余时段（含周末）为低谷。DeepSeek 账户的 CNY / USD 是两套独立钱包：底部会列出选定货币，以及其它仍有余额的钱包；悬停卡片列出全部钱包。计价货币只影响本会话/累计估算和状态灯，不会把其它钱包藏掉。切换货币时会套用该币种官方刊例单价，**不会做汇率换算**。V4 在 2026-08-17 之后按北京时间走峰谷价，人民币和美元同步切换（美元 = 人民币官方价 × 0.14）。
 
-### 自定义额度源（高级 YAML）
+### 自定义 HTTP（高级 YAML）
 
-设置页已可视化添加官方模板和自定义 HTTP。仅需要批量维护或特殊解析时才建议手写 YAML：
+设置页已经覆盖常用配置。只有批量维护、版本控制或特殊解析时才建议手写 `providerQuotas`：
 
 ```yaml
 - id: dsh-credits
@@ -256,9 +285,13 @@ dsh plugin --profile web remove dsh-balance
             metrics:
               - key: remaining
                 label: 剩余额度
+                calculation: direct
                 valuePath: $.data.remaining
                 totalPath: $.data.total
                 unit: USD
+                aggregate: value
+                scale: 1
+                offset: 0
                 resetsAtPath: $.data.resetsAt
 ```
 
@@ -268,11 +301,48 @@ dsh plugin --profile web remove dsh-balance
 
 - `Bearer`、`Authorization: Token`、Basic Auth、任意请求头、Cookie、URL 查询参数
 - 将凭证注入 JSON 或 `application/x-www-form-urlencoded` 请求体
-- 直接在密码框填写敏感凭证（推荐）、复用 DSH 供应商 Key，或在高级选项中使用 credentials / 环境变量引用
+- 直接填写敏感凭证、复用 DSH 供应商 Key，或在高级选项中使用 credentials / 环境变量引用
 - 直接填写的值通过 DSH `credentials.set` 只写保存；设置页和配置 API 只显示「已设置」，不会回显原值，再次填写即覆盖
 - 附加多个普通请求头，例如硅基流动网页接口需要的 `x-subject-id`
 
-响应映射支持普通点路径、数组下标和 `[*]` 通配符；数组可取第一项、求和、计数、最小值或最大值，最后再应用乘数与加减偏移。例如 `$.data.wallets[*].remaining` 配合「求和」可汇总代金券列表。当前每个供应商绑定只请求一个 URL；现金与代金券若来自两个接口，需要分别选择其中一个查询，后续再考虑组合请求。
+响应映射支持普通点路径、数组下标和 `[*]` 通配符；数组可取第一项、求和、计数、最小值或最大值，最后再应用乘数与加减偏移。例如 `$.data.wallets[*].remaining` 配合「求和」可汇总代金券列表。当前每个供应商绑定只请求一个 URL；现金与代金券若来自两个接口，暂时不能在同一绑定中组合请求。
+
+#### 硅基流动网页余额示例
+
+硅基流动未提供内置模板，可使用登录后的网页接口配置自定义 HTTP。以下示例只说明字段结构，不应把真实 Cookie 提交到仓库：
+
+```yaml
+- id: dsh-credits
+  config:
+    providerQuotas:
+      - providerId: siliconflow-cn
+        enabled: true
+        sourceType: custom
+        source:
+          id: quota-siliconflow-cn
+          name: 硅基流动-国内额度
+          kind: metric
+          request:
+            method: GET
+            url: https://cloud.siliconflow.cn/walletd-server/api/v1/subject/profile/peek
+            credentialMode: direct
+            authStyle: cookie
+            headers:
+              x-subject-id: <当前账号的 subject id>
+          response:
+            metrics:
+              - key: remaining
+                label: 剩余额度
+                calculation: direct
+                valuePath: $.data.financialInfo.balance
+                totalPath: $.data.financialInfo.recharged
+                unit: CNY
+                aggregate: value
+                scale: 1e-12
+                offset: 0
+```
+
+页面配置时，将完整 Cookie 填入凭证输入框，`x-subject-id` 放在附加请求头。先测试并确认实际返回字段；如果接口返回的金额使用 `10^-12` 为单位，就把换算乘数设为 `1e-12`。网页接口及字段可能调整，Cookie 过期后需要重新填写。代金券接口与现金余额是两个请求，当前版本不能自动合并。
 
 ## 架构
 
@@ -284,7 +354,7 @@ dsh plugin --profile web remove dsh-balance
 | `GET /query-credits/spend?range=today` | 跨会话累计消耗。`range` 可为 `today` / `yesterday` / `week` / `month` / `custom`；自定义时再带 `from`、`to`（`YYYY-MM-DD` 或 ISO） |
 | `GET /query-credits/config` | 读当前配置 |
 | `POST /query-credits/config` | 保存配置并立即生效 |
-| `POST /query-credits/test-connection` | 连通性测试 |
+| `POST /query-credits/test-connection` | 使用当前供应商草稿测试模板或自定义 HTTP，并返回可选字段或脱敏后的错误诊断 |
 
 本会话花费由 `queryCreditsCost` 投影折叠 token（每笔带事件时间），按该笔发生时的北京时间峰谷价计价；前端切货币时仍按各自行情重算，不会用“此刻”的单价覆盖早上的高峰用量。实时 TPS 由同一组会话事件生成 `liveTokenUsage` 投影：流式 chunk 阶段按字符估算，provider usage 到达后替换为精确输出 token，步骤结束后保留最近一次速率。累计消耗同样按事件时间计价，并落盘到 `$DSH_HOME/storages/dsh-credits-spend.json`。胶囊位置和所选时间范围记在浏览器 `localStorage`。
 
@@ -292,15 +362,18 @@ dsh plugin --profile web remove dsh-balance
 
 ## 更新记录
 
-### 未发布（额度源适配器）
+### 未发布（供应商级额度配置）
 
 - 将内置 `deepseek` / `opencode-go` 抽象为额度源适配器注册表
 - 支持自定义 HTTP / JSONPath 额度源：`balance` / `usage` / `metric`
 - 自定义 HTTP 支持 Cookie / Token / Basic / Header / Query / JSON / Form 鉴权、请求体与数值转换
+- 自定义指标支持直接读取、总量减已用量、百分比基准、重置时间、数组汇总、乘数和偏移
+- 测试连接可读取响应字段；请求失败时可查看并复制脱敏后的请求与响应诊断
 - 移除不可靠的硅基流动旧余额模板
-- 额度源可通过 `providerIds` / `providerPatterns` 自动匹配当前模型供应商
-- 保持 `follow`（自动匹配）/ `custom`（固定展示）/ 默认源配置
-- 设置页「额度查询」新增可视化添加/编辑/删除自定义额度源
+- 设置页改为以 DSH 供应商列表为主体，每个供应商可独立使用内置模板、复用另一供应商或自定义 HTTP
+- 模板匹配改为后台默认逻辑：匹配成功直接展示可编辑的内置模板，匹配失败进入自定义 HTTP；不再暴露全局查询模式或「自动识别」选项
+- 同一模板的多个供应商分别使用各自凭证和缓存，可配置多个 OpenCode Go 账号
+- 直接输入的敏感凭证写入 DSH credentials，页面和配置 API 不回显原值
 - 服务端与客户端统一按 `kind` 渲染，不再写死 `opencode-go`
 
 ### 0.2.4
@@ -373,13 +446,21 @@ curl http://127.0.0.1:3080/plugins/dsh-credits/client.js
 ## FAQ
 
 **Q: 插件怎么知道查的是谁的额度？**  
-A: 优先复用 DSH 供应商已保存的 credential ref / API-key record，不会把 Key 发给浏览器。没有可复用凭据时才使用额度源中的凭据引用。
+A: 插件先根据当前模型的 DSH 供应商 ID 找到它自己的 `providerQuotas` 绑定。内置模板默认复用该供应商保存的 Base URL 与 Key；自定义 HTTP 则按页面选择使用直接凭证、DSH 供应商 Key、凭证引用或无鉴权。Key 不会发给浏览器。
 
 **Q: 状态灯规则？**  
 A: DeepSeek 按余额金额对比 `warningThreshold` / `dangerThreshold`。OpenCode Go 按剩余额度百分比对比同一组阈值。🟢 ≥ 预警线；🟡 告急线～预警线；🔴 < 告急线或接口不可用。
 
 **Q: 切模型后底部读数会跟着变吗？**  
 A: 会。插件按当前模型的 DSH 供应商 ID 读取它自己的 `providerQuotas` 绑定；没配置或单独关闭时不显示额度，不会回退到其它账号。
+
+**Q: “自动识别”去哪了？**
+
+A: 它现在只是后台默认逻辑，不再是页面选项。识别成功时会直接显示匹配到的内置模板，你仍可修改模板；识别失败时使用自定义 HTTP 配置。
+
+**Q: 一个自定义供应商能同时查询现金余额和代金券两个接口吗？**
+
+A: 当前不能。一个供应商绑定只发送一个 HTTP 请求，可以在同一个响应内配置多个指标或汇总数组；来自两个不同 URL 的数据暂时不能合并。
 
 **Q: 8 月 17 日峰谷价会自动切吗？**  
 A: 会。北京时间 2026-08-17 00:00 之后，V4 Flash / Pro 按 09:00–12:00、14:00–18:00 高峰价；谷时段是 00:00–09:00、12:00–14:00、18:00–24:00，其余时段半价。
