@@ -4,7 +4,7 @@
  * USD 官方价 = CNY 官方价 × 0.14（与刊例 1 / 0.14、2 / 0.28 一致）。
  * 高峰：北京时间周一至周五 09:00–12:00、14:00–18:00；其余（含周末）为低谷，低谷 = 高峰 × 0.5。
  * 设置里的 prices[model].peak / .offPeak 可覆盖官方峰谷。
- * 内置 flash / pro 若只有刊例三字段，仍走官方峰谷表（兼容涨价前旧配置）。
+ * 内置 flash / pro / vision-exp 若只有刊例三字段，仍走官方峰谷表（兼容涨价前旧配置）。
  * 其它模型只有三字段时按固定价计，等效峰谷倍率 1，不再套官方表。
  */
 
@@ -44,7 +44,7 @@ const V4_USD = Object.fromEntries(
 
 const isFiniteRate = (p) => p && [p.cacheHit, p.cacheMiss, p.output].every((n) => Number.isFinite(Number(n)))
 
-export const PINNED_V4_MODELS = ['deepseek-v4-flash', 'deepseek-v4-pro']
+export const PINNED_V4_MODELS = ['deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-v4-flash-vision-exp']
 
 export const hasTariffTiers = (p) => isFiniteRate(p?.peak) && isFiniteRate(p?.offPeak)
 
@@ -76,7 +76,7 @@ export const officialV4ConfigPrices = (currency) => {
   const table = v4TableFor(currency)
   if (!table) return {}
   return Object.fromEntries(
-    ['deepseek-v4-flash', 'deepseek-v4-pro'].map((model) => [model, toConfigPrice(table[model])]),
+    PINNED_V4_MODELS.map((model) => [model, toConfigPrice(table[model])]),
   )
 }
 

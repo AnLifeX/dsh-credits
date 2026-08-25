@@ -174,8 +174,10 @@ window.__ModuleLoader__.load({
 				".dshqb_pricing_reset_bar{display:flex;justify-content:flex-end;margin-top:6px}",
 				".dshqb_pricing_tier_row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums}",
 				".dshqb_input_num{width:80px;padding:4px 8px;font-size:12px}",
-				".dshqb_btn_del{color:var(--dsw-alias-state-error-primary,#ef4444);background:transparent;border:none;cursor:pointer;padding:2px 6px;border-radius:4px;font-size:13px;line-height:1;transition:background-color .15s ease}",
-				".dshqb_btn_del:hover{background:rgba(239,68,68,0.12)}",
+				".dshqb_btn_del{appearance:none;color:var(--dsw-alias-label-secondary);background:transparent;border:1px solid transparent;cursor:pointer;padding:4px 9px;border-radius:6px;font:inherit;font-size:11.5px;font-weight:500;line-height:1.35;white-space:nowrap;transition:color .15s ease,background-color .15s ease,border-color .15s ease,transform .15s ease}",
+				".dshqb_btn_del:hover{color:var(--dsw-alias-state-error-primary,#dc2626);background:color-mix(in srgb,var(--dsw-alias-state-error-primary,#dc2626) 12%,transparent);border-color:color-mix(in srgb,var(--dsw-alias-state-error-primary,#dc2626) 28%,transparent)}",
+				".dshqb_btn_del:active{transform:scale(.97)}",
+				".dshqb_btn_del:focus-visible{outline:2px solid var(--dsw-alias-state-error-primary,#dc2626);outline-offset:2px}",
 				".dshqb_add_model_box{display:flex;flex-direction:column;gap:8px;align-items:stretch;background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,0.03));border:1px dashed var(--dsw-alias-border-l2,rgba(128,128,128,0.2));border-radius:6px;padding:8px 10px;margin-top:8px}",
 				".dshqb_add_model_row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}",
 				".dshqb_add_model_hint{font-size:11px;color:var(--dsw-alias-label-tertiary);line-height:1.45;white-space:normal}",
@@ -206,6 +208,7 @@ window.__ModuleLoader__.load({
 				".dshqb_settings_head_copy{display:flex;flex-direction:column;gap:4px;min-width:0}",
 				".dshqb_settings_desc{font-size:12.5px;font-weight:400;color:var(--dsw-alias-label-tertiary);line-height:1.45;white-space:normal}",
 				".dshqb_unsaved{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;font-size:11px;font-weight:500;line-height:16px;color:var(--dsw-alias-label-secondary);background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,0.1));border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.16));flex-shrink:0;white-space:nowrap}",
+				".dshqb_unsaved_compact{padding:1px 7px;font-size:10.5px;line-height:16px}",
 				".dshqb_toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);max-width:min(680px,calc(100vw - 32px));background:var(--dsw-alias-state-success-primary,#10b981);color:#ffffff;padding:9px 16px;border-radius:10px;box-shadow:var(--dsw-shadow-lv3,0 8px 24px rgba(0,0,0,0.3));font-size:12.5px;font-weight:500;line-height:1.45;white-space:normal;z-index:100000;animation:dshqb-toast-in .2s ease-out;display:flex;align-items:center;gap:6px}",
 				".dshqb_toast_error{background:var(--dsw-alias-state-error-primary,#dc2626)}",
 				".dshqb_settings_page{position:relative;display:flex;flex-direction:column;gap:12px;min-width:0;width:100%;max-width:760px;box-sizing:border-box;white-space:normal}",
@@ -310,11 +313,11 @@ window.__ModuleLoader__.load({
 				".dshqb_source_advanced{border-top:1px solid var(--dsw-alias-border-l3,rgba(128,128,128,.12));padding-top:8px}",
 				".dshqb_source_advanced>summary{cursor:pointer;color:var(--dsw-alias-label-secondary);font-size:12px;user-select:none}",
 				".dshqb_source_advanced[open]>summary{margin-bottom:6px}",
-				".dshqb_provider_quota_intro{margin:10px 0 2px;padding:10px 12px;border-radius:8px;background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.04));color:var(--dsw-alias-label-tertiary);font-size:11.5px;line-height:1.5}",
 				".dshqb_provider_quota_empty{margin:10px 0 2px;padding:18px 14px;border:1px dashed var(--dsw-alias-border-l2,rgba(128,128,128,.2));border-radius:9px;color:var(--dsw-alias-label-tertiary);font-size:12px;text-align:center}",
 				".dshqb_provider_quota_list{display:flex;flex-direction:column;gap:9px;padding:10px 0 2px}",
 				".dshqb_provider_quota_item{display:flex;flex-direction:column;gap:9px;padding:12px;border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,.16));border-radius:10px;background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-1,#fff));transition:border-color .15s ease,opacity .15s ease}",
 				".dshqb_provider_quota_item:hover{border-color:var(--dsw-alias-label-dimmed,rgba(128,128,128,.4))}",
+				".dshqb_provider_quota_item_dirty{border-color:color-mix(in srgb,var(--dsw-alias-brand-primary,#3b82f6) 38%,var(--dsw-alias-border-l2,rgba(128,128,128,.16)))}",
 				".dshqb_provider_quota_item_off{opacity:.72}",
 				".dshqb_provider_quota_head,.dshqb_provider_quota_summary{display:flex;align-items:center;justify-content:space-between;gap:12px;min-width:0}",
 				".dshqb_provider_quota_identity{display:flex;flex-direction:column;gap:1px;min-width:0}",
@@ -483,7 +486,7 @@ window.__ModuleLoader__.load({
 		}
 		/** 与服务端 src/pricing.js 同一套 V4 峰谷表; 客户端按每笔 legs[].t 计价。 */
 		const V4_CUTOFF_MS = 1786896000000;
-		const PINNED_V4_MODELS = ["deepseek-v4-flash", "deepseek-v4-pro"];
+		const PINNED_V4_MODELS = ["deepseek-v4-flash", "deepseek-v4-pro", "deepseek-v4-flash-vision-exp"];
 		const V4_CNY = {
 			"deepseek-v4-flash": { listed: { cacheHit: 0.02, cacheMiss: 1, output: 2 }, peak: { cacheHit: 0.10, cacheMiss: 3.0, output: 9.0 }, offPeak: { cacheHit: 0.05, cacheMiss: 1.5, output: 4.5 } },
 			"deepseek-v4-pro": { listed: { cacheHit: 0.025, cacheMiss: 3, output: 6 }, peak: { cacheHit: 0.30, cacheMiss: 9.0, output: 27.0 }, offPeak: { cacheHit: 0.15, cacheMiss: 4.5, output: 13.5 } },
@@ -934,7 +937,6 @@ window.__ModuleLoader__.load({
 			"settings.dshNotReady": "DSH 内置，尚未启用；可先添加模板 · {template}",
 			"settings.dshCredential": "凭证来自 DSH 供应商：",
 			"settings.dshCredentialPending": "该 DSH 供应商尚未启用；启用后会自动复用凭证，也可在高级设置填凭证引用：",
-			"settings.providerQuota.intro": "为每个供应商设置要展示的额度信息。",
 			"settings.providerQuota.empty": "DSH 中还没有已启用的供应商。请先在供应商设置中添加并启用一个供应商。",
 			"settings.providerQuota.enabled": "展示该供应商额度",
 			"settings.providerQuota.hidden": "不展示额度",
@@ -1237,7 +1239,6 @@ window.__ModuleLoader__.load({
 			"settings.dshNotReady": "Built into DSH but not enabled; add the template first · {template}",
 			"settings.dshCredential": "Credentials come from DSH provider:",
 			"settings.dshCredentialPending": "This DSH provider is not enabled yet. Credentials will be reused after enabling it, or set a credential reference under Advanced:",
-			"settings.providerQuota.intro": "Choose the quota information shown for each provider.",
 			"settings.providerQuota.empty": "No DSH provider is enabled yet. Add and enable one in provider settings first.",
 			"settings.providerQuota.enabled": "Show quota for this provider",
 			"settings.providerQuota.hidden": "Quota hidden",
@@ -1419,14 +1420,12 @@ window.__ModuleLoader__.load({
 		const DEFAULT_PRICES_CNY = {
 			"deepseek-v4-flash": v4SettingsFromTable(V4_CNY["deepseek-v4-flash"]),
 			"deepseek-v4-pro": v4SettingsFromTable(V4_CNY["deepseek-v4-pro"]),
-			"deepseek-chat": { cacheHit: 0.1, cacheMiss: 1, output: 2 },
-			"deepseek-reasoner": { cacheHit: 1, cacheMiss: 4, output: 16 }
+			"deepseek-v4-flash-vision-exp": v4SettingsFromTable(V4_CNY["deepseek-v4-flash-vision-exp"])
 		};
 		const DEFAULT_PRICES_USD = {
 			"deepseek-v4-flash": v4SettingsFromTable(V4_USD["deepseek-v4-flash"]),
 			"deepseek-v4-pro": v4SettingsFromTable(V4_USD["deepseek-v4-pro"]),
-			"deepseek-chat": { cacheHit: 0.014, cacheMiss: 0.14, output: 0.28 },
-			"deepseek-reasoner": { cacheHit: 0.14, cacheMiss: 0.55, output: 2.19 }
+			"deepseek-v4-flash-vision-exp": v4SettingsFromTable(V4_USD["deepseek-v4-flash-vision-exp"])
 		};
 		const DEFAULT_PRICES = { ...DEFAULT_PRICES_CNY };
 
@@ -1637,7 +1636,8 @@ window.__ModuleLoader__.load({
 		}
 
 		function configToForm(c) {
-			const loadedPrices = (c.prices && Object.keys(c.prices).length > 0) ? { ...c.prices } : { ...DEFAULT_PRICES };
+			const selectedCurrency = c.currency ?? "CNY";
+			const loadedPrices = { ...officialPricesFor(selectedCurrency), ...(c.prices ?? {}) };
 			return {
 				enabled: c.enabled !== false,
 				quotaMode: c.quotaMode === "custom" ? "custom" : "follow",
@@ -1647,7 +1647,7 @@ window.__ModuleLoader__.load({
 				showPopover: c.showPopover !== false,
 				showTps: c.showTps !== false,
 				provider: typeof c.provider === "string" && c.provider.trim() ? c.provider.trim() : "deepseek",
-				currency: c.currency ?? "CNY",
+				currency: selectedCurrency,
 				warningThreshold: c.warningThreshold ?? 10,
 				dangerThreshold: c.dangerThreshold ?? 5,
 				refreshIntervalMs: c.refreshIntervalMs ?? 300000,
@@ -1658,8 +1658,8 @@ window.__ModuleLoader__.load({
 				opencodeApiKeyRef: c.opencodeApiKeyRef || "OPENCODE_GO_API_KEY",
 				opencodeApiKey: "",
 				opencodeBaseUrl: c.opencodeBaseUrl || "https://opencode.ai/zen/go/v1/usage",
-				prices: hydratePrices(loadedPrices, c.currency ?? "CNY"),
-				defaultPrices: c.defaultPrices ?? officialDefaultPrices(c.currency ?? "CNY"),
+				prices: hydratePrices(loadedPrices, selectedCurrency),
+				defaultPrices: c.defaultPrices ?? officialDefaultPrices(selectedCurrency),
 				quotaSources: Array.isArray(c.quotaSources) ? c.quotaSources.map((s) => cloneSettings(s)) : [],
 				providerQuotas: Array.isArray(c.providerQuotas) ? c.providerQuotas.map((binding) => cloneSettings(binding)) : [],
 				quotaTemplates: Array.isArray(c.quotaTemplates) ? c.quotaTemplates.map((item) => cloneSettings(item)) : [],
@@ -1687,7 +1687,49 @@ window.__ModuleLoader__.load({
 			return next;
 		}
 
-		function valuesEqual(field, a, b) {
+		function stableComparable(value) {
+			if (Array.isArray(value)) return value.map((item) => stableComparable(item));
+			if (!value || typeof value !== "object") return value;
+			const next = {};
+			for (const key of Object.keys(value).sort()) {
+				if (value[key] !== undefined) next[key] = stableComparable(value[key]);
+			}
+			return next;
+		}
+
+		function comparableProviderBinding(binding, provider) {
+			const raw = binding && typeof binding === "object" ? binding : {};
+			const providerId = String(raw.providerId ?? provider?.id ?? "");
+			const implicit = raw.implicit === true;
+			const enabled = raw.enabled !== false;
+			const sourceType = raw.sourceType === "auto"
+				? (provider?.quotaSupported === true ? "template" : "custom")
+				: (["template", "provider", "custom"].includes(raw.sourceType) ? raw.sourceType : "custom");
+			const next = { providerId, enabled, sourceType };
+			if (sourceType === "template") next.templateId = String(raw.templateId || provider?.templateId || "");
+			if (sourceType === "provider") next.sourceProviderId = String(raw.sourceProviderId || "");
+			if (sourceType === "custom" && !(implicit && !enabled)) next.source = raw.source ?? null;
+			return stableComparable(next);
+		}
+
+		function providerQuotaBindingEqual(a, b, provider) {
+			return JSON.stringify(comparableProviderBinding(a, provider)) === JSON.stringify(comparableProviderBinding(b, provider));
+		}
+
+		function providerQuotaListsEqual(a, b, providers) {
+			const directory = new Map((Array.isArray(providers) ? providers : []).map((provider) => [provider.id, provider]));
+			const asMap = (items) => new Map((Array.isArray(items) ? items : []).map((binding) => [String(binding?.providerId ?? ""), binding]));
+			const left = asMap(a);
+			const right = asMap(b);
+			const providerIds = [...new Set([...left.keys(), ...right.keys()])].sort();
+			return providerIds.every((providerId) => providerQuotaBindingEqual(
+				left.get(providerId),
+				right.get(providerId),
+				directory.get(providerId) ?? { id: providerId },
+			));
+		}
+
+		function valuesEqual(field, a, b, context) {
 			if (field === "prices") {
 				const pa = {};
 				const pb = {};
@@ -1695,6 +1737,7 @@ window.__ModuleLoader__.load({
 				for (const [model, rates] of Object.entries(b || {})) pb[model] = snapshotModelPrice(rates);
 				return JSON.stringify(pa) === JSON.stringify(pb);
 			}
+			if (field === "providerQuotas") return providerQuotaListsEqual(a, b, context?.dshProviders);
 			if (field === "defaultPrices") return JSON.stringify(a || {}) === JSON.stringify(b || {});
 			if ((a && typeof a === "object") || (b && typeof b === "object")) return JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
 			if (typeof a === "boolean" || typeof b === "boolean") return Boolean(a) === Boolean(b);
@@ -1761,7 +1804,7 @@ window.__ModuleLoader__.load({
 			const keys = Object.keys(overlay);
 			if (keys.length === 0) return false;
 			for (const key of keys) {
-				if (!valuesEqual(key, overlay[key], baseline?.[key])) return true;
+				if (!valuesEqual(key, overlay[key], baseline?.[key], baseline)) return true;
 			}
 			return false;
 		}
@@ -1994,7 +2037,7 @@ window.__ModuleLoader__.load({
 				setDrafts((prev) => {
 					const current = { ...(prev[cardId] || {}) };
 					for (const [key, value] of Object.entries(patch)) {
-						if (valuesEqual(key, value, baseline[key])) delete current[key];
+						if (valuesEqual(key, value, baseline[key], baseline)) delete current[key];
 						else current[key] = value;
 					}
 					const nextDrafts = { ...prev, [cardId]: Object.keys(current).length ? current : null };
@@ -2225,6 +2268,21 @@ window.__ModuleLoader__.load({
 				sourceProviderId: "",
 				...(provider.quotaSupported === true ? {} : { source: emptyProviderCustomSource(provider) }),
 			});
+			const baselineProviderBindingFor = (provider) => {
+				const saved = (Array.isArray(baseline.providerQuotas) ? baseline.providerQuotas : [])
+					.find((binding) => binding.providerId === provider.id);
+				return cloneSettings(saved ?? defaultProviderBinding(provider));
+			};
+			const providerBindingDirty = (provider, binding = providerBindingFor(provider.id) ?? defaultProviderBinding(provider)) =>
+				!providerQuotaBindingEqual(binding, baselineProviderBindingFor(provider), provider);
+			const discardProviderBinding = (provider) => {
+				const saved = baselineProviderBindingFor(provider);
+				const next = providerQuotaBindings.some((binding) => binding.providerId === provider.id)
+					? providerQuotaBindings.map((binding) => binding.providerId === provider.id ? saved : cloneSettings(binding))
+					: [...providerQuotaBindings.map((binding) => cloneSettings(binding)), saved];
+				patchCard("quota", { providerQuotas: next });
+				setFailedCard((id) => id === "quota" ? null : id);
+			};
 			const updateProviderBinding = (provider, patchOrUpdater, preserveTestFields = false) => {
 				const current = cloneSettings(providerBindingFor(provider.id) ?? defaultProviderBinding(provider));
 				const patch = typeof patchOrUpdater === "function" ? patchOrUpdater(current) : patchOrUpdater;
@@ -2561,13 +2619,13 @@ window.__ModuleLoader__.load({
 				hideFooter: editingProviderId !== null,
 				key: "quota"
 			}, [
-				react.createElement("div", { className: "dshqb_provider_quota_intro", key: "intro" }, t("settings.providerQuota.intro")),
 				visibleDshProviders.length === 0
 					? react.createElement("div", { className: "dshqb_provider_quota_empty", key: "empty" }, t("settings.providerQuota.empty"))
 					: react.createElement("div", { className: "dshqb_provider_quota_list", key: "providers" }, visibleDshProviders.map((provider) => {
 						const binding = cloneSettings(providerBindingFor(provider.id) ?? defaultProviderBinding(provider));
 						const enabled = binding.enabled !== false;
 						const editing = editingProviderId === provider.id;
+						const providerDirty = providerBindingDirty(provider, binding);
 						const source = binding.source ?? emptyProviderCustomSource(provider);
 						const metrics = Array.isArray(source.response?.metrics) && source.response.metrics.length
 							? source.response.metrics
@@ -2839,26 +2897,27 @@ window.__ModuleLoader__.load({
 								react.createElement("button", {
 									type: "button",
 									className: "dshqb_btn dshqb_btn_outline",
-									disabled: !dirtyOf("quota") || savingCard === "quota",
-									onClick: () => { discardCard("quota"); setEditingProviderId(null); setSourceTest({ state: "idle", fields: [], message: "" }); },
+									disabled: !providerDirty || savingCard === "quota",
+									onClick: () => { discardProviderBinding(provider); setEditingProviderId(null); setSourceTest({ state: "idle", fields: [], message: "" }); },
 									key: "discard"
 								}, t("settings.btnDiscard")),
 								react.createElement("button", {
 									type: "button",
 									className: "dshqb_btn dshqb_btn_primary",
-									disabled: !dirtyOf("quota") || savingCard === "quota",
+									disabled: !providerDirty || savingCard === "quota",
 									onClick: () => { void saveCard("quota"); },
 									key: "save"
 								}, t(savingCard === "quota" ? "settings.saving" : "settings.btnSave"))
 							])
 						]) : null;
-						return react.createElement("div", { className: "dshqb_provider_quota_item" + (enabled ? "" : " dshqb_provider_quota_item_off"), key: provider.id }, [
+						return react.createElement("div", { className: "dshqb_provider_quota_item" + (enabled ? "" : " dshqb_provider_quota_item_off") + (providerDirty ? " dshqb_provider_quota_item_dirty" : ""), key: provider.id }, [
 							react.createElement("div", { className: "dshqb_provider_quota_head", key: "head" }, [
 								react.createElement("span", { className: "dshqb_provider_quota_identity", key: "identity" }, [
 									react.createElement("span", { className: "dshqb_provider_quota_name", key: "name" }, provider.name || provider.id),
 									react.createElement("span", { className: "dshqb_provider_quota_id", key: "id" }, provider.id),
 								]),
 								react.createElement("span", { className: "dshqb_provider_quota_badges", key: "badges" }, [
+									providerDirty ? react.createElement("span", { className: "dshqb_unsaved dshqb_unsaved_compact", key: "unsaved" }, t("settings.unsaved")) : null,
 									provider.configured === true ? react.createElement("span", { className: "dshqb_source_chip", key: "configured" }, t("settings.providerQuota.configured")) : null,
 								react.createElement(SwitchControl, {
 									checked: enabled,
@@ -3092,13 +3151,12 @@ window.__ModuleLoader__.load({
 							const officialRates = official[model];
 							const overridden = !officialRates || !pricesEqualModel(rates, officialRates);
 							const canDelete = !PINNED_V4_MODELS.includes(model);
-							const resetBtn = overridden ? react.createElement("button", {
+							const resetBtn = officialRates && overridden ? react.createElement("button", {
 								type: "button",
 								className: "dshqb_model_reset",
 								onClick: () => {
 									const next = { ...(view.prices || {}) };
-									if (officialRates) next[model] = JSON.parse(JSON.stringify(officialRates));
-									else delete next[model];
+									next[model] = JSON.parse(JSON.stringify(officialRates));
 									patchCard("pricing", { prices: next });
 								},
 								key: "rst"
@@ -3112,8 +3170,9 @@ window.__ModuleLoader__.load({
 									patchCard("pricing", { prices: next });
 								},
 								title: t("settings.removeModel"),
+								"aria-label": t("settings.removeModel"),
 								key: "del"
-							}, "🗑️") : null;
+							}, t("settings.remove")) : null;
 							const enableTiersBtn = react.createElement("button", {
 								type: "button",
 								className: "dshqb_model_reset",

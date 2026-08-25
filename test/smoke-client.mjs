@@ -436,6 +436,12 @@ if (code.includes('[name]: table')) throw new Error('adding a model must not aut
 if (!code.includes('dshqb_btn_del')) throw new Error('model delete button missing')
 if (!code.includes('PINNED_V4_MODELS')) throw new Error('pinned v4 models allowlist missing')
 if (code.includes('!model.toLowerCase().includes("v4")')) throw new Error('delete button must not key off the v4 substring')
+const defaultPriceBlock = code.slice(code.indexOf('const DEFAULT_PRICES_CNY'), code.indexOf('const DEFAULT_SETTINGS'))
+if (!defaultPriceBlock.includes('deepseek-v4-flash-vision-exp')) throw new Error('vision-exp must be present in default model prices')
+if (defaultPriceBlock.includes('deepseek-chat') || defaultPriceBlock.includes('deepseek-reasoner')) throw new Error('currency defaults must not auto-add legacy chat/reasoner models')
+if (!code.includes('const resetBtn = officialRates && overridden')) throw new Error('restore-default must only apply to built-in model prices')
+if (code.includes('}, "🗑️")')) throw new Error('model delete action should use a readable styled label')
+if (!code.includes('.dshqb_btn_del:hover{color:var(--dsw-alias-state-error-primary')) throw new Error('model delete hover must expose the danger state')
 if (!htmlSettings.includes('YAML 导出')) throw new Error('export card title missing')
 if (htmlSettings.includes('未保存')) throw new Error('unsaved badge should stay hidden until dirty')
 if (htmlSettings.includes('放弃修改')) throw new Error('discard should stay hidden until a dirty card is open')
@@ -459,6 +465,7 @@ if (!code.includes('dshqb_provider_editor_footer') || !code.includes('settings.b
 if (code.includes('"settings.providerQuota.auto"') || code.includes('settings.providerQuota.autoSummary')) throw new Error('automatic template matching should not be exposed as a quota source')
 if (!code.includes('binding.sourceType === "auto"') || !code.includes('? (provider.quotaSupported === true ? "template" : "custom")')) throw new Error('legacy automatic bindings must resolve to template or custom in the UI')
 if (code.includes('每个供应商独立查询，多个 OpenCode Go 账号也不会共用额度缓存')) throw new Error('provider-specific implementation notes should not appear in the UI')
+if (code.includes('为每个供应商设置要展示的额度信息。')) throw new Error('redundant provider quota intro should be removed')
 if (code.includes('保存到 DSH 本地凭证库') || code.includes('原值不可查看，只能覆盖')) throw new Error('credential boundary notes should not appear in the UI')
 if (code.includes('settings.requestHeadersHint') || code.includes('settings.bodyHint')) throw new Error('request controls should not show redundant boundary hints')
 if (code.includes('key: "close_actions"')) throw new Error('provider editor should not duplicate the collapse action at the bottom')
@@ -539,6 +546,79 @@ if (!htmlDraft.includes('放弃修改')) throw new Error('dirty draft should sho
   globalThis.sessionStorage = prevSession
   globalThis.window.__ModuleLoader__.load = (entry) => { captured = entry }
   console.log('SETTINGS DRAFT RESTORE SMOKE TEST PASSED')
+}
+
+{
+  const prevSession = globalThis.sessionStorage
+  const providerSaved = {
+    enabled: true,
+    showDock: true,
+    dockLayout: 'own',
+    showCapsule: true,
+    showPopover: true,
+    showTps: true,
+    currency: 'CNY',
+    warningThreshold: 10,
+    dangerThreshold: 5,
+    refreshIntervalMs: 300000,
+    clientPollIntervalMs: 30000,
+    timeoutMs: 8000,
+    prices: {},
+    defaultPrices: { cacheHit: 0.1, cacheMiss: 1, output: 2 },
+    providerQuotas: [{
+      providerId: 'go-work',
+      enabled: true,
+      sourceType: 'auto',
+      templateId: 'opencode-go',
+      sourceProviderId: '',
+      adapterId: 'provider:go-work',
+      implicit: true,
+      migrated: false,
+    }],
+    quotaTemplates: [
+      { id: 'opencode-go', category: 'subscription', name: 'OpenCode Go 订阅用量', description: 'test' },
+      { id: 'deepseek', category: 'balance', name: 'DeepSeek 官方余额', description: 'test' },
+    ],
+    dshProviders: [{ id: 'go-work', name: 'Go 工作套餐', configured: true, quotaSupported: true, templateId: 'opencode-go' }],
+  }
+  const renderProviderDraft = (binding) => {
+    const draftStore = {
+      'dsh-credits.settingsDraft.state': JSON.stringify({
+        baseline: providerSaved,
+        drafts: { quota: { providerQuotas: [binding] } },
+        open: { quota: true },
+      }),
+    }
+    globalThis.sessionStorage = {
+      getItem(key) { return Object.prototype.hasOwnProperty.call(draftStore, key) ? draftStore[key] : null },
+      setItem(key, value) { draftStore[key] = String(value) },
+      removeItem(key) { delete draftStore[key] },
+    }
+    const providerDraftApi = loadClientFactory()
+    const providerDraftRegs = []
+    providerDraftApi.apply(makeSlotCtx(providerDraftRegs))
+    return renderToStaticMarkup(ReactMock.createElement(slotOf(providerDraftRegs, 'settings.section').comp, { t: settingsT }))
+  }
+  const equivalentBinding = {
+    ...providerSaved.providerQuotas[0],
+    sourceType: 'template',
+    _edited: true,
+  }
+  const htmlEquivalent = renderProviderDraft(equivalentBinding)
+  if (htmlEquivalent.includes('未保存')) throw new Error('reverting a provider quota source to its saved meaning must clear dirty state')
+
+  const changedBinding = {
+    ...providerSaved.providerQuotas[0],
+    sourceType: 'template',
+    templateId: 'deepseek',
+    _edited: true,
+  }
+  const htmlChanged = renderProviderDraft(changedBinding)
+  if (!htmlChanged.includes('dshqb_provider_quota_item_dirty')) throw new Error('changed provider quota row must expose its own dirty state')
+  if ((htmlChanged.match(/>未保存</g) ?? []).length < 2) throw new Error('dirty provider must show both card-level and provider-level unsaved badges')
+  globalThis.sessionStorage = prevSession
+  globalThis.window.__ModuleLoader__.load = (entry) => { captured = entry }
+  console.log('PROVIDER QUOTA DIRTY STATE SMOKE TEST PASSED')
 }
 
 // ---------- OpenCode Go 场景 ----------

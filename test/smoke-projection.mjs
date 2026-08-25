@@ -4,7 +4,14 @@
  * 运行: node test/smoke-projection.mjs
  */
 import { makeCostProjection, makeTpsProjection, resolveModelPrice } from '../src/index.js'
+import { officialV4ConfigPrices } from '../src/pricing.js'
 import assert from 'node:assert/strict'
+
+assert.deepEqual(Object.keys(officialV4ConfigPrices('CNY')), [
+  'deepseek-v4-flash',
+  'deepseek-v4-pro',
+  'deepseek-v4-flash-vision-exp',
+], 'new installations must include the vision model in built-in prices')
 
 const usdFlash = resolveModelPrice({
   currency: 'USD',
@@ -132,7 +139,15 @@ const visionFlat = resolveModelPrice({
     'deepseek-v4-flash-vision-exp': { cacheHit: 0.2, cacheMiss: 4, output: 8 },
   },
 }, 'deepseek-v4-flash-vision-exp', peak)
-assert.equal(visionFlat.cacheMiss, 4, 'non-pinned V4 name with only three fields is a flat rate (multiplier 1)')
+assert.equal(visionFlat.cacheMiss, 3, 'built-in vision-exp must stay on the official V4 table when only legacy flat fields are present')
+
+const customFlat = resolveModelPrice({
+  currency: 'CNY',
+  prices: {
+    'deepseek-v4-community': { cacheHit: 0.2, cacheMiss: 4, output: 8 },
+  },
+}, 'deepseek-v4-community', peak)
+assert.equal(customFlat.cacheMiss, 4, 'custom model names with only three fields remain flat-rate prices')
 
 const pinnedListed = resolveModelPrice({
   currency: 'CNY',
