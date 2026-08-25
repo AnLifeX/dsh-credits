@@ -1,5 +1,7 @@
 # dsh-credits
 
+[![npm version](https://img.shields.io/npm/v/dsh-credits.svg)](https://www.npmjs.com/package/dsh-credits)
+
 DeepSeek Harness（`dsh web`）额度插件：在输入框下方显示账户额度与本会话估算消耗；右下角另有可拖动的累计消耗胶囊。设置在侧栏「额度」（最后一项，货币硬币图标），分成多张可折叠卡片。
 
 > 兼容性：`dsh-credits 0.2.4` 已适配 `dsh 0.1.1-rc.1`（即 0.1.1-rc1）的新版会话投影接口；TPS 与本会话金额可正常传递到 Web 前端，同时保留对旧版投影接口的兼容。
