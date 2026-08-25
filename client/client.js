@@ -2297,7 +2297,7 @@ window.__ModuleLoader__.load({
 					const fields = Array.isArray(data.availableFields) ? data.availableFields : [];
 					const details = [
 						...Object.entries(data.usage ?? {}).map(([key, window]) => opencodeWindowName(key, t) + " " + formatPercent(window?.percent)),
-						...(data.metrics ?? []).map((metric) => (metric?.label || metric?.key || "Quota") + " " + formatMetricValue(metric)),
+						...(data.metrics ?? []).map((metric) => (metric?.label || metric?.key || "Quota") + " " + formatMetricSummary(metric)),
 						...(data.balances ?? []).map((wallet) => (wallet?.currency || "") + " " + String(wallet?.total ?? 0)),
 					].filter(Boolean);
 					setSourceTest({
@@ -2446,14 +2446,8 @@ window.__ModuleLoader__.load({
 					const parsedDetails = [
 						...Object.entries(data.usage ?? {}).map(([key, window]) =>
 							opencodeWindowName(key, t) + " " + formatPercent(window?.percent)),
-						...(data.metrics ?? []).map((metric) => {
-							const value = formatMetricValue(metric);
-							const total = Number(metric?.total);
-							const totalText = Number.isFinite(total) && total > 0
-								? " / " + String(total) + (metric?.unit ? " " + metric.unit : "")
-								: "";
-							return (metric?.label || metric?.key || "Quota") + " " + value + totalText;
-						}),
+						...(data.metrics ?? []).map((metric) =>
+							(metric?.label || metric?.key || "Quota") + " " + formatMetricSummary(metric)),
 						...(data.balances ?? []).map((balance) =>
 							(balance?.currency || "") + " " + String(Number(balance?.total) || 0)),
 					].filter(Boolean).join(" · ");
@@ -3420,6 +3414,16 @@ window.__ModuleLoader__.load({
 			const unit = typeof metric?.unit === "string" ? metric.unit : "";
 			if (!Number.isFinite(value)) return "—";
 			return String(value) + (unit ? " " + unit : "");
+		}
+		/** 测试结果与额度卡片使用同一套百分比语义。 */
+		function formatMetricSummary(metric) {
+			const percent = metricPercent(metric);
+			if (!Number.isFinite(percent)) return formatMetricValue(metric);
+			const value = Number(metric?.value);
+			const total = Number(metric?.total);
+			const unit = typeof metric?.unit === "string" ? metric.unit : "";
+			if (!Number.isFinite(value) || !Number.isFinite(total) || total <= 0) return formatPercent(percent);
+			return formatPercent(percent) + "（" + String(value) + " / " + String(total) + (unit ? " " + unit : "") + "）";
 		}
 
 		/** 多币种钱包: 底部列出选定货币 + 其他非零钱包; 卡片列出全部。 */

@@ -167,6 +167,8 @@ if (!code.includes('settings.metricCalculation.subtract')) throw new Error('subt
 if (!code.includes('calculation === "direct" ? fieldInput("valuePath"')) throw new Error('direct metric fields are not conditional')
 if (!code.includes('calculation === "subtract" ? fieldInput("usedPath"')) throw new Error('subtractive metric fields are not conditional')
 if (!code.includes('settings.metricBaselinePath')) throw new Error('generic percentage baseline wording missing')
+if ((code.match(/formatMetricSummary\(metric\)/g) ?? []).length < 2) throw new Error('metric test summaries do not use card percentage semantics')
+if (!code.includes('formatPercent(percent) + "（"')) throw new Error('metric test summary percentage details missing')
 if (!code.includes('支持科学计数法，例如 1e-12。')) throw new Error('scientific notation guidance missing')
 if (!code.includes('仅用于展示，不参与计算。')) throw new Error('reset-time display behavior is unclear')
 if (code.includes('硅基流动网页接口通常还需要单独添加 x-subject-id')) throw new Error('provider-specific cookie guidance should not be hard-coded')
