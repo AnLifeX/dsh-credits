@@ -48,6 +48,12 @@ OpenCode Go 模式下，卡片改成三个窗口的用量百分比与重置时�
 
 额度查询现在以 DSH 供应商列表为主体：每个供应商都有独立的额度开关、信息来源和保存按钮。
 
+![供应商级额度查询](./assets/settings-quota.png)
+
+识别出适合的模板后会直接显示为「内置模板」，展开后仍可切换其他套餐或余额模板：
+
+![内置额度模板设置](./assets/settings-quota-template.png)
+
 ![阈值与刷新卡片](./assets/settings-thresholds.png)
 
 ## 供应商额度怎么用
