@@ -934,49 +934,39 @@ window.__ModuleLoader__.load({
 			"settings.dshNotReady": "DSH 内置，尚未启用；可先添加模板 · {template}",
 			"settings.dshCredential": "凭证来自 DSH 供应商：",
 			"settings.dshCredentialPending": "该 DSH 供应商尚未启用；启用后会自动复用凭证，也可在高级设置填凭证引用：",
-			"settings.providerQuota.intro": "这里只列出已启用或已配置过额度的 DSH 供应商。每个供应商独立查询，多个 OpenCode Go 账号也不会共用额度缓存。",
+			"settings.providerQuota.intro": "为每个供应商设置要展示的额度信息。",
 			"settings.providerQuota.empty": "DSH 中还没有已启用的供应商。请先在供应商设置中添加并启用一个供应商。",
 			"settings.providerQuota.enabled": "展示该供应商额度",
 			"settings.providerQuota.hidden": "不展示额度",
 			"settings.providerQuota.configured": "供应商已启用",
 			"settings.providerQuota.source": "额度信息来源",
-			"settings.providerQuota.auto": "自动识别（推荐）",
-			"settings.providerQuota.template": "使用内置模板",
+			"settings.providerQuota.template": "内置模板",
 			"settings.providerQuota.reuse": "复用另一供应商的额度",
 			"settings.providerQuota.custom": "自定义 HTTP 接口",
-			"settings.providerQuota.autoSummary": "自动识别 · {template}",
+			"settings.providerQuota.templateSummary": "内置模板 · {template}",
 			"settings.providerQuota.reuseSummary": "复用 · {name}",
-			"settings.providerQuota.autoHint": "按供应商 ID 和 Base URL 识别模板，并直接复用该供应商在 DSH 保存的地址与 Key。",
-			"settings.providerQuota.templateHint": "模板自带官方查询地址和解析规则，凭证直接复用当前 DSH 供应商。",
-			"settings.providerQuota.reuseHint": "两个模型供应商实际使用同一账号时，可直接展示另一供应商已经查到的额度。",
-			"settings.providerQuota.customHint": "只需填写接口地址、选择凭证来源，再测试并选择返回字段。",
-			"settings.providerQuota.saveHint": "修改不会自动保存；点击“保存”后才会生效。",
 			"settings.providerQuota.templateSelect": "内置模板",
 			"settings.providerQuota.reuseSelect": "额度来自",
 			"settings.providerQuota.credential": "请求凭证",
 			"settings.providerQuota.credentialCurrent": "当前供应商：{name}",
 			"settings.providerQuota.credentialOther": "DSH 供应商：{name}",
 			"settings.providerQuota.credentialRef": "高级：凭证引用 / 环境变量",
-			"settings.providerQuota.credentialDirect": "直接填写 Token / Cookie（推荐）",
+			"settings.providerQuota.credentialDirect": "直接填写凭证",
 			"settings.providerQuota.credentialNone": "无需鉴权",
 			"settings.providerQuota.endpoint": "额度接口 URL",
 			"settings.requestMethod": "请求方法",
-			"settings.directCredential": "Token / Cookie / Auth 凭证",
-			"settings.directCredentialHint": "直接输入即可。保存到 DSH 本地凭证库，页面和配置接口都不会回显；再次输入并保存就是覆盖。",
-			"settings.cookieCredentialHint": "只填写 Cookie 内容，不要包含“Cookie:”前缀。",
-			"settings.cookieCredentialPlaceholder": "例如：__SF_auth.session-token=…; other=value",
-			"settings.directCredentialConfigured": "已设置（原值不可查看，只能覆盖）",
-			"settings.directCredentialPlaceholder": "已设置；输入新值将覆盖",
+			"settings.directCredential": "凭证",
+			"settings.cookieCredentialPlaceholder": "输入 Cookie",
+			"settings.directCredentialConfigured": "已设置",
+			"settings.directCredentialPlaceholder": "输入 Token 或凭证",
 			"settings.authHeader": "鉴权请求头名称",
 			"settings.authParam": "鉴权参数名称",
 			"settings.requestHeaders": "附加请求头",
-			"settings.requestHeadersHint": "例如 x-subject-id。Cookie 请使用上面的 Cookie 鉴权，不要重复填在这里。",
 			"settings.addHeader": "添加请求头",
 			"settings.headerName": "请求头名称",
 			"settings.headerValue": "请求头值",
 			"settings.bodyType": "请求体类型",
 			"settings.body": "请求体",
-			"settings.bodyHint": "JSON 必须是对象；选择 JSON/Form 参数鉴权时，凭证会自动写入上方参数名，不要把秘密直接写进请求体。",
 			"settings.body.none": "无请求体",
 			"settings.body.json": "JSON",
 			"settings.body.form": "表单（x-www-form-urlencoded）",
@@ -1028,24 +1018,24 @@ window.__ModuleLoader__.load({
 			"settings.auth.none": "无需鉴权",
 			"settings.metricLabel": "指标名称",
 			"settings.metricCalculation": "计算方式",
-			"settings.metricCalculationHint": "选择如何从接口响应中得到这个指标的最终值。",
+			"settings.metricCalculationHint": "选择指标值的计算方式。",
 			"settings.metricCalculation.direct": "直接读取指标值",
 			"settings.metricCalculation.subtract": "总量减已用量",
 			"settings.metricValuePath": "指标值字段",
-			"settings.metricValuePathHint": "选择要展示的原始数值字段，例如余额、剩余次数、已用量或任意统计值。",
+			"settings.metricValuePathHint": "选择要展示的返回字段。",
 			"settings.metricUsedPath": "已用量字段",
-			"settings.metricUsedPathHint": "最终指标值将按“总量减已用量”计算。",
+			"settings.metricUsedPathHint": "与总量字段相减得到指标值。",
 			"settings.metricTotalPath": "总量字段",
-			"settings.metricTotalPathHint": "与已用量字段一起计算最终指标值。",
+			"settings.metricTotalPathHint": "用于计算“总量减已用量”。",
 			"settings.metricBaselinePath": "百分比基准字段（可选）",
 			"settings.metricBaselinePathHint": "填写后按“指标值 ÷ 基准值”显示百分比和进度条；留空则直接显示指标值。",
 			"settings.metricUnit": "单位",
-			"settings.metricUnitHint": "只影响展示，例如 CNY、USD、次或 Token。",
+			"settings.metricUnitHint": "例如 CNY、USD、次或 Token。",
 			"settings.metricResetPath": "重置时间字段（可选）",
 			"settings.metricResetPathHint": "填写后在指标下方显示重置时间，仅用于展示，不参与计算。",
-			"settings.metricMappingHint": "每项代表一个要展示的指标。先选择计算方式，再映射当前方式所需的字段；无效或缺失的字段不会显示为 0。",
+			"settings.metricMappingHint": "选择计算方式并映射返回字段。",
 			"settings.metricAggregate": "多值处理（仅数组字段）",
-			"settings.metricAggregateHint": "普通数字保持“直接取值”即可；只有所选字段返回数组时，才需要求和、计数、最小值或最大值。",
+			"settings.metricAggregateHint": "返回字段为数组时选择汇总方式。",
 			"settings.metricAggregate.value": "直接取值（数组时取第一项）",
 			"settings.metricAggregate.sum": "求和",
 			"settings.metricAggregate.count": "计数",
@@ -1054,7 +1044,7 @@ window.__ModuleLoader__.load({
 			"settings.metricScale": "换算乘数",
 			"settings.metricScaleHint": "支持科学计数法，例如 1e-12。",
 			"settings.metricOffset": "加减偏移",
-			"settings.metricOffsetHint": "在乘数换算后再加上的数值；通常保持 0。",
+			"settings.metricOffsetHint": "换算后加上的数值，通常为 0。",
 			"settings.addMetric": "添加展示指标",
 			"settings.removeMetric": "删除指标",
 			"settings.metricItem": "指标 {index}",
@@ -1247,49 +1237,39 @@ window.__ModuleLoader__.load({
 			"settings.dshNotReady": "Built into DSH but not enabled; add the template first · {template}",
 			"settings.dshCredential": "Credentials come from DSH provider:",
 			"settings.dshCredentialPending": "This DSH provider is not enabled yet. Credentials will be reused after enabling it, or set a credential reference under Advanced:",
-			"settings.providerQuota.intro": "Only enabled DSH providers and providers with an existing quota configuration are listed. Each provider is queried independently, so multiple OpenCode Go accounts never share a quota cache.",
+			"settings.providerQuota.intro": "Choose the quota information shown for each provider.",
 			"settings.providerQuota.empty": "No DSH provider is enabled yet. Add and enable one in provider settings first.",
 			"settings.providerQuota.enabled": "Show quota for this provider",
 			"settings.providerQuota.hidden": "Quota hidden",
 			"settings.providerQuota.configured": "Provider enabled",
 			"settings.providerQuota.source": "Quota source",
-			"settings.providerQuota.auto": "Auto detect (recommended)",
 			"settings.providerQuota.template": "Built-in template",
 			"settings.providerQuota.reuse": "Reuse another provider quota",
 			"settings.providerQuota.custom": "Custom HTTP endpoint",
-			"settings.providerQuota.autoSummary": "Auto · {template}",
+			"settings.providerQuota.templateSummary": "Built-in template · {template}",
 			"settings.providerQuota.reuseSummary": "Reuse · {name}",
-			"settings.providerQuota.autoHint": "Detect a template from provider ID and Base URL, then reuse the URL and key already saved in DSH.",
-			"settings.providerQuota.templateHint": "The template owns the official endpoint and parser; credentials come from this DSH provider.",
-			"settings.providerQuota.reuseHint": "Use this when two model providers actually share the same account and quota.",
-			"settings.providerQuota.customHint": "Enter an endpoint, choose credentials, test it, then select response fields.",
-			"settings.providerQuota.saveHint": "Changes are not saved automatically. Click Save to apply them.",
 			"settings.providerQuota.templateSelect": "Built-in template",
 			"settings.providerQuota.reuseSelect": "Quota comes from",
 			"settings.providerQuota.credential": "Request credentials",
 			"settings.providerQuota.credentialCurrent": "Current provider: {name}",
 			"settings.providerQuota.credentialOther": "DSH provider: {name}",
 			"settings.providerQuota.credentialRef": "Advanced: credential ref / environment variable",
-			"settings.providerQuota.credentialDirect": "Enter token / cookie directly (recommended)",
+			"settings.providerQuota.credentialDirect": "Enter credential directly",
 			"settings.providerQuota.credentialNone": "No authentication",
 			"settings.providerQuota.endpoint": "Quota endpoint URL",
 			"settings.requestMethod": "HTTP method",
-			"settings.directCredential": "Token / cookie / auth credential",
-			"settings.directCredentialHint": "Enter it here. DSH stores it in the local credential vault and never returns it; enter a new value to overwrite it.",
-			"settings.cookieCredentialHint": "Enter the cookie value only, without the “Cookie:” prefix.",
-			"settings.cookieCredentialPlaceholder": "For example: __SF_auth.session-token=…; other=value",
-			"settings.directCredentialConfigured": "Configured (the saved value cannot be viewed, only overwritten)",
-			"settings.directCredentialPlaceholder": "Configured; enter a new value to overwrite",
+			"settings.directCredential": "Credential",
+			"settings.cookieCredentialPlaceholder": "Enter cookie",
+			"settings.directCredentialConfigured": "Configured",
+			"settings.directCredentialPlaceholder": "Enter token or credential",
 			"settings.authHeader": "Authentication header",
 			"settings.authParam": "Authentication parameter",
 			"settings.requestHeaders": "Additional headers",
-			"settings.requestHeadersHint": "For example x-subject-id. Use Cookie authentication above instead of adding Cookie here.",
 			"settings.addHeader": "Add header",
 			"settings.headerName": "Header name",
 			"settings.headerValue": "Header value",
 			"settings.bodyType": "Request body type",
 			"settings.body": "Request body",
-			"settings.bodyHint": "JSON must be an object. JSON/Form parameter authentication injects the credential using the parameter name above; do not put secrets in the body text.",
 			"settings.body.none": "No body",
 			"settings.body.json": "JSON",
 			"settings.body.form": "Form (x-www-form-urlencoded)",
@@ -1340,24 +1320,24 @@ window.__ModuleLoader__.load({
 			"settings.auth.none": "No authentication",
 			"settings.metricLabel": "Metric label",
 			"settings.metricCalculation": "Calculation",
-			"settings.metricCalculationHint": "Choose how the final metric value is obtained from the API response.",
+			"settings.metricCalculationHint": "Choose how the metric value is calculated.",
 			"settings.metricCalculation.direct": "Read metric value directly",
 			"settings.metricCalculation.subtract": "Total minus used",
 			"settings.metricValuePath": "Metric value field",
-			"settings.metricValuePathHint": "Select the raw value to display, such as a balance, remaining requests, usage, or any other measurement.",
+			"settings.metricValuePathHint": "Select the response field to display.",
 			"settings.metricUsedPath": "Used value field",
-			"settings.metricUsedPathHint": "The final metric value is calculated as total minus used.",
+			"settings.metricUsedPathHint": "Subtracted from the total to produce the metric value.",
 			"settings.metricTotalPath": "Total value field",
-			"settings.metricTotalPathHint": "Used together with the used value field to calculate the final metric value.",
+			"settings.metricTotalPathHint": "Used for the total-minus-used calculation.",
 			"settings.metricBaselinePath": "Percentage baseline field (optional)",
 			"settings.metricBaselinePathHint": "When set, displays value ÷ baseline as a percentage and progress bar. Leave empty to display the metric value directly.",
 			"settings.metricUnit": "Unit",
-			"settings.metricUnitHint": "Display only, for example CNY, USD, requests, or tokens.",
+			"settings.metricUnitHint": "For example CNY, USD, requests, or tokens.",
 			"settings.metricResetPath": "Reset-time field (optional)",
 			"settings.metricResetPathHint": "Displays the reset time below the metric. This is display-only and does not affect calculations.",
-			"settings.metricMappingHint": "Each item is one displayed metric. Choose its calculation first, then map only the fields required by that method. Invalid or missing fields are not reported as zero.",
+			"settings.metricMappingHint": "Choose a calculation and map the response fields.",
 			"settings.metricAggregate": "Multiple-value handling (arrays only)",
-			"settings.metricAggregateHint": "Keep Direct value for an ordinary number. Sum, count, minimum, and maximum only apply when the selected field returns an array.",
+			"settings.metricAggregateHint": "Choose how to aggregate an array response field.",
 			"settings.metricAggregate.value": "Direct value (first item for arrays)",
 			"settings.metricAggregate.sum": "Sum",
 			"settings.metricAggregate.count": "Count",
@@ -1366,7 +1346,7 @@ window.__ModuleLoader__.load({
 			"settings.metricScale": "Conversion multiplier",
 			"settings.metricScaleHint": "Scientific notation is supported, for example 1e-12.",
 			"settings.metricOffset": "Offset",
-			"settings.metricOffsetHint": "Added after applying the multiplier; normally leave this at 0.",
+			"settings.metricOffsetHint": "Added after conversion; normally 0.",
 			"settings.addMetric": "Add display metric",
 			"settings.removeMetric": "Remove metric",
 			"settings.metricItem": "Metric {index}",
@@ -2268,11 +2248,12 @@ window.__ModuleLoader__.load({
 					return t("settings.providerQuota.reuseSummary", { name: target?.name || binding.sourceProviderId || "—" });
 				}
 				if (binding.sourceType === "custom") return t("settings.providerQuota.custom");
-				const templateId = binding.sourceType === "template" ? binding.templateId : (provider.templateId || binding.templateId);
+				if (binding.sourceType === "auto" && provider.quotaSupported !== true) return t("settings.providerQuota.custom");
+				const templateId = binding.sourceType === "auto"
+					? (provider.templateId || binding.templateId)
+					: (binding.templateId || provider.templateId);
 				const template = quotaTemplates.find((item) => item.id === templateId);
-				return binding.sourceType === "auto"
-					? t("settings.providerQuota.autoSummary", { template: template?.name || templateId || "—" })
-					: (template?.name || templateId || "—");
+				return t("settings.providerQuota.templateSummary", { template: template?.name || templateId || "—" });
 			};
 			const testProviderBinding = async (provider, binding) => {
 				setSourceTest({ state: "testing", fields: [], message: "", diagnostics: null, providerId: provider.id });
@@ -2594,13 +2575,13 @@ window.__ModuleLoader__.load({
 						const testState = sourceTest.providerId === provider.id ? sourceTest : { state: "idle", fields: [], message: "" };
 						const otherProviders = visibleDshProviders.filter((item) => item.id !== provider.id);
 						const sourceTypes = [
-							...(provider.quotaSupported === true ? [["auto", t("settings.providerQuota.auto")]] : []),
 							["template", t("settings.providerQuota.template")],
 							...(otherProviders.length ? [["provider", t("settings.providerQuota.reuse")]] : []),
 							["custom", t("settings.providerQuota.custom")],
 						];
-						const currentSourceType = sourceTypes.some(([value]) => value === binding.sourceType) ? binding.sourceType : sourceTypes[0][0];
-						const hintKey = "settings.providerQuota." + (currentSourceType === "provider" ? "reuseHint" : currentSourceType + "Hint");
+						const currentSourceType = binding.sourceType === "auto"
+							? (provider.quotaSupported === true ? "template" : "custom")
+							: (sourceTypes.some(([value]) => value === binding.sourceType) ? binding.sourceType : "custom");
 						const providerFieldOptions = (current) => {
 							const rows = Array.isArray(testState.fields) ? testState.fields : [];
 							const options = [["", rows.length ? t("settings.selectField") : t("settings.testFirst")]];
@@ -2629,9 +2610,9 @@ window.__ModuleLoader__.load({
 						}, true);
 						const patchHeaders = (headers) => patchSource("request", { headers });
 						const requestDshProvider = source.request?.dshProvider;
-						const selectedTemplateId = currentSourceType === "auto"
+						const selectedTemplateId = binding.sourceType === "auto"
 							? (provider.templateId || binding.templateId)
-							: binding.templateId;
+							: (binding.templateId || provider.templateId);
 						const selectedTemplate = quotaTemplates.find((item) => item.id === selectedTemplateId);
 						const credentialChoice = source.request?.credentialMode === "direct" ? "__value" : source.request?.credentialMode === "none" ? "__none" : requestDshProvider
 							? requestDshProvider
@@ -2676,7 +2657,7 @@ window.__ModuleLoader__.load({
 						const editor = editing ? react.createElement("div", { className: "dshqb_provider_quota_editor", key: "editor" }, [
 							react.createElement(FieldGrid, { key: "source_type_grid" }, [
 								react.createElement(FieldRow, {
-									t, key: "source_type", wide: true, label: t("settings.providerQuota.source"), hint: t(hintKey), disabled: savingCard === "quota"
+									t, key: "source_type", wide: true, label: t("settings.providerQuota.source"), disabled: savingCard === "quota"
 								}, react.createElement("select", {
 									className: "dshqb_select",
 									value: currentSourceType,
@@ -2685,7 +2666,7 @@ window.__ModuleLoader__.load({
 										updateProviderBinding(provider, (current) => ({
 											enabled: true,
 											sourceType,
-											templateId: sourceType === "auto" ? (provider.templateId || "") : (current.templateId || quotaTemplates[0]?.id || ""),
+											templateId: sourceType === "template" ? (current.templateId || provider.templateId || quotaTemplates[0]?.id || "") : current.templateId,
 											sourceProviderId: sourceType === "provider" ? (current.sourceProviderId || otherProviders[0]?.id || "") : current.sourceProviderId,
 											...(sourceType === "custom" ? { source: current.source ?? emptyProviderCustomSource(provider) } : {}),
 										}));
@@ -2695,7 +2676,7 @@ window.__ModuleLoader__.load({
 							currentSourceType === "template" ? react.createElement(FieldGrid, { key: "template_grid" }, [
 								react.createElement(FieldRow, { t, key: "template", wide: true, label: t("settings.providerQuota.templateSelect"), hint: selectedTemplate?.description || "", disabled: savingCard === "quota" },
 									react.createElement("select", {
-										className: "dshqb_select", value: binding.templateId || quotaTemplates[0]?.id || "",
+										className: "dshqb_select", value: selectedTemplateId || quotaTemplates[0]?.id || "",
 										onChange: (e) => updateProviderBinding(provider, { templateId: e.target.value, sourceType: "template", enabled: true })
 										}, ["subscription", "balance"].flatMap((category) => quotaTemplates.filter((item) => item.category === category).map((template) =>
 											react.createElement("option", { value: template.id, key: template.id }, t("settings.template." + category) + " · " + template.name)
@@ -2738,9 +2719,9 @@ window.__ModuleLoader__.load({
 											react.createElement("option", { value: "__none", key: "__none" }, t("settings.providerQuota.credentialNone")),
 										])
 									),
-									credentialChoice === "__value" ? react.createElement(FieldRow, { t, key: "auth_value", label: t("settings.directCredential"), hint: t(authStyle === "cookie" ? "settings.cookieCredentialHint" : "settings.directCredentialHint"), disabled: savingCard === "quota" },
+									credentialChoice === "__value" ? react.createElement(FieldRow, { t, key: "auth_value", label: t("settings.directCredential"), disabled: savingCard === "quota" },
 										react.createElement("div", { className: "dshqb_secret_input" }, [
-											react.createElement("input", { className: "dshqb_input", key: "input", type: "password", autoComplete: "new-password", value: source.request?.authValue || "", placeholder: source.request?.credentialConfigured ? t("settings.directCredentialPlaceholder") : (authStyle === "cookie" ? t("settings.cookieCredentialPlaceholder") : ""), onChange: (e) => patchSource("request", { authValue: e.target.value }) }),
+											react.createElement("input", { className: "dshqb_input", key: "input", type: "password", autoComplete: "new-password", value: source.request?.authValue || "", placeholder: t(authStyle === "cookie" ? "settings.cookieCredentialPlaceholder" : "settings.directCredentialPlaceholder"), onChange: (e) => patchSource("request", { authValue: e.target.value }) }),
 											source.request?.credentialConfigured ? react.createElement("span", { className: "dshqb_secret_status", key: "status" }, t("settings.directCredentialConfigured")) : null
 										])
 									) : null,
@@ -2771,7 +2752,6 @@ window.__ModuleLoader__.load({
 								]),
 								react.createElement("div", { className: "dshqb_provider_mapping", key: "headers" }, [
 									react.createElement("span", { className: "dshqb_template_group_title", key: "title" }, t("settings.requestHeaders")),
-									react.createElement("span", { className: "dshqb_hint", key: "hint" }, t("settings.requestHeadersHint")),
 									react.createElement("div", { className: "dshqb_header_list", key: "list" }, requestHeaders.map(([name, value], index) =>
 										react.createElement("div", { className: "dshqb_header_row", key: name + index }, [
 											react.createElement("input", { className: "dshqb_input", value: name, placeholder: t("settings.headerName"), onChange: (e) => replaceHeader(index, e.target.value, value), key: "name" }),
@@ -2790,7 +2770,7 @@ window.__ModuleLoader__.load({
 											react.createElement("option", { value: "raw", key: "raw" }, t("settings.body.raw")),
 										])
 									),
-									(source.request?.bodyType || "none") !== "none" ? react.createElement(FieldRow, { t, key: "body", wide: true, label: t("settings.body"), hint: t("settings.bodyHint"), disabled: savingCard === "quota" },
+									(source.request?.bodyType || "none") !== "none" ? react.createElement(FieldRow, { t, key: "body", wide: true, label: t("settings.body"), disabled: savingCard === "quota" },
 										react.createElement("textarea", { className: "dshqb_input dshqb_textarea", value: source.request?.body || "", placeholder: source.request?.bodyType === "json" ? "{\n  \"pageSize\": 100\n}" : "key=value", onChange: (e) => patchSource("request", { body: e.target.value }) })
 									) : null,
 								]),
@@ -2844,18 +2824,18 @@ window.__ModuleLoader__.load({
 									type: "button", className: "dshqb_btn dshqb_btn_outline", disabled: currentSourceType === "provider" || testState.state === "testing" || savingCard === "quota",
 									onClick: () => { void testProviderBinding(provider, {
 										...binding,
-										sourceType: currentSourceType,
+										sourceType: binding.sourceType === "auto" && currentSourceType === "template" ? "auto" : currentSourceType,
 										templateId: binding.templateId || provider.templateId || quotaTemplates[0]?.id || "",
 									}); }
 								}, t(testState.state === "testing" ? "settings.btnTesting" : "settings.btnTest"))),
 								testResult
 							]),
 							react.createElement("div", { className: "dshqb_provider_editor_footer", key: "save_actions" }, [
-								react.createElement("span", {
-									className: "dshqb_provider_editor_save_hint" + (failedCard === "quota" ? " dshqb_provider_editor_save_hint_error" : ""),
-									role: failedCard === "quota" ? "status" : undefined,
-									key: "hint"
-								}, failedCard === "quota" ? t("settings.saveFailed") : t("settings.providerQuota.saveHint")),
+								failedCard === "quota" ? react.createElement("span", {
+									className: "dshqb_provider_editor_save_hint dshqb_provider_editor_save_hint_error",
+									role: "status",
+									key: "error"
+								}, t("settings.saveFailed")) : react.createElement("span", { key: "spacer" }),
 								react.createElement("button", {
 									type: "button",
 									className: "dshqb_btn dshqb_btn_outline",
@@ -2887,7 +2867,7 @@ window.__ModuleLoader__.load({
 									onChange: (e) => updateProviderBinding(provider, {
 										enabled: e.target.checked,
 										...(e.target.checked && provider.quotaSupported !== true && binding.sourceType === "auto"
-											? { sourceType: "template", templateId: quotaTemplates[0]?.id || "" }
+											? { sourceType: "custom", source: binding.source ?? emptyProviderCustomSource(provider) }
 											: {}),
 									}),
 									key: "switch"
