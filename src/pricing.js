@@ -45,10 +45,14 @@ const V4_USD = Object.fromEntries(
 const isFiniteRate = (p) => p && [p.cacheHit, p.cacheMiss, p.output].every((n) => Number.isFinite(Number(n)))
 
 export const PINNED_V4_MODELS = ['deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-v4-flash-vision-exp']
+export const PRICING_CURRENCIES = ['CNY', 'USD']
+
+/** 官方仅提供人民币与美元价；历史 EUR 实际复用了美元数值，因此迁移为 USD。 */
+export const normalizePricingCurrency = (currency) => ['USD', 'EUR'].includes(String(currency ?? '').trim().toUpperCase()) ? 'USD' : 'CNY'
 
 export const hasTariffTiers = (p) => isFiniteRate(p?.peak) && isFiniteRate(p?.offPeak)
 
-/** 北京时间周一至周五 09:00–12:00、14:00–18:00 为高峰。 */
+/** 北京时间周一至周五 09:00–12:00、14:00–18:00 为高峰，周末全天低谷。 */
 export const isPeakBeijing = (timestamp) => {
   const beijing = new Date(Number(timestamp) + 8 * 3600 * 1000)
   const hour = beijing.getUTCHours()
@@ -89,7 +93,7 @@ const asRate = (p) => ({
 /** 实时计算指定模型在指定时间戳下的单价。 */
 export const resolveModelPrice = (configOrGetter, model, timestamp = Date.now()) => {
   const config = typeof configOrGetter === 'function' ? configOrGetter() : configOrGetter
-  const currency = config.currency || 'CNY'
+  const currency = normalizePricingCurrency(config.currency)
   const table = v4TableFor(currency)?.[model]
   const configured = config.prices?.[model]
   const customTiers = hasTariffTiers(configured) ? configured : null

@@ -439,6 +439,8 @@ if (code.includes('!model.toLowerCase().includes("v4")')) throw new Error('delet
 const defaultPriceBlock = code.slice(code.indexOf('const DEFAULT_PRICES_CNY'), code.indexOf('const DEFAULT_SETTINGS'))
 if (!defaultPriceBlock.includes('deepseek-v4-flash-vision-exp')) throw new Error('vision-exp must be present in default model prices')
 if (defaultPriceBlock.includes('deepseek-chat') || defaultPriceBlock.includes('deepseek-reasoner')) throw new Error('currency defaults must not auto-add legacy chat/reasoner models')
+if (code.includes('EUR (欧元 €)')) throw new Error('pricing must not offer a fake EUR option backed by USD numbers')
+if (!code.includes('["USD", "EUR"].includes') || !code.includes('? "USD" : "CNY"')) throw new Error('legacy EUR settings must migrate to the truthful USD label')
 if (!code.includes('const resetBtn = officialRates && overridden')) throw new Error('restore-default must only apply to built-in model prices')
 if (code.includes('}, "🗑️")')) throw new Error('model delete action should use a readable styled label')
 if (!code.includes('.dshqb_btn_del:hover{color:var(--dsw-alias-state-error-primary')) throw new Error('model delete hover must expose the danger state')
@@ -524,8 +526,8 @@ function loadClientFactory() {
   }
   draftStore['dsh-credits.settingsDraft.state'] = JSON.stringify({
     baseline: saved,
-    drafts: { display: { dockLayout: 'shared' } },
-    open: { display: true, quota: true, thresholds: true, export: true },
+    drafts: { display: { dockLayout: 'shared' }, pricing: { currency: 'EUR' } },
+    open: { display: true, quota: true, thresholds: true, pricing: true, export: true },
   })
   const draftApi = loadClientFactory()
   const draftRegs = []
@@ -538,6 +540,8 @@ if (!htmlDraft.includes('放弃修改')) throw new Error('dirty draft should sho
   if (!htmlDraft.includes('已覆盖')) throw new Error('overridden field should show badge')
   if (!htmlDraft.includes('恢复默认')) throw new Error('overridden field should show restore default')
   if (!htmlDraft.includes('dshqb_layout_choice dshqb_layout_choice_selected')) throw new Error('dirty draft should restore the selected dock layout card')
+  if (htmlDraft.includes('value="EUR"') || htmlDraft.includes('EUR (欧元 €)')) throw new Error('restored EUR drafts must not keep the fake currency label')
+  if (!htmlDraft.includes('value="USD"')) throw new Error('restored EUR drafts must migrate to USD')
   if (!htmlDraft.includes('dshqb_switch')) throw new Error('display settings should render slider switches')
   if (!htmlDraft.includes('dshqb_field_grid')) throw new Error('threshold fields should use two-column grid')
   if (!htmlDraft.includes('dshqb_provider_quota_item') || !htmlDraft.includes('Go 工作套餐')) throw new Error('quota card should be centered on DSH provider rows')

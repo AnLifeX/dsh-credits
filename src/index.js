@@ -19,7 +19,7 @@ import { z } from 'zod'
 import { homedir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
-import { resolveModelPrice, priceBuckets, officialV4ConfigPrices } from './pricing.js'
+import { resolveModelPrice, priceBuckets, officialV4ConfigPrices, normalizePricingCurrency } from './pricing.js'
 import { applySpendEvent, aggregateSpend, initSpendFold, resolveSpendRange } from './spend.js'
 
 export { resolveModelPrice } from './pricing.js'
@@ -1186,7 +1186,7 @@ export const makeCostProjection = (configOrGetter) => {
         tokens,
         tokensByModel,
         legs,
-        currency: cfg.currency,
+        currency: normalizePricingCurrency(cfg.currency),
         pricingEpoch: Number(cfg.pricingEpoch ?? 0),
       }
     }
@@ -1466,7 +1466,7 @@ export function apply(ctx, config) {
     refreshIntervalMs: config.refreshIntervalMs ?? 300000,
     clientPollIntervalMs: config.clientPollIntervalMs ?? 30000,
     timeoutMs: config.timeoutMs ?? 8000,
-    currency: config.currency ?? 'CNY',
+    currency: normalizePricingCurrency(config.currency),
     pricingEpoch: 0,
     warningThreshold: config.warningThreshold ?? 10,
     dangerThreshold: config.dangerThreshold ?? 5,
@@ -2377,7 +2377,7 @@ export function apply(ctx, config) {
               if (typeof body.refreshIntervalMs === 'number' && body.refreshIntervalMs >= 1000) runtimeConfig.refreshIntervalMs = body.refreshIntervalMs
               if (typeof body.clientPollIntervalMs === 'number' && body.clientPollIntervalMs >= 1000) runtimeConfig.clientPollIntervalMs = body.clientPollIntervalMs
               if (typeof body.timeoutMs === 'number' && body.timeoutMs >= 1000) runtimeConfig.timeoutMs = body.timeoutMs
-              if (typeof body.currency === 'string' && body.currency.trim()) runtimeConfig.currency = body.currency.trim().toUpperCase()
+              if (typeof body.currency === 'string' && body.currency.trim()) runtimeConfig.currency = normalizePricingCurrency(body.currency)
             }
             // 总开关只停用额度相关功能；模型单价与 YAML 导出仍然可独立使用。
             if (body.prices && typeof body.prices === 'object') {

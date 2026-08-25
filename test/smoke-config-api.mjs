@@ -297,6 +297,10 @@ assert.equal(resGetConfig.data.config.showPopover, true)
   assert.deepEqual(Object.keys(resPostConfig.data.config.prices), ['deepseek-v4-flash'], 'prices should be completely replaced without deleted models')
   console.log('POST /query-credits/config passed (including model deletion test)')
 
+  const resLegacyEur = await invokeRoute('/query-credits/config', 'POST', { currency: 'EUR' })
+  assert.equal(resLegacyEur.status, 200)
+  assert.equal(resLegacyEur.data.config.currency, 'USD', 'legacy EUR used USD prices and must migrate to the USD label')
+
   // 2.5 OpenCode Go: 切换 provider 并验证 usage 缓存与连通性测试
   const resOpenCode = await invokeRoute('/query-credits/config', 'POST', {
     provider: 'opencode-go',

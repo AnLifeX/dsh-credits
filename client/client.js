@@ -355,7 +355,7 @@ window.__ModuleLoader__.load({
 		//#endregion
 
 		//#region formatting
-		const CURRENCY_SYMBOLS = { CNY: "¥", USD: "$", EUR: "€" };
+		const CURRENCY_SYMBOLS = { CNY: "¥", USD: "$" };
 		const currencySymbol = (currency) => CURRENCY_SYMBOLS[currency] ?? currency + " ";
 		/** 余额/花费显示: 0 显示 2 位, 大额 2 位小数, 小额 3~4 位。 */
 		function formatMoney(amount, currency) {
@@ -501,6 +501,9 @@ window.__ModuleLoader__.load({
 		function v4TableFor(currency) {
 			return currency === "USD" ? V4_USD : V4_CNY;
 		}
+		function normalizePricingCurrency(currency) {
+			return ["USD", "EUR"].includes(String(currency ?? "").trim().toUpperCase()) ? "USD" : "CNY";
+		}
 		function isFiniteRate(p) {
 			return p && [p.cacheHit, p.cacheMiss, p.output].every((n) => Number.isFinite(Number(n)));
 		}
@@ -569,7 +572,7 @@ window.__ModuleLoader__.load({
 			return isPeakBeijing(timestamp) ? "peak" : "offPeak";
 		}
 		function resolveClientPrice(cfg, model, timestamp) {
-			const currency = cfg.currency || "CNY";
+			const currency = normalizePricingCurrency(cfg.currency);
 			const table = v4TableFor(currency)?.[model];
 			const configured = cfg.prices?.[model];
 			if (hasTariffTiers(configured)) {
@@ -593,7 +596,7 @@ window.__ModuleLoader__.load({
 		}
 		/** 用当前计价货币按每笔事件时间重算本会话; 不用 /query-credits 里“此刻”的 V4 单价。 */
 		function priceSession(cost, payload) {
-			const currency = payload?.currency ?? cost?.currency ?? "CNY";
+			const currency = normalizePricingCurrency(payload?.currency ?? cost?.currency);
 			const cfg = {
 				currency,
 				prices: payload?.prices,
@@ -911,7 +914,7 @@ window.__ModuleLoader__.load({
 			"settings.quotaModeHint": "自动模式会跟随当前供应商；没有匹配项时使用下方回退源。",
 			"settings.currency": "计价货币",
 			"settings.currencyHint": "用于本会话估算与状态灯。",
-			"settings.currencyHintQuota": "只影响本会话估算。",
+			"settings.currencyHintQuota": "保存后用于本会话与累计消耗估算。",
 			"settings.warning": "预警阈值 (黄灯 🟡)",
 			"settings.warningHint": "低于此值亮黄灯。",
 			"settings.danger": "告急阈值 (红灯 🔴)",
@@ -1139,8 +1142,8 @@ window.__ModuleLoader__.load({
 			"card.pricingHint": "💡 View pricing & rates via [?]",
 			"tariff.peak": "Liangwen Peak Time",
 			"tariff.offPeak": "Liangwen Valley Time",
-			"tariff.peakTitle": "Peak period: (Beijing time) Mon–Fri 09:00–12:00, 14:00–18:00\nValley period: all other times, including weekends",
-			"tariff.offPeakTitle": "Peak period: (Beijing time) Mon–Fri 09:00–12:00, 14:00–18:00\nValley period: all other times, including weekends",
+			"tariff.peakTitle": "Peak period: Beijing time Mon–Fri 09:00–12:00, 14:00–18:00\nValley period: all other times, including weekends",
+			"tariff.offPeakTitle": "Peak period: Beijing time Mon–Fri 09:00–12:00, 14:00–18:00\nValley period: all other times, including weekends",
 			"card.error": "【Account Balance】Error: {error}",
 			/* OpenCode Go quota translations */
 			"quota.readout": "Go quota M {monthly} · W {weekly} · 5h {rolling}",
@@ -1213,7 +1216,7 @@ window.__ModuleLoader__.load({
 			"settings.quotaModeHint": "Automatic mode follows the current provider and uses the fallback below when unmatched.",
 			"settings.currency": "Currency",
 			"settings.currencyHint": "For session estimates and the status light.",
-			"settings.currencyHintQuota": "Only affects the session estimate.",
+			"settings.currencyHintQuota": "Used for session and cumulative estimates after saving.",
 			"settings.warning": "Warning Threshold (Yellow 🟡)",
 			"settings.warningHint": "Yellow below this value.",
 			"settings.danger": "Danger Threshold (Red 🔴)",
@@ -1430,12 +1433,12 @@ window.__ModuleLoader__.load({
 		const DEFAULT_PRICES = { ...DEFAULT_PRICES_CNY };
 
 		function officialPricesFor(currency) {
-			return currency === "CNY" ? DEFAULT_PRICES_CNY : DEFAULT_PRICES_USD;
+			return normalizePricingCurrency(currency) === "USD" ? DEFAULT_PRICES_USD : DEFAULT_PRICES_CNY;
 		}
 		function officialDefaultPrices(currency) {
-			return currency === "CNY"
-				? { cacheHit: 0.1, cacheMiss: 1, output: 2 }
-				: { cacheHit: 0.014, cacheMiss: 0.14, output: 0.28 };
+			return normalizePricingCurrency(currency) === "USD"
+				? { cacheHit: 0.014, cacheMiss: 0.14, output: 0.28 }
+				: { cacheHit: 0.1, cacheMiss: 1, output: 2 };
 		}
 
 		const DEFAULT_SETTINGS = {
@@ -1636,7 +1639,7 @@ window.__ModuleLoader__.load({
 		}
 
 		function configToForm(c) {
-			const selectedCurrency = c.currency ?? "CNY";
+			const selectedCurrency = normalizePricingCurrency(c.currency);
 			const loadedPrices = { ...officialPricesFor(selectedCurrency), ...(c.prices ?? {}) };
 			return {
 				enabled: c.enabled !== false,
@@ -1823,9 +1826,13 @@ window.__ModuleLoader__.load({
 				if (!raw) return null;
 				const parsed = JSON.parse(raw);
 				if (!parsed || typeof parsed !== "object" || !parsed.baseline) return null;
+				const baseline = cloneSettings(parsed.baseline);
+				baseline.currency = normalizePricingCurrency(baseline.currency);
+				const drafts = parsed.drafts && typeof parsed.drafts === "object" ? cloneSettings(parsed.drafts) : {};
+				if (drafts.pricing?.currency) drafts.pricing.currency = normalizePricingCurrency(drafts.pricing.currency);
 				return {
-					baseline: parsed.baseline,
-					drafts: parsed.drafts && typeof parsed.drafts === "object" ? parsed.drafts : {},
+					baseline,
+					drafts,
 					open: parsed.open && typeof parsed.open === "object" ? parsed.open : {}
 				};
 			} catch {
@@ -3130,8 +3137,7 @@ window.__ModuleLoader__.load({
 						}
 					}, [
 						react.createElement("option", { value: "CNY", key: "cny" }, "CNY (人民币 ¥)"),
-						react.createElement("option", { value: "USD", key: "usd" }, "USD (美元 $)"),
-						react.createElement("option", { value: "EUR", key: "eur" }, "EUR (欧元 €)")
+						react.createElement("option", { value: "USD", key: "usd" }, "USD (美元 $)")
 					]))
 				]),
 				react.createElement("table", { className: "dshqb_pricing_table", key: "p_table" }, [

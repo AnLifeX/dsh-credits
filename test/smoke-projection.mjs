@@ -4,7 +4,7 @@
  * 运行: node test/smoke-projection.mjs
  */
 import { makeCostProjection, makeTpsProjection, resolveModelPrice } from '../src/index.js'
-import { officialV4ConfigPrices } from '../src/pricing.js'
+import { normalizePricingCurrency, officialV4ConfigPrices, PRICING_CURRENCIES } from '../src/pricing.js'
 import assert from 'node:assert/strict'
 
 assert.deepEqual(Object.keys(officialV4ConfigPrices('CNY')), [
@@ -12,6 +12,8 @@ assert.deepEqual(Object.keys(officialV4ConfigPrices('CNY')), [
   'deepseek-v4-pro',
   'deepseek-v4-flash-vision-exp',
 ], 'new installations must include the vision model in built-in prices')
+assert.deepEqual(PRICING_CURRENCIES, ['CNY', 'USD'], 'pricing must only offer currencies with official price tables')
+assert.equal(normalizePricingCurrency('EUR'), 'USD', 'legacy EUR reused USD numbers and must migrate to the truthful USD label')
 
 const usdFlash = resolveModelPrice({
   currency: 'USD',
@@ -112,9 +114,9 @@ assert.equal(cnyPeak.cacheMiss, 3)
 assert.equal(usdPeak.cacheMiss, 0.42)
 assert.equal(usdPeak.output, 1.26)
 
-const weekend = Date.parse('2026-08-22T02:00:00.000Z') // 周六北京 10:00，应为低谷
+const weekend = Date.parse('2026-08-22T02:00:00.000Z') // 周六北京 10:00，仍为低谷
 const weekendFlash = resolveModelPrice({ currency: 'CNY' }, 'deepseek-v4-flash', weekend)
-assert.equal(weekendFlash.cacheMiss, 1.5, 'weekend must use off-peak even during weekday peak hours')
+assert.equal(weekendFlash.cacheMiss, 1.5, 'weekends must use off-peak prices all day')
 
 const customPeak = resolveModelPrice({
   currency: 'CNY',
