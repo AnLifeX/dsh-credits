@@ -944,6 +944,15 @@ window.__ModuleLoader__.load({
 			"settings.providerQuota.enabled": "展示该供应商额度",
 			"settings.providerQuota.hidden": "不展示额度",
 			"settings.providerQuota.configured": "供应商已启用",
+			"settings.providerQuota.thresholdsEnabled": "独立阈值",
+			"settings.providerQuota.thresholdsEnabledHint": "开启后该供应商使用自己的预警/告急线；关闭则继承全局阈值。",
+			"settings.providerQuota.thresholdMode": "阈值比较方式",
+			"settings.providerQuota.thresholdModeHint": "百分比：按剩余百分比比较；数值：直接按余额或数量比较。",
+			"settings.providerQuota.thresholdMode.percent": "百分比",
+			"settings.providerQuota.thresholdMode.value": "数值",
+			"settings.providerQuota.refreshInterval": "独立查询频率",
+			"settings.providerQuota.refreshIntervalHint": "该供应商后台查询额度的间隔；选择“继承全局”则使用全局设置。",
+			"settings.providerQuota.refreshInherit": "继承全局",
 			"settings.providerQuota.source": "额度信息来源",
 			"settings.providerQuota.template": "内置模板",
 			"settings.providerQuota.reuse": "复用另一供应商的额度",
@@ -1246,6 +1255,15 @@ window.__ModuleLoader__.load({
 			"settings.providerQuota.enabled": "Show quota for this provider",
 			"settings.providerQuota.hidden": "Quota hidden",
 			"settings.providerQuota.configured": "Provider enabled",
+			"settings.providerQuota.thresholdsEnabled": "Provider-specific thresholds",
+			"settings.providerQuota.thresholdsEnabledHint": "When on, this provider uses its own warning/danger lines; when off, it inherits the global thresholds.",
+			"settings.providerQuota.thresholdMode": "Threshold comparison",
+			"settings.providerQuota.thresholdModeHint": "Percent compares remaining percentage; value compares the raw balance or amount.",
+			"settings.providerQuota.thresholdMode.percent": "Percent",
+			"settings.providerQuota.thresholdMode.value": "Value",
+			"settings.providerQuota.refreshInterval": "Provider refresh interval",
+			"settings.providerQuota.refreshIntervalHint": "How often this provider is queried in the background; Inherit global uses the global interval.",
+			"settings.providerQuota.refreshInherit": "Inherit global",
 			"settings.providerQuota.source": "Quota source",
 			"settings.providerQuota.template": "Built-in template",
 			"settings.providerQuota.reuse": "Reuse another provider quota",
@@ -1481,6 +1499,10 @@ window.__ModuleLoader__.load({
 					if (clean.source?.request) {
 						delete clean.source.request.authValue;
 						delete clean.source.request.credentialConfigured;
+						const headers = Object.entries(clean.source.request.headers ?? {})
+							.filter(([name, value]) => value !== "***" || !/authorization|proxy-authorization|token|api[-_]?key|secret|cookie|set-cookie|session/i.test(name))
+							.map(([name, value]) => [name, value]);
+						clean.source.request.headers = Object.fromEntries(headers);
 					}
 					return clean;
 				}) : [];
@@ -1712,6 +1734,11 @@ window.__ModuleLoader__.load({
 			if (sourceType === "template") next.templateId = String(raw.templateId || provider?.templateId || "");
 			if (sourceType === "provider") next.sourceProviderId = String(raw.sourceProviderId || "");
 			if (sourceType === "custom" && !(implicit && !enabled)) next.source = raw.source ?? null;
+			next.thresholdsEnabled = raw.thresholdsEnabled === true;
+			next.thresholdMode = raw.thresholdMode === "value" || raw.thresholdMode === "percent" ? raw.thresholdMode : null;
+			next.warningThreshold = raw.warningThreshold ?? null;
+			next.dangerThreshold = raw.dangerThreshold ?? null;
+			next.refreshIntervalMs = raw.refreshIntervalMs ?? null;
 			return stableComparable(next);
 		}
 
@@ -2273,6 +2300,11 @@ window.__ModuleLoader__.load({
 				sourceType: provider.quotaSupported === true ? "auto" : "custom",
 				templateId: provider.templateId || "",
 				sourceProviderId: "",
+				thresholdsEnabled: false,
+				thresholdMode: null,
+				warningThreshold: null,
+				dangerThreshold: null,
+				refreshIntervalMs: null,
 				...(provider.quotaSupported === true ? {} : { source: emptyProviderCustomSource(provider) }),
 			});
 			const baselineProviderBindingFor = (provider) => {
@@ -2719,6 +2751,23 @@ window.__ModuleLoader__.load({
 								diagnosticPreview ? react.createElement("pre", { className: "dshqb_diagnostic_preview", key: "preview" }, diagnosticPreview) : null,
 							])
 							: null;
+						const providerThresholdsEnabled = binding.thresholdsEnabled === true;
+						const providerThresholdMode = binding.thresholdMode
+							|| (binding.sourceType === "custom"
+								? ((source.response?.metrics ?? []).some((metric) => metric.totalPath || metric.calculation === "subtract") ? "percent" : "value")
+								: (selectedTemplate?.category === "subscription" ? "percent" : "value"));
+						const providerWarning = Number.isFinite(Number(binding.warningThreshold)) ? Number(binding.warningThreshold) : view.warningThreshold;
+						const providerDanger = Number.isFinite(Number(binding.dangerThreshold)) ? Number(binding.dangerThreshold) : view.dangerThreshold;
+						const providerRefresh = Number.isFinite(Number(binding.refreshIntervalMs)) ? Number(binding.refreshIntervalMs) : null;
+						const refreshOptions = [
+							["", t("settings.providerQuota.refreshInherit")],
+							[30000, t("unit.seconds", { n: 30 })],
+							[60000, t("unit.minutes", { n: 1 })],
+							[180000, t("unit.minutes", { n: 3 })],
+							[300000, t("unit.minutes", { n: 5 })],
+							[600000, t("unit.minutes", { n: 10 })],
+							[3600000, t("unit.minutes", { n: 60 })],
+						];
 						const editor = editing ? react.createElement("div", { className: "dshqb_provider_quota_editor", key: "editor" }, [
 							react.createElement(FieldGrid, { key: "source_type_grid" }, [
 								react.createElement(FieldRow, {
@@ -2820,7 +2869,7 @@ window.__ModuleLoader__.load({
 									react.createElement("div", { className: "dshqb_header_list", key: "list" }, requestHeaders.map(([name, value], index) =>
 										react.createElement("div", { className: "dshqb_header_row", key: name + index }, [
 											react.createElement("input", { className: "dshqb_input", value: name, placeholder: t("settings.headerName"), onChange: (e) => replaceHeader(index, e.target.value, value), key: "name" }),
-											react.createElement("input", { className: "dshqb_input", value: value === "***" ? "" : value, placeholder: value === "***" ? "••••••••" : t("settings.headerValue"), onChange: (e) => replaceHeader(index, name, e.target.value), key: "value" }),
+											react.createElement("input", { className: "dshqb_input", value: (value === "***" || String(value).startsWith("@credential:")) ? "" : value, placeholder: (value === "***" || String(value).startsWith("@credential:")) ? "••••••••" : t("settings.headerValue"), onChange: (e) => replaceHeader(index, name, e.target.value), key: "value" }),
 											react.createElement("button", { type: "button", className: "dshqb_btn dshqb_btn_outline", onClick: () => patchHeaders(Object.fromEntries(requestHeaders.filter((_, rowIndex) => rowIndex !== index))), key: "remove" }, "×")
 										])
 									)),
@@ -2894,6 +2943,89 @@ window.__ModuleLoader__.load({
 									}); }
 								}, t(testState.state === "testing" ? "settings.btnTesting" : "settings.btnTest"))),
 								testResult
+							]),
+							react.createElement("div", { className: "dshqb_provider_thresholds", key: "thresholds" }, [
+								react.createElement(FieldRow, {
+									t,
+									key: "thresholds_enabled",
+									label: t("settings.providerQuota.thresholdsEnabled"),
+									hint: t("settings.providerQuota.thresholdsEnabledHint"),
+									disabled: savingCard === "quota"
+								}, react.createElement(SwitchControl, {
+									checked: providerThresholdsEnabled,
+									disabled: savingCard === "quota",
+									onChange: (e) => updateProviderBinding(provider, {
+										thresholdsEnabled: e.target.checked,
+										...(e.target.checked && binding.warningThreshold == null ? { warningThreshold: view.warningThreshold } : {}),
+										...(e.target.checked && binding.dangerThreshold == null ? { dangerThreshold: view.dangerThreshold } : {}),
+									}),
+									label: t("settings.providerQuota.thresholdsEnabled"),
+									key: "switch"
+								})),
+								providerThresholdsEnabled ? react.createElement(FieldGrid, { key: "threshold_fields" }, [
+									react.createElement(FieldRow, {
+										t,
+										key: "threshold_mode",
+										label: t("settings.providerQuota.thresholdMode"),
+										hint: t("settings.providerQuota.thresholdModeHint"),
+										disabled: savingCard === "quota"
+									}, react.createElement("select", {
+										className: "dshqb_select",
+										value: providerThresholdMode,
+										onChange: (e) => updateProviderBinding(provider, { thresholdMode: e.target.value })
+									}, [
+										react.createElement("option", { value: "percent", key: "percent" }, t("settings.providerQuota.thresholdMode.percent")),
+										react.createElement("option", { value: "value", key: "value" }, t("settings.providerQuota.thresholdMode.value")),
+									])),
+									react.createElement(FieldRow, {
+										t,
+										key: "danger",
+										label: t(providerThresholdMode === "percent" ? "settings.dangerPercent" : "settings.danger"),
+										disabled: savingCard === "quota"
+									}, react.createElement("input", {
+										type: "number",
+										step: "any",
+										className: "dshqb_input",
+										value: providerDanger,
+										onChange: (e) => updateProviderBinding(provider, { dangerThreshold: Number(e.target.value) })
+									})),
+									react.createElement(FieldRow, {
+										t,
+										key: "warning",
+										label: t(providerThresholdMode === "percent" ? "settings.warningPercent" : "settings.warning"),
+										disabled: savingCard === "quota"
+									}, react.createElement("input", {
+										type: "number",
+										step: "any",
+										className: "dshqb_input",
+										value: providerWarning,
+										onChange: (e) => updateProviderBinding(provider, { warningThreshold: Number(e.target.value) })
+									})),
+								]) : null,
+								providerThresholdsEnabled ? react.createElement(InteractiveThresholdSlider, {
+									danger: providerDanger,
+									warning: providerWarning,
+									currency: view.currency,
+									percentMode: providerThresholdMode === "percent",
+									onChange: (nextDanger, nextWarning) => updateProviderBinding(provider, {
+										dangerThreshold: nextDanger,
+										warningThreshold: nextWarning,
+										thresholdsEnabled: true,
+									}),
+									t,
+									key: "slider"
+								}) : null,
+								react.createElement(FieldRow, {
+									t,
+									key: "refresh",
+									label: t("settings.providerQuota.refreshInterval"),
+									hint: t("settings.providerQuota.refreshIntervalHint"),
+									disabled: savingCard === "quota"
+								}, react.createElement("select", {
+									className: "dshqb_select",
+									value: providerRefresh ?? "",
+									onChange: (e) => updateProviderBinding(provider, { refreshIntervalMs: e.target.value === "" ? null : Number(e.target.value) })
+								}, refreshOptions.map(([value, label]) => react.createElement("option", { value: String(value), key: String(value) }, label))))
 							]),
 							react.createElement("div", { className: "dshqb_provider_editor_footer", key: "save_actions" }, [
 								failedCard === "quota" ? react.createElement("span", {

@@ -354,7 +354,7 @@ assert.equal(resGetConfig.data.config.showPopover, true)
           authRef: '',
           authValue: '__SF_auth.session-token=session-secret',
           authStyle: 'cookie',
-          headers: { 'x-subject-id': 'subject-123' },
+          headers: { 'x-subject-id': 'subject-123', 'x-api-key': 'header-secret' },
         },
         response: {
           metrics: [{
@@ -385,9 +385,13 @@ assert.equal(resGetConfig.data.config.showPopover, true)
   assert.match(savedCustomBinding.source.request.authRef, /^DSH_CREDITS_PROVIDER_UNSUPPORTED_ROUTE_[0-9A-F]{8}$/)
   assert.equal(credentialSecrets.get(savedCustomBinding.source.request.authRef), '__SF_auth.session-token=session-secret')
   assert.equal(savedCustomBinding.source.request.headers['x-subject-id'], 'subject-123')
+  const headerRef = savedCustomBinding.source.request.headers['x-api-key']
+  assert.match(headerRef, /^@credential:DSH_CREDITS_[0-9A-Z_]+$/)
+  assert.equal(credentialSecrets.get(headerRef.slice('@credential:'.length)), 'header-secret')
   assert.equal(savedCustomBinding.source.response.metrics[0].calculation, 'direct')
   assert.equal(customRequests.at(-1).options.headers.Cookie, '__SF_auth.session-token=session-secret')
   assert.equal(customRequests.at(-1).options.headers['x-subject-id'], 'subject-123')
+  assert.equal(customRequests.at(-1).options.headers['x-api-key'], 'header-secret', 'sensitive headers must resolve from credentials at request time')
   console.log('POST /query-credits/config (custom-metric) passed')
 
   const resCustom = await invokeRoute('/query-credits', 'GET', null, 'source=provider%3Aunsupported-route')
@@ -510,12 +514,63 @@ assert.equal(resGetConfig.data.config.showPopover, true)
   assert.equal(resolveProviderQuotaSource('unknown', providerBindings), null)
   const workAdapter = buildProviderQuotaAdapter({
     id: 'go-work', name: 'Work Go', baseURL: 'https://opencode.ai/zen/go/v1', templateId: 'opencode-go',
-  }, { providerId: 'go-work', enabled: true, sourceType: 'auto' })
+  }, {
+    providerId: 'go-work',
+    enabled: true,
+    sourceType: 'auto',
+    thresholdsEnabled: true,
+    thresholdMode: 'percent',
+    warningThreshold: 20,
+    dangerThreshold: 8,
+    refreshIntervalMs: 60000,
+  })
   assert.equal(workAdapter.id, 'provider:go-work')
   assert.equal(workAdapter.request.url, 'https://opencode.ai/zen/go/v1/usage')
   assert.equal(workAdapter.request.dshProvider, 'go-work')
   assert.equal(workAdapter.template, 'opencode-go')
+  assert.equal(workAdapter.thresholdsEnabled, true)
+  assert.equal(workAdapter.thresholdMode, 'percent')
+  assert.equal(workAdapter.warningThreshold, 20)
+  assert.equal(workAdapter.dangerThreshold, 8)
+  assert.equal(workAdapter.refreshIntervalMs, 60000)
   console.log('provider-centric quota binding / reuse passed')
+
+  // 供应商独立阈值与查询频率
+  const resProviderThresholds = await invokeRoute('/query-credits/config', 'POST', {
+    providerQuotas: [{
+      providerId: 'unsupported-route',
+      enabled: true,
+      sourceType: 'custom',
+      thresholdsEnabled: true,
+      thresholdMode: 'value',
+      warningThreshold: 30,
+      dangerThreshold: 10,
+      refreshIntervalMs: 60000,
+      source: {
+        id: 'custom-threshold-metric',
+        name: 'Threshold Metric',
+        kind: 'metric',
+        providerIds: [],
+        request: { url: 'https://custom.example.com/quota', authStyle: 'none' },
+        response: {
+          metrics: [{ key: 'remaining', label: '剩余额度', calculation: 'direct', valuePath: '$.data.remaining', unit: 'USD' }],
+        },
+      },
+    }],
+  })
+  assert.equal(resProviderThresholds.data.ok, true)
+  const thresholdBinding = resProviderThresholds.data.config.providerQuotas.find((binding) => binding.providerId === 'unsupported-route')
+  assert.equal(thresholdBinding.thresholdsEnabled, true)
+  assert.equal(thresholdBinding.thresholdMode, 'value')
+  assert.equal(thresholdBinding.warningThreshold, 30)
+  assert.equal(thresholdBinding.dangerThreshold, 10)
+  assert.equal(thresholdBinding.refreshIntervalMs, 60000)
+  const resThresholdView = await invokeRoute('/query-credits', 'GET', null, 'source=provider%3Aunsupported-route')
+  assert.equal(resThresholdView.data.views['provider:unsupported-route'].thresholds.warning, 30)
+  assert.equal(resThresholdView.data.views['provider:unsupported-route'].thresholds.danger, 10)
+  assert.equal(resThresholdView.data.views['provider:unsupported-route'].thresholds.mode, 'value')
+  assert.equal(resThresholdView.data.views['provider:unsupported-route'].refreshIntervalMs, 60000)
+  console.log('provider-specific thresholds / refresh interval passed')
 
   assert.deepEqual(matchQuotaTemplateForProvider('my-kimi-route', 'https://api.kimi.com/coding/v1'), { builtin: false, id: 'kimi-coding' })
   assert.deepEqual(matchQuotaTemplateForProvider('deepseek-official'), { builtin: true, id: 'deepseek' })
@@ -571,8 +626,13 @@ assert.equal(resGetConfig.data.config.showPopover, true)
   assert.deepEqual(JSON.parse(jsonRequest.init.body), { page: 1, access_token: 'json-secret' })
   assert.deepEqual(collectQuotaFields({ data: { remaining: 20 }, access_token: 'must-not-leak' }), [
     { path: '$.data.remaining', value: 20, type: 'number' },
+    { path: '$.access_token', value: 'must-not-leak', type: 'string' },
   ])
-  console.log('quota template parsing / safe field preview passed')
+  const resetMetric = normalizeCustomMetrics({ remaining: 20, total: 100, resetAt: 1753000000 }, {
+    metrics: [{ key: 'r', label: '剩余', calculation: 'direct', valuePath: '$.remaining', totalPath: '$.total', resetsAtPath: '$.resetAt', unit: '次' }],
+  })
+  assert.equal(resetMetric[0].resetsAt, new Date(1753000000 * 1000).toISOString(), 'numeric reset timestamps must normalize to ISO seconds')
+  console.log('quota template parsing / field preview passed')
 
   const resQuotaMode = await invokeRoute('/query-credits/config', 'POST', {
     enabled: false,

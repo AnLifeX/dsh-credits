@@ -279,6 +279,9 @@ const normalizeQuotaSourceConfig = (source) => {
 
 const isSensitiveHeader = (name) => /authorization|proxy-authorization|token|api[-_]?key|secret|cookie|set-cookie|session/i.test(String(name))
 
+/** 敏感请求头持久化后，运行时配置里只保留这个引用，不在 YAML / 浏览器中出现明文。 */
+const HEADER_CREDENTIAL_MARKER = '@credential:'
+
 /** POST/测试时将前端回传的 `***` 恢复成服务端已保存值。 */
 const mergeMaskedQuotaRequest = (previous = {}, incoming = {}) => {
   const headers = Object.hasOwn(incoming, 'headers') ? {} : { ...(previous.headers ?? {}) }
@@ -324,11 +327,31 @@ const normalizeProviderQuotaConfig = (binding) => {
     sourceType,
     templateId: String(binding.templateId ?? '').trim(),
     sourceProviderId: String(binding.sourceProviderId ?? '').trim(),
+    thresholdsEnabled: binding.thresholdsEnabled === true,
+    thresholdMode: binding.thresholdMode === 'value'
+      ? 'value'
+      : (binding.thresholdMode === 'percent' ? 'percent' : null),
+    warningThreshold: Number.isFinite(Number(binding.warningThreshold)) && Number(binding.warningThreshold) >= 0
+      ? Number(binding.warningThreshold)
+      : null,
+    dangerThreshold: Number.isFinite(Number(binding.dangerThreshold)) && Number(binding.dangerThreshold) >= 0
+      ? Number(binding.dangerThreshold)
+      : null,
+    refreshIntervalMs: Number.isFinite(Number(binding.refreshIntervalMs)) && Number(binding.refreshIntervalMs) >= 1000
+      ? Number(binding.refreshIntervalMs)
+      : null,
   }
   if (sourceType === 'template' && !getQuotaSourceTemplate(normalized.templateId)) throw new Error('provider-quota-template-invalid')
   if (sourceType === 'provider' && !normalized.sourceProviderId) throw new Error('provider-quota-source-provider-required')
   if (sourceType === 'custom') {
     normalized.source = normalizeQuotaSourceConfig(binding.source)
+  }
+  if (!normalized.thresholdMode) {
+    const template = sourceType === 'template' || sourceType === 'auto'
+      ? getQuotaSourceTemplate(normalized.templateId)
+      : null
+    const kind = template?.category || (sourceType === 'custom' ? normalized.source?.kind : '')
+    normalized.thresholdMode = (template?.category === 'subscription' || kind === 'usage') ? 'percent' : 'value'
   }
   return normalized
 }
@@ -364,6 +387,11 @@ export const buildProviderQuotaAdapter = (provider, rawBinding = {}) => {
         ...(source.request ?? {}),
         dshProvider: requestDshProvider === '' ? '' : (requestDshProvider || providerId),
       },
+      thresholdsEnabled: rawBinding.thresholdsEnabled === true,
+      thresholdMode: rawBinding.thresholdMode === 'value' ? 'value' : (rawBinding.thresholdMode === 'percent' ? 'percent' : null),
+      warningThreshold: Number.isFinite(Number(rawBinding.warningThreshold)) && Number(rawBinding.warningThreshold) >= 0 ? Number(rawBinding.warningThreshold) : null,
+      dangerThreshold: Number.isFinite(Number(rawBinding.dangerThreshold)) && Number(rawBinding.dangerThreshold) >= 0 ? Number(rawBinding.dangerThreshold) : null,
+      refreshIntervalMs: Number.isFinite(Number(rawBinding.refreshIntervalMs)) && Number(rawBinding.refreshIntervalMs) >= 1000 ? Number(rawBinding.refreshIntervalMs) : null,
     }
   }
   const templateId = sourceType === 'template'
@@ -388,6 +416,11 @@ export const buildProviderQuotaAdapter = (provider, rawBinding = {}) => {
       url: providerTemplateUrl(provider, sourceType, templateId, source.request?.url),
       dshProvider: providerId,
     },
+    thresholdsEnabled: rawBinding.thresholdsEnabled === true,
+    thresholdMode: rawBinding.thresholdMode === 'value' ? 'value' : (rawBinding.thresholdMode === 'percent' ? 'percent' : null),
+    warningThreshold: Number.isFinite(Number(rawBinding.warningThreshold)) && Number(rawBinding.warningThreshold) >= 0 ? Number(rawBinding.warningThreshold) : null,
+    dangerThreshold: Number.isFinite(Number(rawBinding.dangerThreshold)) && Number(rawBinding.dangerThreshold) >= 0 ? Number(rawBinding.dangerThreshold) : null,
+    refreshIntervalMs: Number.isFinite(Number(rawBinding.refreshIntervalMs)) && Number(rawBinding.refreshIntervalMs) >= 1000 ? Number(rawBinding.refreshIntervalMs) : null,
   }
 }
 
@@ -554,6 +587,14 @@ const ProviderQuota = Schema.object({
   templateId: Schema.string().default(''),
   sourceProviderId: Schema.string().default(''),
   source: QuotaSource,
+  /** 启用后使用本供应商自己的阈值，否则继承全局阈值。 */
+  thresholdsEnabled: Schema.boolean().default(false),
+  /** percent=百分比比较; value=直接按指标数值比较。 */
+  thresholdMode: Schema.union(['percent', 'value']).default('percent'),
+  warningThreshold: Schema.union([Schema.number().min(0), Schema.const(null)]).default(null),
+  dangerThreshold: Schema.union([Schema.number().min(0), Schema.const(null)]).default(null),
+  /** 本供应商独立查询频率；null 时继承全局 refreshIntervalMs。 */
+  refreshIntervalMs: Schema.union([Schema.number().min(1000), Schema.const(null)]).default(null),
 })
 
 export const Config = Schema.object({
@@ -912,11 +953,24 @@ export const normalizeCustomUsage = (data, response = {}) => {
     windows[w.key] = {
       status: statusRaw && typeof statusRaw === 'string' ? statusRaw : null,
       percent: Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : null,
-      resetsAt: resetsRaw && typeof resetsRaw === 'string' ? resetsRaw : null,
+      resetsAt: normalizeResetTime(resetsRaw),
     }
   }
   if (Object.keys(windows).length === 0) return normalizeOpencodeUsage(data)
   return windows
+}
+
+/** 把上游重置时间统一成 ISO 字符串：兼容 ISO、Unix 秒与 Unix 毫秒。 */
+const normalizeResetTime = (value) => {
+  if (typeof value === 'string' && value.trim()) {
+    const numeric = Number(value)
+    if (!Number.isFinite(numeric)) return value
+    value = numeric
+  }
+  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return null
+  const millis = value < 1e12 ? value * 1000 : value
+  const date = new Date(millis)
+  return Number.isNaN(date.getTime()) ? null : date.toISOString()
 }
 
 /** 归一化自定义单值/多指标额度响应。 */
@@ -962,7 +1016,7 @@ export const normalizeCustomMetrics = (data, response = {}) => {
       used,
       total,
       unit: metric.unit || '',
-      resetsAt: metric.resetsAtPath ? (getByPath(data, metric.resetsAtPath) || null) : null,
+      resetsAt: metric.resetsAtPath ? normalizeResetTime(getByPath(data, metric.resetsAtPath)) : null,
     }]
   })
 }
@@ -970,18 +1024,6 @@ export const normalizeCustomMetrics = (data, response = {}) => {
 const clampPercent = (value) => {
   const n = Number(value)
   return Number.isFinite(n) ? Math.max(0, Math.min(100, n)) : null
-}
-
-const normalizeResetTime = (value) => {
-  if (typeof value === 'string' && value.trim()) {
-    const numeric = Number(value)
-    if (!Number.isFinite(numeric)) return value
-    value = numeric
-  }
-  if (typeof value !== 'number' || !Number.isFinite(value) || value <= 0) return null
-  const millis = value < 1e12 ? value * 1000 : value
-  const date = new Date(millis)
-  return Number.isNaN(date.getTime()) ? null : date.toISOString()
 }
 
 const usageWindow = (percent, resetsAt = null, status = null) => ({
@@ -1056,7 +1098,6 @@ export const normalizeTemplateUsage = (templateId, data) => {
  */
 export const collectQuotaFields = (data, maxFields = 80) => {
   const fields = []
-  const secretKey = /password|secret|token|api[-_]?key|authorization|credential|cookie|session/i
   const visit = (value, path, depth) => {
     if (fields.length >= maxFields || depth > 6 || value === null || value === undefined) return
     if (Array.isArray(value)) {
@@ -1066,7 +1107,6 @@ export const collectQuotaFields = (data, maxFields = 80) => {
     }
     if (typeof value === 'object') {
       for (const [key, entry] of Object.entries(value)) {
-        if (secretKey.test(key)) continue
         visit(entry, `${path}.${key}`, depth + 1)
       }
       return
@@ -1746,27 +1786,39 @@ export function apply(ctx, config) {
    */
   const persistDirectQuotaCredential = async (previousRequest, incomingRequest, scope) => {
     const merged = mergeMaskedQuotaRequest(previousRequest ?? {}, incomingRequest ?? {})
-    if (merged.credentialMode !== 'direct') return merged
+    const credentials = ctx.get('credentials')
 
-    const previousRef = previousRequest?.credentialMode === 'direct' ? String(previousRequest.authRef ?? '').trim() : ''
-    const ref = String(merged.authRef ?? '').trim() || previousRef || quotaCredentialRef(scope)
-    const entered = String(incomingRequest?.authValue ?? '')
-    const legacy = previousRequest?.credentialMode === 'direct' ? String(previousRequest.authValue ?? '') : ''
-    const valueToStore = entered && entered !== '***'
-      ? entered
-      : (!previousRef && legacy && legacy !== '***' ? legacy : '')
-
-    if (valueToStore) {
-      const credentials = ctx.get('credentials')
+    const persistSecret = async (ref, value) => {
       if (!credentials?.set) throw new Error('quota-credential-store-unavailable')
-      await credentials.set(ref, valueToStore)
+      await credentials.set(ref, value)
     }
-    return {
-      ...merged,
-      dshProvider: '',
-      authRef: ref,
-      authValue: '',
+
+    // 1. 直接填写的额度凭证 → DSH credentials，运行时只保留引用。
+    if (merged.credentialMode === 'direct') {
+      const previousRef = previousRequest?.credentialMode === 'direct' ? String(previousRequest.authRef ?? '').trim() : ''
+      const ref = String(merged.authRef ?? '').trim() || previousRef || quotaCredentialRef(scope)
+      const entered = String(incomingRequest?.authValue ?? '')
+      const legacy = previousRequest?.credentialMode === 'direct' ? String(previousRequest.authValue ?? '') : ''
+      const valueToStore = entered && entered !== '***'
+        ? entered
+        : (!previousRef && legacy && legacy !== '***' ? legacy : '')
+      if (valueToStore) await persistSecret(ref, valueToStore)
+      merged.dshProvider = ''
+      merged.authRef = ref
+      merged.authValue = ''
     }
+
+    // 2. 敏感请求头同样持久化到 DSH credentials；YAML 只保留 @credential:<ref>。
+    const headers = { ...(merged.headers ?? {}) }
+    for (const [name, value] of Object.entries(headers)) {
+      if (!isSensitiveHeader(name) || typeof value !== 'string' || value === '' || value === '***') continue
+      if (value.startsWith(HEADER_CREDENTIAL_MARKER)) continue
+      const ref = quotaCredentialRef(`${scope}:header:${name}`)
+      await persistSecret(ref, value)
+      headers[name] = `${HEADER_CREDENTIAL_MARKER}${ref}`
+    }
+    merged.headers = headers
+    return merged
   }
 
   /** 复用 DSH 供应商已保存的 credential-ref 或 llm-pi-ai API-key record。 */
@@ -1884,7 +1936,19 @@ export function apply(ctx, config) {
     }
     const authStyle = normalizeProvider(request.authStyle ?? 'none')
     if (authStyle !== 'none' && key === '') throw new Error('quota-credential-missing')
-    const customRequest = buildCustomHttpRequest(request, key)
+    const runtimeHeaders = {}
+    for (const [name, value] of Object.entries(request.headers ?? {})) {
+      const headerValue = String(value ?? '')
+      if (!headerValue.startsWith(HEADER_CREDENTIAL_MARKER)) {
+        runtimeHeaders[name] = headerValue
+        continue
+      }
+      const ref = headerValue.slice(HEADER_CREDENTIAL_MARKER.length)
+      const resolved = ref ? await resolveCredential(ref) : ''
+      if (!resolved) throw new Error(`quota-header-credential-missing: ${name}`)
+      runtimeHeaders[name] = resolved
+    }
+    const customRequest = buildCustomHttpRequest({ ...request, headers: runtimeHeaders }, key)
     const diagnosticSecrets = credentialDiagnosticSecrets(key, authStyle)
     const controller = new AbortController()
     const timer = setTimeout(() => controller.abort(), runtimeConfig.timeoutMs)
@@ -1921,11 +1985,13 @@ export function apply(ctx, config) {
             ...preview,
           }
         }
+        const balances = normalizeCustomBalances(data, adapter.response)
         return {
           provider: adapter.id,
           kind: 'balance',
-          isAvailable: data?.is_available === true,
-          balances: normalizeCustomBalances(data, adapter.response),
+          // 多数自定义余额接口没有 is_available 字段；有余额就视为可用。
+          isAvailable: data?.is_available !== false && balances.length > 0,
+          balances,
           ...preview,
         }
       }
@@ -2032,6 +2098,31 @@ export function apply(ctx, config) {
     return Promise.all(getActiveRuntimeAdapterIds().map((id) => refreshOne(id)))
   }
 
+  const adapterRefreshInterval = (id) => {
+    const adapter = getQuotaAdapter(id)
+    const interval = Number(adapter?.refreshIntervalMs)
+    return Number.isFinite(interval) && interval >= 1000 ? interval : runtimeConfig.refreshIntervalMs
+  }
+  const nextRefreshDelay = () => {
+    const now = Date.now()
+    const ids = getActiveRuntimeAdapterIds()
+    if (ids.length === 0) return runtimeConfig.refreshIntervalMs
+    let delay = runtimeConfig.refreshIntervalMs
+    for (const id of ids) {
+      const cache = caches.get(id)
+      if (cache && cache.state !== 'ok') {
+        const retryMs = cache.error === 'api-key-missing' || cache.error === 'quota-credential-missing' ? 5000 : adapterRefreshInterval(id)
+        const dueIn = Math.max(0, Number(cache.lastErrorAt || 0) + retryMs - now)
+        if (dueIn < delay) delay = dueIn
+        continue
+      }
+      const interval = adapterRefreshInterval(id)
+      const fetchedAt = Number(cache?.fetchedAt) || 0
+      const dueIn = Math.max(0, fetchedAt + interval - now)
+      if (dueIn < delay) delay = dueIn
+    }
+    return Math.max(1000, delay)
+  }
   let loopTimer = null
   const resetLoop = () => {
     if (loopTimer !== null) {
@@ -2043,13 +2134,23 @@ export function apply(ctx, config) {
         loopTimer = null
         return
       }
-      void refresh().then(() => {
-        const ids = getActiveRuntimeAdapterIds()
-        const bothMissing = ids.length > 0 && ids.every((id) => {
+      const now = Date.now()
+      const ids = getActiveRuntimeAdapterIds()
+      const due = ids.filter((id) => {
+        const cache = caches.get(id)
+        if (!cache) return true
+        if (cache.state !== 'ok') {
+          const retryMs = cache?.error === 'api-key-missing' || cache?.error === 'quota-credential-missing' ? 5000 : adapterRefreshInterval(id)
+          return now - Number(cache.lastErrorAt || 0) >= retryMs
+        }
+        return now - Number(cache.fetchedAt || 0) >= adapterRefreshInterval(id)
+      })
+      void Promise.all(due.map((id) => refreshOne(id))).then(() => {
+        const allMissing = ids.length > 0 && ids.every((id) => {
           const cache = caches.get(id)
-          return cache?.state === 'error' && cache?.error === 'api-key-missing'
+          return cache?.state === 'error' && (cache?.error === 'api-key-missing' || cache?.error === 'quota-credential-missing')
         })
-        const delay = bothMissing ? 5000 : runtimeConfig.refreshIntervalMs
+        const delay = allMissing ? 5000 : nextRefreshDelay()
         loopTimer = setTimeout(run, delay)
       })
     }
@@ -2096,7 +2197,12 @@ export function apply(ctx, config) {
         credentialConfigured: await describeQuotaCredential(source.request),
         headers: Object.fromEntries(
           Object.entries(source.request?.headers ?? {})
-            .map(([k, v]) => [k, isSensitiveHeader(k) ? '***' : v]),
+            .map(([k, v]) => [
+              k,
+              String(v).startsWith(HEADER_CREDENTIAL_MARKER)
+                ? String(v)
+                : (isSensitiveHeader(k) ? '***' : String(v)),
+            ]),
         ),
       },
     }
@@ -2112,6 +2218,11 @@ export function apply(ctx, config) {
       sourceType: binding.sourceType,
       templateId: binding.templateId || binding.provider?.templateId || '',
       sourceProviderId: binding.sourceProviderId || '',
+      thresholdsEnabled: binding.thresholdsEnabled === true,
+      thresholdMode: binding.thresholdMode === 'value' ? 'value' : (binding.thresholdMode === 'percent' ? 'percent' : null),
+      warningThreshold: binding.warningThreshold ?? null,
+      dangerThreshold: binding.dangerThreshold ?? null,
+      refreshIntervalMs: binding.refreshIntervalMs ?? null,
       ...(binding.source ? { source: await sanitizeQuotaSource(binding.source) } : {}),
       adapterId: resolveProviderQuotaSource(binding.providerId, bindings),
       implicit: binding.implicit === true,
@@ -2174,6 +2285,8 @@ export function apply(ctx, config) {
         }
       }
       const cache = caches.get(adapter.id) ?? emptyQuotaCache()
+      const adapterThresholdMode = adapter.thresholdMode
+        || (adapter.kind === 'usage' ? 'percent' : (adapter.kind === 'metric' && (adapter.response?.metrics ?? []).some((metric) => metric.totalPath || metric.calculation === 'subtract') ? 'percent' : 'value'))
       const base = {
         ok: false,
         provider: adapter.id,
@@ -2182,6 +2295,20 @@ export function apply(ctx, config) {
         name: adapter.name,
         template: adapter.template ?? '',
         fetchedAt: cache.fetchedAt,
+        refreshIntervalMs: adapter.refreshIntervalMs ?? runtimeConfig.refreshIntervalMs,
+        thresholdsEnabled: adapter.thresholdsEnabled === true,
+        thresholdMode: adapterThresholdMode,
+        thresholds: adapter.thresholdsEnabled === true
+          ? {
+              warning: adapter.warningThreshold ?? runtimeConfig.warningThreshold,
+              danger: adapter.dangerThreshold ?? runtimeConfig.dangerThreshold,
+              mode: adapterThresholdMode,
+            }
+          : {
+              warning: runtimeConfig.warningThreshold,
+              danger: runtimeConfig.dangerThreshold,
+              mode: adapterThresholdMode,
+            },
       }
       if (cache.state !== 'ok' || cache.payload?.provider !== adapter.id) {
         return {
