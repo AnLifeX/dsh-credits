@@ -1914,7 +1914,7 @@ export function apply(ctx, config) {
     return first ?? resolveQuotaSource(null, runtimeConfig, getRuntimeAdapters())
   }
 
-  const emptyQuotaCache = () => ({ state: 'empty', payload: null, error: null, fetchedAt: 0, lastErrorAt: 0 })
+  const emptyQuotaCache = () => ({ state: 'empty', payload: null, error: null, errorKind: null, fetchedAt: 0, lastErrorAt: 0, retryable: false, fastRetryCount: 0 })
   const caches = new Map()
   const inflights = new Map()
   const consecutiveFailures = new Map()
@@ -1923,6 +1923,13 @@ export function apply(ctx, config) {
     if (!caches.has(id)) caches.set(id, emptyQuotaCache())
     if (!inflights.has(id)) inflights.set(id, null)
     if (!consecutiveFailures.has(id)) consecutiveFailures.set(id, 0)
+  }
+
+  const isTransientQuotaError = (error) => {
+    const name = error?.name
+    const message = error instanceof Error ? error.message : String(error)
+    return name === 'AbortError'
+      || /aborted|timeout|timed out|ECONNRESET|ETIMEDOUT|EAI_AGAIN|ENOTFOUND/i.test(message)
   }
 
   const fetchCustomQuota = async (adapter, options = {}) => {
@@ -2069,21 +2076,33 @@ export function apply(ctx, config) {
           state: 'ok',
           payload,
           error: null,
+          errorKind: null,
           fetchedAt: Date.now(),
           lastErrorAt: 0,
+          retryable: false,
+          fastRetryCount: 0,
         })
         consecutiveFailures.set(adapter.id, 0)
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error)
+        const transient = isTransientQuotaError(error)
+        const prev = caches.get(adapter.id) ?? emptyQuotaCache()
+        const fastRetryCount = prev.fastRetryCount ?? 0
+        const retryable = transient && fastRetryCount === 0
+        const errorKind = transient
+          ? 'quota-timeout'
+          : ((message === 'api-key-missing' || message === 'quota-credential-missing') ? message : null)
         consecutiveFailures.set(adapter.id, (consecutiveFailures.get(adapter.id) ?? 0) + 1)
         if (consecutiveFailures.get(adapter.id) === 1) ctx.logger.warn(`[dsh-credits] quota fetch failed (${adapter.id}): ${message}`)
-        const prev = caches.get(adapter.id) ?? emptyQuotaCache()
         caches.set(adapter.id, {
           state: prev.state === 'ok' ? 'ok' : 'error',
           payload: prev.payload,
           error: message,
+          errorKind,
           fetchedAt: prev.fetchedAt,
           lastErrorAt: Date.now(),
+          retryable,
+          fastRetryCount: transient ? 1 : 0,
         })
       }
     })().finally(() => {
@@ -2111,7 +2130,7 @@ export function apply(ctx, config) {
     for (const id of ids) {
       const cache = caches.get(id)
       if (cache && cache.state !== 'ok') {
-        const retryMs = cache.error === 'api-key-missing' || cache.error === 'quota-credential-missing' ? 5000 : adapterRefreshInterval(id)
+        const retryMs = cache.retryable === true ? 3000 : (cache.error === 'api-key-missing' || cache.error === 'quota-credential-missing' ? 5000 : adapterRefreshInterval(id))
         const dueIn = Math.max(0, Number(cache.lastErrorAt || 0) + retryMs - now)
         if (dueIn < delay) delay = dueIn
         continue
@@ -2140,7 +2159,7 @@ export function apply(ctx, config) {
         const cache = caches.get(id)
         if (!cache) return true
         if (cache.state !== 'ok') {
-          const retryMs = cache?.error === 'api-key-missing' || cache?.error === 'quota-credential-missing' ? 5000 : adapterRefreshInterval(id)
+          const retryMs = cache?.retryable === true ? 3000 : (cache?.error === 'api-key-missing' || cache?.error === 'quota-credential-missing' ? 5000 : adapterRefreshInterval(id))
           return now - Number(cache.lastErrorAt || 0) >= retryMs
         }
         return now - Number(cache.fetchedAt || 0) >= adapterRefreshInterval(id)
@@ -2154,7 +2173,7 @@ export function apply(ctx, config) {
         loopTimer = setTimeout(run, delay)
       })
     }
-    loopTimer = setTimeout(run, 1000)
+    loopTimer = setTimeout(run, 3000)
   }
 
   ctx.effect(() => {
@@ -2314,6 +2333,7 @@ export function apply(ctx, config) {
         return {
           ...base,
           error: cache.error ?? 'unknown',
+          ...(cache.errorKind ? { errorKind: cache.errorKind } : {}),
         }
       }
       return {
@@ -2323,7 +2343,7 @@ export function apply(ctx, config) {
         ...(cache.payload.metrics !== undefined ? { metrics: cache.payload.metrics } : {}),
         ...(cache.payload.isAvailable !== undefined ? { isAvailable: cache.payload.isAvailable } : {}),
         ...(cache.payload.balances !== undefined ? { balances: cache.payload.balances } : {}),
-        ...(cache.error !== null ? { error: cache.error, stale: true } : {}),
+        ...(cache.error !== null ? { error: cache.error, stale: true, ...(cache.errorKind ? { errorKind: cache.errorKind } : {}) } : {}),
       }
     }
 

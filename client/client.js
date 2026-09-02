@@ -468,6 +468,25 @@ window.__ModuleLoader__.load({
 			}
 			return next;
 		}
+		function quotaErrorMessage(info, t, fallback) {
+			const error = typeof info?.error === "string" ? info.error : "";
+			const kind = info?.errorKind;
+			if (kind === "quota-timeout" || /aborted|timeout|timed out/i.test(error)) return t("quota.timeout");
+			if (error === "api-key-missing") return t("balanceMissing");
+			if (error === "quota-credential-missing") return t("quota.credentialMissing");
+			if (error === "quota-url-missing") return t("quota.urlMissing");
+			if (/quota-header-credential-missing/.test(error)) return t("quota.credentialMissing");
+			if (!error) return fallback;
+			return t("quota.requestFailed");
+		}
+		function quotaErrorShort(info, t, fallback) {
+			const error = typeof info?.error === "string" ? info.error : "";
+			const kind = info?.errorKind;
+			if (kind === "quota-timeout" || /aborted|timeout|timed out/i.test(error)) return t("quota.timeoutShort");
+			if (error === "api-key-missing") return t("balanceMissing");
+			if (error === "quota-credential-missing") return t("quota.credentialMissing");
+			return fallback;
+		}
 		const noopSubscribe = () => () => {};
 		let modelDirectories = null;
 		const modelDirListeners = new Set();
@@ -861,6 +880,11 @@ window.__ModuleLoader__.load({
 			"quota.valueTotal": "剩余 {value} / {total} {unit}",
 			"quota.errorCustom": "【额度用量】异常: {error}",
 			"quota.unavailableCustom": "额度用量不可用",
+			"quota.timeout": "额度接口请求超时，请检查网络后点击刷新重试",
+			"quota.timeoutShort": "额度接口超时，点击重试",
+			"quota.credentialMissing": "尚未配置该额度接口的凭证",
+			"quota.urlMissing": "未配置额度接口 URL",
+			"quota.requestFailed": "额度接口请求失败，请稍后点击刷新重试",
 			"btn.refreshCustom": "点击立即刷新额度",
 			"btn.refreshingCustom": "正在刷新额度...",
 			"card.sessionHintCustom": "💡 本会话按设置单价估算，实际扣减以所选套餐/额度为准。",
@@ -1172,6 +1196,11 @@ window.__ModuleLoader__.load({
 			"quota.valueTotal": "{value} / {total} {unit} left",
 			"quota.errorCustom": "【Quota Usage】Error: {error}",
 			"quota.unavailableCustom": "Quota unavailable",
+			"quota.timeout": "Quota request timed out. Check your network, then click refresh to retry.",
+			"quota.timeoutShort": "Quota request timed out, click to retry",
+			"quota.credentialMissing": "Credentials for this quota endpoint are not configured",
+			"quota.urlMissing": "Quota endpoint URL is not configured",
+			"quota.requestFailed": "Quota request failed. Please click refresh to retry later.",
 			"btn.refreshCustom": "Click to refresh quota",
 			"btn.refreshingCustom": "Refreshing quota...",
 			"card.sessionHintCustom": "💡 Session cost uses configured prices; actual deductions depend on the selected plan.",
@@ -3934,7 +3963,7 @@ window.__ModuleLoader__.load({
 					const isOpenCodeGo = quotaSource === "opencode-go";
 					const refreshLabel = isOpenCodeGo ? t("btn.refreshQuota") : t("btn.refreshCustom");
 					const refreshingLabel = isOpenCodeGo ? t("btn.refreshingQuota") : t("btn.refreshingCustom");
-					const message = info.error === "api-key-missing" ? t("balanceMissing") : (isOpenCodeGo ? t("quota.unavailable") : t("quota.unavailableCustom"));
+					const message = quotaErrorShort(info, t, isOpenCodeGo ? t("quota.unavailable") : t("quota.unavailableCustom"));
 					const statusDot = react.createElement(HoverTooltip, {
 						content: isRefreshing ? refreshingLabel : refreshLabel,
 						key: "status_tip"
@@ -3948,7 +3977,7 @@ window.__ModuleLoader__.load({
 					balNode = react.createElement("span", { className: "dshqb_error", key: "bal" }, statusDot, message);
 					leftCol = react.createElement("div", { className: "dshqb_col", key: "left" }, [
 						react.createElement("div", { className: "dshqb_card_header", key: "head" }, react.createElement("span", { className: "dshqb_card_title" }, isOpenCodeGo ? t("quota.cardTitle") : "🧾 " + (info.name || quotaSource))),
-						react.createElement("div", { className: "dshqb_card_sub", key: "err" }, t(isOpenCodeGo ? "quota.error" : "quota.errorCustom", { error: typeof info.error === "string" ? info.error : message }))
+						react.createElement("div", { className: "dshqb_card_sub", key: "err" }, t(isOpenCodeGo ? "quota.error" : "quota.errorCustom", { error: quotaErrorMessage(info, t, message) }))
 					]);
 				} else if ((quotaSourceKind === "balance" || info.kind === "balance") && info.ok === true && Array.isArray(info.balances) && info.balances.length > 0) {
 					const wallets = selectWallets(info.balances, info.currency);
@@ -4090,7 +4119,7 @@ window.__ModuleLoader__.load({
 				} else {
 					const isCustom = quotaSourceKind === "metric";
 					const customSourceName = info.name || info.sourceName || quotaSource;
-					const message = info.error === "api-key-missing" ? t("balanceMissing") : (isCustom ? t("quota.unavailableCustom") : t("balanceError"));
+					const message = quotaErrorShort(info, t, isCustom ? t("quota.unavailableCustom") : t("balanceError"));
 					const statusDot = react.createElement("button", {
 						type: "button",
 						className: "dshqb_dot dshqb_dot_btn dshqb_dot_danger" + (isRefreshing ? " dshqb_dot_loading" : ""),
@@ -4102,7 +4131,7 @@ window.__ModuleLoader__.load({
 					balNode = react.createElement("span", { className: "dshqb_error", key: "bal" }, statusDot, message);
 					leftCol = react.createElement("div", { className: "dshqb_col", key: "left" }, [
 						react.createElement("div", { className: "dshqb_card_header", key: "head" }, react.createElement("span", { className: "dshqb_card_title" }, isCustom || info.providerId ? "🎯 " + customSourceName : t("card.balanceTitle"))),
-						react.createElement("div", { className: "dshqb_card_sub", key: "err" }, isCustom ? t("quota.errorCustom", { error: typeof info.error === "string" ? info.error : message }) : t("card.error", { error: typeof info.error === "string" ? info.error : message }))
+						react.createElement("div", { className: "dshqb_card_sub", key: "err" }, isCustom ? t("quota.errorCustom", { error: quotaErrorMessage(info, t, message) }) : t("card.error", { error: quotaErrorMessage(info, t, message) }))
 					]);
 				}
 			} else if (balance.status === "error") {
