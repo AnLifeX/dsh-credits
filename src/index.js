@@ -30,6 +30,15 @@ export const PROVIDERS = ['deepseek', 'opencode-go']
 export const QUOTA_MODES = ['follow', 'custom']
 export const DOCK_LAYOUTS = ['own', 'shared']
 export const OPENCODE_GO_DEFAULT_BASE_URL = 'https://opencode.ai/zen/go/v1/usage'
+export const DEFAULT_REFRESH_INTERVAL_MS = 300000
+
+/** 默认阈值：百分比模式统一 30% / 10%；金额模式按计价货币给默认值（USD 2 / 0.5，其它 10 / 5）。 */
+export const defaultThresholdsFor = (mode, currency) => {
+  if (mode === 'percent') return { warning: 30, danger: 10 }
+  return normalizePricingCurrency(currency) === 'USD'
+    ? { warning: 2, danger: 0.5 }
+    : { warning: 10, danger: 5 }
+}
 
 /**
  * 内置额度源适配器注册表。
@@ -327,14 +336,14 @@ const normalizeProviderQuotaConfig = (binding) => {
     sourceType,
     templateId: String(binding.templateId ?? '').trim(),
     sourceProviderId: String(binding.sourceProviderId ?? '').trim(),
-    thresholdsEnabled: binding.thresholdsEnabled === true,
+    thresholdsEnabled: true,
     thresholdMode: binding.thresholdMode === 'value'
       ? 'value'
       : (binding.thresholdMode === 'percent' ? 'percent' : null),
-    warningThreshold: Number.isFinite(Number(binding.warningThreshold)) && Number(binding.warningThreshold) >= 0
+    warningThreshold: Number.isFinite(Number(binding.warningThreshold)) && Number(binding.warningThreshold) > 0
       ? Number(binding.warningThreshold)
       : null,
-    dangerThreshold: Number.isFinite(Number(binding.dangerThreshold)) && Number(binding.dangerThreshold) >= 0
+    dangerThreshold: Number.isFinite(Number(binding.dangerThreshold)) && Number(binding.dangerThreshold) > 0
       ? Number(binding.dangerThreshold)
       : null,
     refreshIntervalMs: Number.isFinite(Number(binding.refreshIntervalMs)) && Number(binding.refreshIntervalMs) >= 1000
@@ -387,10 +396,10 @@ export const buildProviderQuotaAdapter = (provider, rawBinding = {}) => {
         ...(source.request ?? {}),
         dshProvider: requestDshProvider === '' ? '' : (requestDshProvider || providerId),
       },
-      thresholdsEnabled: rawBinding.thresholdsEnabled === true,
+      thresholdsEnabled: true,
       thresholdMode: rawBinding.thresholdMode === 'value' ? 'value' : (rawBinding.thresholdMode === 'percent' ? 'percent' : null),
-      warningThreshold: Number.isFinite(Number(rawBinding.warningThreshold)) && Number(rawBinding.warningThreshold) >= 0 ? Number(rawBinding.warningThreshold) : null,
-      dangerThreshold: Number.isFinite(Number(rawBinding.dangerThreshold)) && Number(rawBinding.dangerThreshold) >= 0 ? Number(rawBinding.dangerThreshold) : null,
+      warningThreshold: Number.isFinite(Number(rawBinding.warningThreshold)) && Number(rawBinding.warningThreshold) > 0 ? Number(rawBinding.warningThreshold) : null,
+      dangerThreshold: Number.isFinite(Number(rawBinding.dangerThreshold)) && Number(rawBinding.dangerThreshold) > 0 ? Number(rawBinding.dangerThreshold) : null,
       refreshIntervalMs: Number.isFinite(Number(rawBinding.refreshIntervalMs)) && Number(rawBinding.refreshIntervalMs) >= 1000 ? Number(rawBinding.refreshIntervalMs) : null,
     }
   }
@@ -416,10 +425,10 @@ export const buildProviderQuotaAdapter = (provider, rawBinding = {}) => {
       url: providerTemplateUrl(provider, sourceType, templateId, source.request?.url),
       dshProvider: providerId,
     },
-    thresholdsEnabled: rawBinding.thresholdsEnabled === true,
+    thresholdsEnabled: true,
     thresholdMode: rawBinding.thresholdMode === 'value' ? 'value' : (rawBinding.thresholdMode === 'percent' ? 'percent' : null),
-    warningThreshold: Number.isFinite(Number(rawBinding.warningThreshold)) && Number(rawBinding.warningThreshold) >= 0 ? Number(rawBinding.warningThreshold) : null,
-    dangerThreshold: Number.isFinite(Number(rawBinding.dangerThreshold)) && Number(rawBinding.dangerThreshold) >= 0 ? Number(rawBinding.dangerThreshold) : null,
+    warningThreshold: Number.isFinite(Number(rawBinding.warningThreshold)) && Number(rawBinding.warningThreshold) > 0 ? Number(rawBinding.warningThreshold) : null,
+    dangerThreshold: Number.isFinite(Number(rawBinding.dangerThreshold)) && Number(rawBinding.dangerThreshold) > 0 ? Number(rawBinding.dangerThreshold) : null,
     refreshIntervalMs: Number.isFinite(Number(rawBinding.refreshIntervalMs)) && Number(rawBinding.refreshIntervalMs) >= 1000 ? Number(rawBinding.refreshIntervalMs) : null,
   }
 }
@@ -587,13 +596,13 @@ const ProviderQuota = Schema.object({
   templateId: Schema.string().default(''),
   sourceProviderId: Schema.string().default(''),
   source: QuotaSource,
-  /** 启用后使用本供应商自己的阈值，否则继承全局阈值。 */
-  thresholdsEnabled: Schema.boolean().default(false),
+  /** 兼容旧配置保留字段；现在始终使用本供应商自己的阈值，不再有“继承全局”模式。 */
+  thresholdsEnabled: Schema.boolean().default(true),
   /** percent=百分比比较; value=直接按指标数值比较。 */
   thresholdMode: Schema.union(['percent', 'value']).default('percent'),
   warningThreshold: Schema.union([Schema.number().min(0), Schema.const(null)]).default(null),
   dangerThreshold: Schema.union([Schema.number().min(0), Schema.const(null)]).default(null),
-  /** 本供应商独立查询频率；null 时继承全局 refreshIntervalMs。 */
+  /** 本供应商独立查询频率；null 时使用默认 300000ms。 */
   refreshIntervalMs: Schema.union([Schema.number().min(1000), Schema.const(null)]).default(null),
 })
 
@@ -2120,13 +2129,13 @@ export function apply(ctx, config) {
   const adapterRefreshInterval = (id) => {
     const adapter = getQuotaAdapter(id)
     const interval = Number(adapter?.refreshIntervalMs)
-    return Number.isFinite(interval) && interval >= 1000 ? interval : runtimeConfig.refreshIntervalMs
+    return Number.isFinite(interval) && interval >= 1000 ? interval : DEFAULT_REFRESH_INTERVAL_MS
   }
   const nextRefreshDelay = () => {
     const now = Date.now()
     const ids = getActiveRuntimeAdapterIds()
-    if (ids.length === 0) return runtimeConfig.refreshIntervalMs
-    let delay = runtimeConfig.refreshIntervalMs
+    if (ids.length === 0) return DEFAULT_REFRESH_INTERVAL_MS
+    let delay = DEFAULT_REFRESH_INTERVAL_MS
     for (const id of ids) {
       const cache = caches.get(id)
       if (cache && cache.state !== 'ok') {
@@ -2237,7 +2246,7 @@ export function apply(ctx, config) {
       sourceType: binding.sourceType,
       templateId: binding.templateId || binding.provider?.templateId || '',
       sourceProviderId: binding.sourceProviderId || '',
-      thresholdsEnabled: binding.thresholdsEnabled === true,
+      thresholdsEnabled: true,
       thresholdMode: binding.thresholdMode === 'value' ? 'value' : (binding.thresholdMode === 'percent' ? 'percent' : null),
       warningThreshold: binding.warningThreshold ?? null,
       dangerThreshold: binding.dangerThreshold ?? null,
@@ -2314,20 +2323,14 @@ export function apply(ctx, config) {
         name: adapter.name,
         template: adapter.template ?? '',
         fetchedAt: cache.fetchedAt,
-        refreshIntervalMs: adapter.refreshIntervalMs ?? runtimeConfig.refreshIntervalMs,
+        refreshIntervalMs: adapter.refreshIntervalMs ?? DEFAULT_REFRESH_INTERVAL_MS,
         thresholdsEnabled: adapter.thresholdsEnabled === true,
         thresholdMode: adapterThresholdMode,
-        thresholds: adapter.thresholdsEnabled === true
-          ? {
-              warning: adapter.warningThreshold ?? runtimeConfig.warningThreshold,
-              danger: adapter.dangerThreshold ?? runtimeConfig.dangerThreshold,
-              mode: adapterThresholdMode,
-            }
-          : {
-              warning: runtimeConfig.warningThreshold,
-              danger: runtimeConfig.dangerThreshold,
-              mode: adapterThresholdMode,
-            },
+        thresholds: {
+          warning: adapter.warningThreshold ?? defaultThresholdsFor(adapterThresholdMode, runtimeConfig.currency).warning,
+          danger: adapter.dangerThreshold ?? defaultThresholdsFor(adapterThresholdMode, runtimeConfig.currency).danger,
+          mode: adapterThresholdMode,
+        },
       }
       if (cache.state !== 'ok' || cache.payload?.provider !== adapter.id) {
         return {

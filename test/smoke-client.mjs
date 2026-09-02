@@ -421,7 +421,7 @@ if (!code.includes('dshqb_code_copy') || !code.includes('dshqb_copy_icon')) thro
 if (!code.includes('isSchemaOverridden("enabled"')) throw new Error('global quota switch should expose override/reset state')
 if (!code.includes('settings.enabled')) throw new Error('global quota enable switch missing')
 if (!htmlSettings.includes('额度查询')) throw new Error('quota card title missing')
-if (!htmlSettings.includes('阈值与刷新')) throw new Error('thresholds card title missing')
+if (htmlSettings.includes('阈值与刷新')) throw new Error('global thresholds card should be removed')
 if (!htmlSettings.includes('模型单价')) throw new Error('pricing card title missing')
 if (!code.includes('settings.pricingPeak')) throw new Error('peak pricing i18n missing')
 if (!code.includes('settings.pricingOffPeak')) throw new Error('off-peak pricing i18n missing')
