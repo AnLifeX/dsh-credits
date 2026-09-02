@@ -19,8 +19,8 @@ DeepSeek Harness（`dsh web`）额度插件：在输入框下方显示账户额�
 - **累计消耗胶囊**  
   右下角可拖动气泡，查看今天 / 昨天 / 本周 / 本月 / 自定义时间范围内的跨会话估算总额（按当前计价货币与单价现算）。
 - **设置卡片**  
-  展示、额度查询、阈值与刷新、模型单价、YAML 导出各一张卡。每张独立「放弃修改 / 保存」，改过的字段可「恢复默认」。关掉再打开，未保存的草稿还在。
-  顶部「启用额度功能」总开关关闭后会隐藏额度、TPS、峰谷徽章、悬停详情与累计消耗，停止额度轮询，并锁定展示、额度查询、阈值与刷新；模型单价和 YAML 导出仍可用。
+  展示、额度查询、模型单价、YAML 导出各一张卡；阈值与查询频率已收进每个供应商的额度配置。每张卡独立「放弃修改 / 保存」，改过的字段可「恢复默认」。关掉再打开，未保存的草稿还在。
+  顶部「启用额度功能」总开关关闭后会隐藏额度、TPS、峰谷徽章、悬停详情与累计消耗，停止额度轮询，并锁定展示和额度查询；模型单价和 YAML 导出仍可用。
 
 ## 界面预览
 
@@ -60,7 +60,7 @@ OpenCode Go 模式下，卡片改成三个窗口的用量百分比与重置时�
 
 ![自定义 HTTP 额度设置](./assets/settings-quota-custom.png)
 
-![阈值与刷新卡片](./assets/settings-thresholds.png)
+![供应商额度配置里的阈值与刷新](./assets/settings-thresholds.png)
 
 ## 供应商额度怎么用
 
@@ -180,7 +180,7 @@ dsh plugin --profile web remove dsh-balance
 | `showCapsule` | `true` | 右下角累计消耗胶囊 |
 | `showPopover` | `true` | 悬停底部读数时的双栏详情 |
 | `showTps` | `true` | 是否显示实时 TPS |
-| `enabled` | `true` | 额度功能总开关；关闭后隐藏相关 UI、停止轮询，并锁定展示、额度查询、阈值与刷新；不影响模型单价和 YAML 导出 |
+| `enabled` | `true` | 额度功能总开关；关闭后隐藏相关 UI、停止轮询，并锁定展示和额度查询；不影响模型单价和 YAML 导出 |
 
 ### 多个 OpenCode Go 账号
 
@@ -196,15 +196,18 @@ dsh plugin --profile web remove dsh-balance
         enabled: true
         sourceType: template
         templateId: opencode-go
+        thresholdMode: percent
+        warningThreshold: 30       # 剩余额度 < 30% 黄灯
+        dangerThreshold: 10        # 剩余额度 < 10% 红灯
+        refreshIntervalMs: 300000
       - providerId: go-personal  # DSH 中另一个自定义供应商，使用另一份 Key
         enabled: true
         sourceType: template
         templateId: opencode-go
-    warningThreshold: 10          # Go 套餐剩余额度 < 10% 黄灯
-    dangerThreshold: 5            # 剩余额度 < 5% 红灯
-    refreshIntervalMs: 300000
-    clientPollIntervalMs: 30000
-    timeoutMs: 15000
+        thresholdMode: percent
+        warningThreshold: 30
+        dangerThreshold: 10
+        refreshIntervalMs: 300000
     currency: USD
 ```
 
@@ -220,11 +223,10 @@ dsh plugin --profile web remove dsh-balance
         enabled: true
         sourceType: template
         templateId: deepseek
-    warningThreshold: 10
-    dangerThreshold: 5
-    refreshIntervalMs: 300000
-    clientPollIntervalMs: 30000
-    timeoutMs: 8000
+        thresholdMode: value
+        warningThreshold: 10
+        dangerThreshold: 5
+        refreshIntervalMs: 300000
     currency: CNY
     prices:
       deepseek-v4-flash:
@@ -253,8 +255,10 @@ dsh plugin --profile web remove dsh-balance
         enabled: true
         sourceType: template
         templateId: deepseek
-    warningThreshold: 2.0
-    dangerThreshold: 0.5
+        thresholdMode: value
+        warningThreshold: 2.0
+        dangerThreshold: 0.5
+        refreshIntervalMs: 300000
     currency: USD
     prices:
       deepseek-v4-flash:
@@ -468,7 +472,7 @@ curl http://127.0.0.1:3080/plugins/dsh-credits/client.js
 A: 插件先根据当前模型的 DSH 供应商 ID 找到它自己的 `providerQuotas` 绑定。内置模板默认复用该供应商保存的 Base URL 与 Key；自定义 HTTP 则按页面选择使用直接凭证、DSH 供应商 Key、凭证引用或无鉴权。Key 不会发给浏览器。
 
 **Q: 状态灯规则？**  
-A: DeepSeek 按余额金额对比 `warningThreshold` / `dangerThreshold`。OpenCode Go 按剩余额度百分比对比同一组阈值。🟢 ≥ 预警线；🟡 告急线～预警线；🔴 < 告急线或接口不可用。
+A: 每个供应商使用自己的 `warningThreshold` / `dangerThreshold`。DeepSeek 按余额金额对比，OpenCode Go 按剩余额度百分比对比；未填写时使用该模式的默认值。🟢 ≥ 预警线；🟡 告急线～预警线；🔴 < 告急线或接口不可用。
 
 **Q: 切模型后底部读数会跟着变吗？**  
 A: 会。插件按当前模型的 DSH 供应商 ID 读取它自己的 `providerQuotas` 绑定；没配置或单独关闭时不显示额度，不会回退到其它账号。

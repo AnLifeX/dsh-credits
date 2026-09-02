@@ -15,11 +15,11 @@
           - providerId: opencode-go
             enabled: true
             sourceType: auto
+            thresholdMode: percent
+            warningThreshold: 30       # 剩余额度 < 30% 黄灯
+            dangerThreshold: 10         # 剩余额度 < 10% 红灯
+            refreshIntervalMs: 300000
           # DSH 中额外添加的 Go 账号也可独立绑定；它会复用该供应商自己的地址和 Key。
           # - providerId: go-personal
           #   enabled: true
           #   sourceType: auto
-        warningThreshold: 10          # OpenCode Go: 剩余额度 < 10% 黄灯
-        dangerThreshold: 5            # OpenCode Go: 剩余额度 < 5% 红灯
-        refreshIntervalMs: 300000
-        clientPollIntervalMs: 30000
