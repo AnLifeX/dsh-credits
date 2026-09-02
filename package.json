@@ -1,6 +1,6 @@
 {
   "name": "dsh-credits",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "DeepSeek Harness 额度插件：按供应商展示内置套餐、余额或自定义 HTTP 额度，并提供模型计价、本会话估算与累计消耗",
   "keywords": [
     "dsh",

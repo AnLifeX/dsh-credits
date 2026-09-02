@@ -4,7 +4,7 @@
 
 DeepSeek Harness（`dsh web`）额度插件：在输入框下方显示账户额度与本会话估算消耗；右下角另有可拖动的累计消耗胶囊。设置在侧栏「额度」（最后一项，货币硬币图标），分成多张可折叠卡片。
 
-> 兼容性：`dsh-credits 0.3.0` 已适配 `dsh 0.1.1-rc.1`（即 0.1.1-rc1）的新版会话投影接口；TPS 与本会话金额可正常传递到 Web 前端，同时保留对旧版投影接口的兼容。
+> 兼容性：`dsh-credits 0.3.1` 已适配 `dsh 0.1.1-rc.1`（即 0.1.1-rc1）的新版会话投影接口；TPS 与本会话金额可正常传递到 Web 前端，同时保留对旧版投影接口的兼容。
 
 - **账户额度 + 状态灯**  
   DeepSeek 模式如 `🟢 余额 ¥97.69`；OpenCode Go 模式如 `🟢 Go 额度 月 6% · 周 12% · 5h 9%`。点击圆点可立即强刷。
@@ -378,6 +378,18 @@ dsh plugin --profile web remove dsh-balance
 
 ## 更新记录
 
+### 0.3.1
+
+阈值与查询频率全面改为供应商级独立配置，移除全局「阈值与刷新」设置卡。
+
+- 删除全局「阈值与刷新」卡片；阈值、刷新频率均在每个供应商的额度配置中设置
+- 每个供应商默认独立阈值，不再有「独立 / 继承全局」开关
+- 百分比模式默认预警 / 告急改为 30% / 10%
+- 金额模式默认 CNY 10 / 5，USD 2 / 0.5
+- 旧配置遗留的 0 阈值视为未设置，自动回退默认值
+- 查询频率改为数字输入框，单位分钟，支持 0.5～60 分钟，默认 5 分钟
+- YAML 导出不再输出全局阈值 / 刷新字段，改为随 `providerQuotas` 保存
+
 ### 0.3.0
 
 额度查询重构为供应商级配置，并扩展自定义 HTTP、诊断和模型计价能力。
@@ -430,7 +442,7 @@ dsh plugin --profile web remove dsh-balance
 
 ## 发布到 npm
 
-**普通 `git push` 不会发包。** 只有推送符合 `v*` 的 tag（例如 `v0.3.0`）才会触发 `.github/workflows/publish.yml`。
+**普通 `git push` 不会发包。** 只有推送符合 `v*` 的 tag（例如 `v0.3.1`）才会触发 `.github/workflows/publish.yml`。
 
 第一次发布前：
 
@@ -441,8 +453,8 @@ dsh plugin --profile web remove dsh-balance
 5. `package.json` 的 `version` 与即将打的 tag 一致后：
 
 ```sh
-git tag v0.3.0
-git push origin v0.3.0
+git tag v0.3.1
+git push origin v0.3.1
 ```
 
 之后 Actions 会执行 `npm publish --provenance --access public`。发布成功即可：
