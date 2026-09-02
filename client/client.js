@@ -979,8 +979,8 @@ window.__ModuleLoader__.load({
 			"settings.providerQuota.thresholdModeHint": "百分比：按剩余百分比比较；数值：直接按余额或数量比较。",
 			"settings.providerQuota.thresholdMode.percent": "百分比",
 			"settings.providerQuota.thresholdMode.value": "数值",
-			"settings.providerQuota.refreshInterval": "独立查询频率",
-			"settings.providerQuota.refreshIntervalHint": "该供应商后台查询额度的间隔；默认 5 分钟。",
+			"settings.providerQuota.refreshInterval": "查询频率",
+			"settings.providerQuota.refreshIntervalHint": "该供应商后台查询额度的间隔，单位分钟；默认 5 分钟，最高 60 分钟。",
 			"settings.providerQuota.source": "额度信息来源",
 			"settings.providerQuota.template": "内置模板",
 			"settings.providerQuota.reuse": "复用另一供应商的额度",
@@ -1292,8 +1292,8 @@ window.__ModuleLoader__.load({
 			"settings.providerQuota.thresholdModeHint": "Percent compares remaining percentage; value compares the raw balance or amount.",
 			"settings.providerQuota.thresholdMode.percent": "Percent",
 			"settings.providerQuota.thresholdMode.value": "Value",
-			"settings.providerQuota.refreshInterval": "Provider refresh interval",
-			"settings.providerQuota.refreshIntervalHint": "How often this provider is queried in the background; defaults to 5 minutes.",
+			"settings.providerQuota.refreshInterval": "Refresh interval",
+			"settings.providerQuota.refreshIntervalHint": "Background quota refresh interval in minutes; defaults to 5, max 60.",
 			"settings.providerQuota.source": "Quota source",
 			"settings.providerQuota.template": "Built-in template",
 			"settings.providerQuota.reuse": "Reuse another provider quota",
@@ -2772,14 +2772,7 @@ window.__ModuleLoader__.load({
 						const providerWarning = Number(binding.warningThreshold) > 0 ? Number(binding.warningThreshold) : providerThresholdDefaults.warning;
 						const providerDanger = Number(binding.dangerThreshold) > 0 ? Number(binding.dangerThreshold) : providerThresholdDefaults.danger;
 						const providerRefresh = Number.isFinite(Number(binding.refreshIntervalMs)) ? Number(binding.refreshIntervalMs) : 300000;
-						const refreshOptions = [
-							[30000, t("unit.seconds", { n: 30 })],
-							[60000, t("unit.minutes", { n: 1 })],
-							[180000, t("unit.minutes", { n: 3 })],
-							[300000, t("unit.minutes", { n: 5 })],
-							[600000, t("unit.minutes", { n: 10 })],
-							[3600000, t("unit.minutes", { n: 60 })],
-						];
+						const providerRefreshMinutes = Math.round((providerRefresh / 60000) * 10) / 10;
 						const editor = editing ? react.createElement("div", { className: "dshqb_provider_quota_editor", key: "editor" }, [
 							react.createElement(FieldGrid, { key: "source_type_grid" }, [
 								react.createElement(FieldRow, {
@@ -3015,11 +3008,20 @@ window.__ModuleLoader__.load({
 									label: t("settings.providerQuota.refreshInterval"),
 									hint: t("settings.providerQuota.refreshIntervalHint"),
 									disabled: savingCard === "quota"
-								}, react.createElement("select", {
-									className: "dshqb_select",
-									value: providerRefresh,
-									onChange: (e) => updateProviderBinding(provider, { refreshIntervalMs: Number(e.target.value) })
-								}, refreshOptions.map(([value, label]) => react.createElement("option", { value: String(value), key: String(value) }, label))))
+								}, react.createElement("input", {
+									type: "number",
+									className: "dshqb_input",
+									min: 0.5,
+									max: 60,
+									step: 0.5,
+									value: providerRefreshMinutes,
+									onChange: (e) => {
+										const minutes = Number(e.target.value);
+										if (Number.isFinite(minutes) && minutes >= 0.5 && minutes <= 60) {
+											updateProviderBinding(provider, { refreshIntervalMs: Math.round(minutes * 60000) });
+										}
+									}
+								}))
 							]),
 							react.createElement("div", { className: "dshqb_provider_editor_footer", key: "save_actions" }, [
 								failedCard === "quota" ? react.createElement("span", {
