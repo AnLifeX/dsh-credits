@@ -2967,6 +2967,26 @@ window.__ModuleLoader__.load({
 									])),
 									react.createElement(FieldRow, {
 										t,
+										key: "refresh",
+										label: t("settings.providerQuota.refreshInterval"),
+										hint: t("settings.providerQuota.refreshIntervalHint"),
+										disabled: savingCard === "quota"
+									}, react.createElement("input", {
+										type: "number",
+										className: "dshqb_input",
+										min: 0.5,
+										max: 60,
+										step: 0.5,
+										value: providerRefreshMinutes,
+										onChange: (e) => {
+											const minutes = Number(e.target.value);
+											if (Number.isFinite(minutes) && minutes >= 0.5 && minutes <= 60) {
+												updateProviderBinding(provider, { refreshIntervalMs: Math.round(minutes * 60000) });
+											}
+										}
+									})),
+									react.createElement(FieldRow, {
+										t,
 										key: "danger",
 										label: t(providerThresholdMode === "percent" ? "settings.dangerPercent" : "settings.danger"),
 										disabled: savingCard === "quota"
@@ -3002,26 +3022,6 @@ window.__ModuleLoader__.load({
 									t,
 									key: "slider"
 								}),
-								react.createElement(FieldRow, {
-									t,
-									key: "refresh",
-									label: t("settings.providerQuota.refreshInterval"),
-									hint: t("settings.providerQuota.refreshIntervalHint"),
-									disabled: savingCard === "quota"
-								}, react.createElement("input", {
-									type: "number",
-									className: "dshqb_input",
-									min: 0.5,
-									max: 60,
-									step: 0.5,
-									value: providerRefreshMinutes,
-									onChange: (e) => {
-										const minutes = Number(e.target.value);
-										if (Number.isFinite(minutes) && minutes >= 0.5 && minutes <= 60) {
-											updateProviderBinding(provider, { refreshIntervalMs: Math.round(minutes * 60000) });
-										}
-									}
-								}))
 							]),
 							react.createElement("div", { className: "dshqb_provider_editor_footer", key: "save_actions" }, [
 								failedCard === "quota" ? react.createElement("span", {
