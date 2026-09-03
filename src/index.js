@@ -1299,7 +1299,7 @@ export const makeCostProjection = (configOrGetter) => {
       }
     },
     view,
-    stateVersion: 2,
+    stateVersion: 3,
     wire: { viewSchema, view },
   }
 }
