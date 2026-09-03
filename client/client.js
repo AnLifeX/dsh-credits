@@ -3701,7 +3701,6 @@ window.__ModuleLoader__.load({
 			const showTps = payload?.showTps !== false;
 			const cost = priceSession(rawCost, payload);
 			const rootRef = react.useRef(null);
-			const [popoverDx, setPopoverDx] = react.useState(0);
 
 			// 峰谷切换不依赖额度接口轮询，避免跨过 09:00/12:00/14:00/18:00 后徽章滞后。
 			const [tariffNow, setTariffNow] = react.useState(() => Date.now());
@@ -4063,20 +4062,22 @@ window.__ModuleLoader__.load({
 			]);
 
 			react.useEffect(() => {
-				if (!showPopover || leftCol === null || !rootRef.current) return;
-				const trigger = rootRef.current.querySelector(".dshqb_trigger");
-				const el = rootRef.current.querySelector(".dshqb_popover");
-				if (!trigger || !el) return;
+				if (!rootRef.current) return;
 				const vw = document.documentElement.clientWidth;
-				const tr = trigger.getBoundingClientRect();
-				const width = el.offsetWidth || 440;
 				const margin = 8;
-				const center = tr.left + tr.width / 2;
-				const half = width / 2;
-				let dx = 0;
-				if (center - half < margin) dx = margin - (center - half);
-				if (center + half > vw - margin) dx = (vw - margin) - (center + half);
-				setPopoverDx(dx);
+				const elements = rootRef.current.querySelectorAll(".dshqb_popover, .dshqb_pricing_popover, .dshqb_hover_tip");
+				for (const el of elements) {
+					const host = el.parentElement;
+					if (!host) continue;
+					const hr = host.getBoundingClientRect();
+					const width = el.offsetWidth || 440;
+					const center = hr.left + hr.width / 2;
+					const half = width / 2;
+					let dx = 0;
+					if (center - half < margin) dx = margin - (center - half);
+					if (center + half > vw - margin) dx = (vw - margin) - (center + half);
+					el.style.setProperty("--dshqb-dx", dx + "px");
+				}
 			}, [showPopover, leftCol, rightCol]);
 
 			// 3. 定价策略 "?" 图标与毛玻璃卡片 (仅 DeepSeek 官方余额展示)
@@ -4177,8 +4178,7 @@ window.__ModuleLoader__.load({
 
 			const popover = showPopover && leftCol !== null ? react.createElement("div", {
 				className: "dshqb_popover",
-				key: "popover",
-				style: { "--dshqb-dx": popoverDx + "px" }
+				key: "popover"
 			}, [
 				leftCol,
 				react.createElement("div", { className: "dshqb_vsep", key: "vsep" }),
