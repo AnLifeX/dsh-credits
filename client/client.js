@@ -49,9 +49,9 @@ window.__ModuleLoader__.load({
 				".dshqb_dot_success{background-color:var(--dsw-alias-state-success-primary,#10b981);box-shadow:0 0 0 2px rgba(16,185,129,0.2)}",
 				".dshqb_dot_warning{background-color:var(--dsw-alias-state-warn-primary,var(--dsw-alias-state-warning-primary,#f59e0b));box-shadow:0 0 0 2px rgba(245,158,11,0.2)}",
 				".dshqb_dot_danger{background-color:var(--dsw-alias-state-error-primary,#ef4444);box-shadow:0 0 0 2px rgba(239,68,68,0.2)}",
-				".dshqb_popover{position:absolute;bottom:calc(100% + 8px);left:50%;right:auto;z-index:9999;width:min(440px,calc(100vw - 24px));min-width:0;max-width:calc(100vw - 24px);background:var(--dsw-alias-bg-layer-1,var(--dsw-hovercard-bg,var(--dsw-alias-surface-elevated,#ffffff)));border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-secondary,rgba(128,128,128,0.2)));border-radius:10px;box-shadow:var(--dsw-shadow-lv3,0 12px 32px rgba(0,0,0,0.18));padding:clamp(10px,3cqi,14px) clamp(10px,3.4cqi,16px);display:flex;flex-direction:row;flex-wrap:wrap;align-items:stretch;gap:12px 16px;box-sizing:border-box;white-space:normal;text-align:left;color:var(--dsw-alias-label-primary);font-size:12px;font-size:clamp(11px,2.8cqi,12px);line-height:1.5;backdrop-filter:blur(16px);opacity:0;pointer-events:none;transform:translateX(-50%) translateY(6px);transition:opacity .18s cubic-bezier(0.16,1,0.3,1),transform .18s cubic-bezier(0.16,1,0.3,1);container-type:inline-size;container-name:dshqb-pop}",
+				".dshqb_popover{position:absolute;bottom:calc(100% + 8px);left:50%;right:auto;z-index:9999;width:min(440px,calc(100vw - 24px));min-width:0;max-width:calc(100vw - 24px);background:var(--dsw-alias-bg-layer-1,var(--dsw-hovercard-bg,var(--dsw-alias-surface-elevated,#ffffff)));border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-secondary,rgba(128,128,128,0.2)));border-radius:10px;box-shadow:var(--dsw-shadow-lv3,0 12px 32px rgba(0,0,0,0.18));padding:clamp(10px,3cqi,14px) clamp(10px,3.4cqi,16px);display:flex;flex-direction:row;flex-wrap:wrap;align-items:stretch;gap:12px 16px;box-sizing:border-box;white-space:normal;text-align:left;color:var(--dsw-alias-label-primary);font-size:12px;font-size:clamp(11px,2.8cqi,12px);line-height:1.5;backdrop-filter:blur(16px);opacity:0;pointer-events:none;transform:translateX(calc(-50% + var(--dshqb-dx, 0px))) translateY(6px);transition:opacity .18s cubic-bezier(0.16,1,0.3,1),transform .18s cubic-bezier(0.16,1,0.3,1);container-type:inline-size;container-name:dshqb-pop}",
 				".dshqb_popover::after{content:'';position:absolute;top:100%;left:0;right:0;height:12px;background:transparent}",
-				".dshqb_trigger:hover .dshqb_popover, .dshqb_popover:hover{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0)}",
+				".dshqb_trigger:hover .dshqb_popover, .dshqb_popover:hover{opacity:1;pointer-events:auto;transform:translateX(calc(-50% + var(--dshqb-dx, 0px))) translateY(0)}",
 				".dshqb_col{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}",
 				".dshqb_popover .dshqb_col{flex:1 1 188px}",
 				".dshqb_vsep{width:1px;background:var(--dsw-alias-separator-primary,var(--dsw-alias-border-l3,rgba(128,128,128,0.15)));align-self:stretch;margin:0 2px;flex:0 0 1px}",
@@ -116,9 +116,9 @@ window.__ModuleLoader__.load({
 				".dshqb_btn_icon svg{display:block}",
 				".dshqb_btn_icon:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover,rgba(128,128,128,0.1));transform:scale(1.1)}",
 				".dshqb_btn_icon:active{transform:scale(0.95)}",
-				".dshqb_pricing_popover{position:absolute;bottom:calc(100% + 8px);left:50%;right:auto;z-index:9999;width:min(320px,calc(100vw - 24px));min-width:0;max-width:calc(100vw - 24px);background:var(--dsw-alias-bg-layer-1,var(--dsw-hovercard-bg,var(--dsw-alias-surface-elevated,#ffffff)));border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-secondary,rgba(128,128,128,0.2)));border-radius:10px;box-shadow:var(--dsw-shadow-lv3,0 12px 32px rgba(0,0,0,0.18));padding:12px 14px;display:flex;flex-direction:column;gap:8px;box-sizing:border-box;white-space:normal;text-align:left;color:var(--dsw-alias-label-primary);font-size:12px;font-size:clamp(11px,3.4cqi,12px);line-height:1.5;backdrop-filter:blur(16px);opacity:0;pointer-events:none;transform:translateX(-50%) translateY(6px);transition:opacity .18s cubic-bezier(0.16,1,0.3,1),transform .18s cubic-bezier(0.16,1,0.3,1);container-type:inline-size}",
+				".dshqb_pricing_popover{position:absolute;bottom:calc(100% + 8px);left:50%;right:auto;z-index:9999;width:min(320px,calc(100vw - 24px));min-width:0;max-width:calc(100vw - 24px);background:var(--dsw-alias-bg-layer-1,var(--dsw-hovercard-bg,var(--dsw-alias-surface-elevated,#ffffff)));border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-secondary,rgba(128,128,128,0.2)));border-radius:10px;box-shadow:var(--dsw-shadow-lv3,0 12px 32px rgba(0,0,0,0.18));padding:12px 14px;display:flex;flex-direction:column;gap:8px;box-sizing:border-box;white-space:normal;text-align:left;color:var(--dsw-alias-label-primary);font-size:12px;font-size:clamp(11px,3.4cqi,12px);line-height:1.5;backdrop-filter:blur(16px);opacity:0;pointer-events:none;transform:translateX(calc(-50% + var(--dshqb-dx, 0px))) translateY(6px);transition:opacity .18s cubic-bezier(0.16,1,0.3,1),transform .18s cubic-bezier(0.16,1,0.3,1);container-type:inline-size}",
 				".dshqb_pricing_popover::after{content:'';position:absolute;top:100%;left:0;right:0;height:12px;background:transparent}",
-				".dshqb_pricing_wrap:hover .dshqb_pricing_popover, .dshqb_pricing_popover:hover{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0)}",
+				".dshqb_pricing_wrap:hover .dshqb_pricing_popover, .dshqb_pricing_popover:hover{opacity:1;pointer-events:auto;transform:translateX(calc(-50% + var(--dshqb-dx, 0px))) translateY(0)}",
 				".dshqb_pricing_models{display:flex;flex-direction:column;gap:6px}",
 				".dshqb_pricing_card_item{background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,0.06));border:1px solid var(--dsw-alias-border-l3,rgba(128,128,128,0.12));border-radius:6px;padding:6px 10px;display:flex;flex-direction:column;gap:3px}",
 				".dshqb_pricing_model_name{font-weight:600;font-size:12px;color:var(--dsw-alias-label-primary);font-variant-numeric:tabular-nums}",
@@ -3701,6 +3701,7 @@ window.__ModuleLoader__.load({
 			const showTps = payload?.showTps !== false;
 			const cost = priceSession(rawCost, payload);
 			const rootRef = react.useRef(null);
+			const [popoverDx, setPopoverDx] = react.useState(0);
 
 			// 峰谷切换不依赖额度接口轮询，避免跨过 09:00/12:00/14:00/18:00 后徽章滞后。
 			const [tariffNow, setTariffNow] = react.useState(() => Date.now());
@@ -4061,6 +4062,23 @@ window.__ModuleLoader__.load({
 				])
 			]);
 
+			react.useEffect(() => {
+				if (!showPopover || leftCol === null || !rootRef.current) return;
+				const trigger = rootRef.current.querySelector(".dshqb_trigger");
+				const el = rootRef.current.querySelector(".dshqb_popover");
+				if (!trigger || !el) return;
+				const vw = document.documentElement.clientWidth;
+				const tr = trigger.getBoundingClientRect();
+				const width = el.offsetWidth || 440;
+				const margin = 8;
+				const center = tr.left + tr.width / 2;
+				const half = width / 2;
+				let dx = 0;
+				if (center - half < margin) dx = margin - (center - half);
+				if (center + half > vw - margin) dx = (vw - margin) - (center + half);
+				setPopoverDx(dx);
+			}, [showPopover, leftCol, rightCol]);
+
 			// 3. 定价策略 "?" 图标与毛玻璃卡片 (仅 DeepSeek 官方余额展示)
 			let pricingNode = null;
 			if (balance.status === "ok" && balance.payload !== null && quotaSourceKind === "balance") {
@@ -4159,7 +4177,8 @@ window.__ModuleLoader__.load({
 
 			const popover = showPopover && leftCol !== null ? react.createElement("div", {
 				className: "dshqb_popover",
-				key: "popover"
+				key: "popover",
+				style: { "--dshqb-dx": popoverDx + "px" }
 			}, [
 				leftCol,
 				react.createElement("div", { className: "dshqb_vsep", key: "vsep" }),
