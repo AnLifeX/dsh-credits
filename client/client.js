@@ -49,9 +49,9 @@ window.__ModuleLoader__.load({
 				".dshqb_dot_success{background-color:var(--dsw-alias-state-success-primary,#10b981);box-shadow:0 0 0 2px rgba(16,185,129,0.2)}",
 				".dshqb_dot_warning{background-color:var(--dsw-alias-state-warn-primary,var(--dsw-alias-state-warning-primary,#f59e0b));box-shadow:0 0 0 2px rgba(245,158,11,0.2)}",
 				".dshqb_dot_danger{background-color:var(--dsw-alias-state-error-primary,#ef4444);box-shadow:0 0 0 2px rgba(239,68,68,0.2)}",
-				".dshqb_popover{position:absolute;bottom:calc(100% + 8px);left:50%;right:auto;z-index:9999;width:min(440px,calc(100vw - 24px));min-width:0;max-width:calc(100vw - 24px);background:var(--dsw-alias-bg-layer-1,var(--dsw-hovercard-bg,var(--dsw-alias-surface-elevated,#ffffff)));border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-secondary,rgba(128,128,128,0.2)));border-radius:10px;box-shadow:var(--dsw-shadow-lv3,0 12px 32px rgba(0,0,0,0.18));padding:clamp(10px,3cqi,14px) clamp(10px,3.4cqi,16px);display:flex;flex-direction:row;flex-wrap:wrap;align-items:stretch;gap:12px 16px;box-sizing:border-box;white-space:normal;text-align:left;color:var(--dsw-alias-label-primary);font-size:12px;font-size:clamp(11px,2.8cqi,12px);line-height:1.5;backdrop-filter:blur(16px);opacity:0;pointer-events:none;transform:translateX(calc(-50% + var(--dshqb-dx, 0px))) translateY(6px);transition:opacity .18s cubic-bezier(0.16,1,0.3,1),transform .18s cubic-bezier(0.16,1,0.3,1);container-type:inline-size;container-name:dshqb-pop}",
+				".dshqb_popover{position:absolute;bottom:calc(100% + 8px);left:50%;right:auto;z-index:9999;width:min(440px,calc(100vw - 24px));min-width:0;max-width:calc(100vw - 24px);background:var(--dsw-alias-bg-layer-1,var(--dsw-hovercard-bg,var(--dsw-alias-surface-elevated,#ffffff)));border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-secondary,rgba(128,128,128,0.2)));border-radius:10px;box-shadow:var(--dsw-shadow-lv3,0 12px 32px rgba(0,0,0,0.18));padding:clamp(10px,3cqi,14px) clamp(10px,3.4cqi,16px);display:flex;flex-direction:row;flex-wrap:wrap;align-items:stretch;gap:12px 16px;box-sizing:border-box;white-space:normal;text-align:left;color:var(--dsw-alias-label-primary);font-size:12px;font-size:clamp(11px,2.8cqi,12px);line-height:1.5;backdrop-filter:blur(16px);opacity:0;pointer-events:none;transform:translateX(-50%) translateY(6px);transition:opacity .18s cubic-bezier(0.16,1,0.3,1),transform .18s cubic-bezier(0.16,1,0.3,1);container-type:inline-size;container-name:dshqb-pop}",
 				".dshqb_popover::after{content:'';position:absolute;top:100%;left:0;right:0;height:12px;background:transparent}",
-				".dshqb_trigger:hover .dshqb_popover, .dshqb_popover:hover{opacity:1;pointer-events:auto;transform:translateX(calc(-50% + var(--dshqb-dx, 0px))) translateY(0)}",
+				".dshqb_trigger:hover .dshqb_popover, .dshqb_popover:hover{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0)}",
 				".dshqb_col{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}",
 				".dshqb_popover .dshqb_col{flex:1 1 188px}",
 				".dshqb_vsep{width:1px;background:var(--dsw-alias-separator-primary,var(--dsw-alias-border-l3,rgba(128,128,128,0.15)));align-self:stretch;margin:0 2px;flex:0 0 1px}",
@@ -116,9 +116,9 @@ window.__ModuleLoader__.load({
 				".dshqb_btn_icon svg{display:block}",
 				".dshqb_btn_icon:hover{color:var(--dsw-alias-label-primary);background:var(--dsw-alias-interactive-bg-hover,rgba(128,128,128,0.1));transform:scale(1.1)}",
 				".dshqb_btn_icon:active{transform:scale(0.95)}",
-				".dshqb_pricing_popover{position:absolute;bottom:calc(100% + 8px);left:50%;right:auto;z-index:9999;width:min(320px,calc(100vw - 24px));min-width:0;max-width:calc(100vw - 24px);background:var(--dsw-alias-bg-layer-1,var(--dsw-hovercard-bg,var(--dsw-alias-surface-elevated,#ffffff)));border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-secondary,rgba(128,128,128,0.2)));border-radius:10px;box-shadow:var(--dsw-shadow-lv3,0 12px 32px rgba(0,0,0,0.18));padding:12px 14px;display:flex;flex-direction:column;gap:8px;box-sizing:border-box;white-space:normal;text-align:left;color:var(--dsw-alias-label-primary);font-size:12px;font-size:clamp(11px,3.4cqi,12px);line-height:1.5;backdrop-filter:blur(16px);opacity:0;pointer-events:none;transform:translateX(calc(-50% + var(--dshqb-dx, 0px))) translateY(6px);transition:opacity .18s cubic-bezier(0.16,1,0.3,1),transform .18s cubic-bezier(0.16,1,0.3,1);container-type:inline-size}",
+				".dshqb_pricing_popover{position:absolute;bottom:calc(100% + 8px);left:50%;right:auto;z-index:9999;width:min(320px,calc(100vw - 24px));min-width:0;max-width:calc(100vw - 24px);background:var(--dsw-alias-bg-layer-1,var(--dsw-hovercard-bg,var(--dsw-alias-surface-elevated,#ffffff)));border:1px solid var(--dsw-alias-border-l2,var(--dsw-alias-border-secondary,rgba(128,128,128,0.2)));border-radius:10px;box-shadow:var(--dsw-shadow-lv3,0 12px 32px rgba(0,0,0,0.18));padding:12px 14px;display:flex;flex-direction:column;gap:8px;box-sizing:border-box;white-space:normal;text-align:left;color:var(--dsw-alias-label-primary);font-size:12px;font-size:clamp(11px,3.4cqi,12px);line-height:1.5;backdrop-filter:blur(16px);opacity:0;pointer-events:none;transform:translateX(-50%) translateY(6px);transition:opacity .18s cubic-bezier(0.16,1,0.3,1),transform .18s cubic-bezier(0.16,1,0.3,1);container-type:inline-size}",
 				".dshqb_pricing_popover::after{content:'';position:absolute;top:100%;left:0;right:0;height:12px;background:transparent}",
-				".dshqb_pricing_wrap:hover .dshqb_pricing_popover, .dshqb_pricing_popover:hover{opacity:1;pointer-events:auto;transform:translateX(calc(-50% + var(--dshqb-dx, 0px))) translateY(0)}",
+				".dshqb_pricing_wrap:hover .dshqb_pricing_popover, .dshqb_pricing_popover:hover{opacity:1;pointer-events:auto;transform:translateX(-50%) translateY(0)}",
 				".dshqb_pricing_models{display:flex;flex-direction:column;gap:6px}",
 				".dshqb_pricing_card_item{background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,0.06));border:1px solid var(--dsw-alias-border-l3,rgba(128,128,128,0.12));border-radius:6px;padding:6px 10px;display:flex;flex-direction:column;gap:3px}",
 				".dshqb_pricing_model_name{font-weight:600;font-size:12px;color:var(--dsw-alias-label-primary);font-variant-numeric:tabular-nums}",
@@ -3523,10 +3523,21 @@ window.__ModuleLoader__.load({
 		const SpendCapsule = react.memo(function SpendCapsule({ t }) {
 			const snap = react.useSyncExternalStore(spendStore.subscribe, spendStore.getSnapshot, spendStore.getSnapshot);
 			const [open, setOpen] = react.useState(false);
+			const clampCapPos = (right, bottom, width, height) => {
+				const vw = typeof document !== "undefined" && document.documentElement ? document.documentElement.clientWidth : 1280;
+				const vh = typeof document !== "undefined" && document.documentElement ? document.documentElement.clientHeight : 800;
+				const margin = 8;
+				const maxRight = Math.max(margin, vw - width - margin);
+				const maxBottom = Math.max(margin, vh - height - margin);
+				return {
+					right: Math.min(Math.max(margin, Number(right) || margin), maxRight),
+					bottom: Math.min(Math.max(margin, Number(bottom) || margin), maxBottom)
+				};
+			};
 			const [pos, setPos] = react.useState(() => {
 				const raw = readCapState();
-				if (Number.isFinite(raw.right) && Number.isFinite(raw.bottom)) return { right: raw.right, bottom: raw.bottom };
-				return { right: 20, bottom: 20 };
+				if (Number.isFinite(raw.right) && Number.isFinite(raw.bottom)) return clampCapPos(raw.right, raw.bottom, 200, 40);
+				return clampCapPos(20, 20, 200, 40);
 			});
 			const drag = react.useRef(null);
 			const capRef = react.useRef(null);
@@ -3549,10 +3560,15 @@ window.__ModuleLoader__.load({
 				const move = (ev) => {
 					if (!drag.current) return;
 					if (Math.abs(ev.clientX - drag.current.x) + Math.abs(ev.clientY - drag.current.y) > 4) lastMoved.current = true;
-					setPos({
-						right: Math.max(8, drag.current.right - (ev.clientX - drag.current.x)),
-						bottom: Math.max(8, drag.current.bottom - (ev.clientY - drag.current.y))
-					});
+					const el = capRef.current;
+					const w = el?.offsetWidth || (open ? 320 : 200);
+					const h = el?.offsetHeight || (open ? 300 : 40);
+					setPos(clampCapPos(
+						drag.current.right - (ev.clientX - drag.current.x),
+						drag.current.bottom - (ev.clientY - drag.current.y),
+						w,
+						h
+					));
 				};
 				const up = () => {
 					document.removeEventListener("mousemove", move);
@@ -4080,24 +4096,6 @@ window.__ModuleLoader__.load({
 				])
 			]);
 
-			react.useEffect(() => {
-				if (!rootRef.current) return;
-				const vw = document.documentElement.clientWidth;
-				const margin = 8;
-				const elements = rootRef.current.querySelectorAll(".dshqb_popover, .dshqb_pricing_popover, .dshqb_hover_tip");
-				for (const el of elements) {
-					const host = el.parentElement;
-					if (!host) continue;
-					const hr = host.getBoundingClientRect();
-					const width = el.offsetWidth || 440;
-					const center = hr.left + hr.width / 2;
-					const half = width / 2;
-					let dx = 0;
-					if (center - half < margin) dx = margin - (center - half);
-					if (center + half > vw - margin) dx = (vw - margin) - (center + half);
-					el.style.setProperty("--dshqb-dx", dx + "px");
-				}
-			}, [showPopover, leftCol, rightCol]);
 
 			// 3. 定价策略 "?" 图标与毛玻璃卡片 (仅 DeepSeek 官方余额展示)
 			let pricingNode = null;
