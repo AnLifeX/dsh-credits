@@ -14,13 +14,13 @@
     "cost"
   ],
   "license": "MIT",
-  "homepage": "https://github.com/Gaq152/dsh-credits#readme",
+  "homepage": "https://github.com/AnLifeX/dsh-credits#readme",
   "bugs": {
-    "url": "https://github.com/Gaq152/dsh-credits/issues"
+    "url": "https://github.com/AnLifeX/dsh-credits/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/Gaq152/dsh-credits.git"
+    "url": "git+https://github.com/AnLifeX/dsh-credits.git"
   },
   "type": "module",
   "main": "src/index.js",
