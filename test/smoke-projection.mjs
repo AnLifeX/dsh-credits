@@ -81,12 +81,12 @@ assert.deepEqual(view.tokens, { uncachedInput: 300, cacheRead: 60, cacheWrite: 1
 // chat: (100+10)*2 + 60*0.2 + 60*8 = 220 + 12 + 480 = 712 (每 1M) → 0.000712
 // reasoner: 200*4 + 0*0.5 + 40*16 = 800 + 640 = 1440 → 0.00144
 assert.equal(view.costByModel['deepseek-chat'], 0.000712)
-assert.equal(view.costByModel['deepseek-reasoner'], 0.00144)
+assert.equal(view.costByModel['deepseek/deepseek-reasoner'], 0.00144)
 assert.equal(Math.round(view.cost * 1e6), 2152)
-assert.deepEqual(view.models, ['deepseek-chat', 'deepseek-reasoner'])
+assert.deepEqual(view.models, ['deepseek-chat', 'deepseek/deepseek-reasoner'])
 assert.equal(view.currency, 'CNY')
 assert.deepEqual(view.tokensByModel['deepseek-chat'], { uncachedInput: 100, cacheRead: 60, cacheWrite: 10, output: 60 })
-assert.deepEqual(view.tokensByModel['deepseek-reasoner'], { uncachedInput: 200, cacheRead: 0, cacheWrite: 0, output: 40 })
+assert.deepEqual(view.tokensByModel['deepseek/deepseek-reasoner'], { uncachedInput: 200, cacheRead: 0, cacheWrite: 0, output: 40 })
 
 // 未知名模型使用回退价(deepseek-chat 默认)
 state = def.init()

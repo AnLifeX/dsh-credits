@@ -646,7 +646,8 @@ window.__ModuleLoader__.load({
 			let total = 0;
 			for (const leg of legs) {
 				const c = priceLeg(cfg, leg);
-				if (c > 0) costByModel[leg.model] = Math.round(((costByModel[leg.model] ?? 0) + c) * 1e6) / 1e6;
+				const modelKey = leg.provider ? `${leg.provider}/${leg.model}` : leg.model;
+				if (c > 0) costByModel[modelKey] = Math.round(((costByModel[modelKey] ?? 0) + c) * 1e6) / 1e6;
 				total += c;
 			}
 			return {

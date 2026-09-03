@@ -89,16 +89,21 @@ export const resolveSpendRange = (range, fromValue, toValue, now = Date.now()) =
   return { ok: true, range: 'today', from: startOfDay(now), to: now }
 }
 
-export const initSpendFold = () => ({ currentModel: null, last: null, samples: {} })
+export const initSpendFold = () => ({ currentModel: null, currentProvider: null, last: null, samples: {} })
 
 export const applySpendEvent = (state, event) => {
   let nextModel = state.currentModel
+  let nextProvider = state.currentProvider
   if (event.type === 'request/header') {
     const model = event.data?.header?.config?.model
+    const provider = event.data?.provider ?? event.data?.header?.provider ?? event.data?.header?.config?.provider
     if (typeof model === 'string' && model !== '') nextModel = model
+    if (typeof provider === 'string' && provider !== '') nextProvider = provider
   } else if (event.type === 'request/context') {
     const model = event.data?.model
+    const provider = event.data?.provider
     if (typeof model === 'string' && model !== '') nextModel = model
+    if (typeof provider === 'string' && provider !== '') nextProvider = provider
   }
 
   let usage = null
@@ -111,24 +116,27 @@ export const applySpendEvent = (state, event) => {
     ({ turn, step, usage } = event.data)
   }
 
+  const changedModel = nextModel !== state.currentModel || nextProvider !== state.currentProvider
   if (usage === null) {
-    return nextModel === state.currentModel ? state : { ...state, currentModel: nextModel }
+    return changedModel ? { ...state, currentModel: nextModel, currentProvider: nextProvider } : state
   }
 
   const model = nextModel ?? 'unknown'
+  const provider = nextProvider ?? ''
   const buckets = bucketsOf(usage)
   const key = `${turn}:${step}`
   const previous = state.samples[key]
-  if (previous && previous.model === model && bucketsEqual(previous.buckets, buckets) && previous.t === (event.time ?? previous.t)) {
-    return nextModel === state.currentModel ? state : { ...state, currentModel: nextModel }
+  if (previous && previous.model === model && previous.provider === provider && bucketsEqual(previous.buckets, buckets) && previous.t === (event.time ?? previous.t)) {
+    return changedModel ? { ...state, currentModel: nextModel, currentProvider: nextProvider } : state
   }
 
   return {
     currentModel: nextModel,
-    last: { turn, step, model },
+    currentProvider: nextProvider,
+    last: { turn, step, model, provider },
     samples: {
       ...state.samples,
-      [key]: { t: Number(event.time) || 0, model, buckets },
+      [key]: { t: Number(event.time) || 0, model, provider, buckets },
     },
   }
 }
@@ -154,9 +162,12 @@ export const aggregateSpend = (samples, cfg, from, to) => {
     tokens.cacheRead += b.cacheReadTokens
     tokens.cacheWrite += b.cacheWriteTokens
     tokens.output += b.outputTokens
-    const c = priceBuckets(cfg, sample.model ?? 'unknown', b, t)
+    const model = sample.model ?? 'unknown'
+    const provider = sample.provider ?? ''
+    const modelKey = provider ? `${provider}/${model}` : model
+    const c = priceBuckets(cfg, model, b, t)
     cost += c
-    if (c > 0) costByModel[sample.model ?? 'unknown'] = round6((costByModel[sample.model ?? 'unknown'] ?? 0) + c)
+    if (c > 0) costByModel[modelKey] = round6((costByModel[modelKey] ?? 0) + c)
     if (sample.sessionId) sessionIds.add(sample.sessionId)
     calls += 1
     inRange.push({ ...sample, cost: round6(c) })

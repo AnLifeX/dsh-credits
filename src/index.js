@@ -1167,6 +1167,7 @@ export const makeCostProjection = (configOrGetter) => {
     legs: z.array(z.object({
       t: z.number(),
       model: z.string(),
+      provider: z.string().nullable().optional(),
       uncachedInput: z.number().int().nonnegative(),
       cacheRead: z.number().int().nonnegative(),
       cacheWrite: z.number().int().nonnegative(),
@@ -1183,14 +1184,17 @@ export const makeCostProjection = (configOrGetter) => {
   }).strict()
   const stateSchema = z.object({
     currentModel: z.string().nullable(),
+    currentProvider: z.string().nullable().optional(),
     last: z.object({
       turn: z.number().int().nonnegative(),
       step: z.number().int().nonnegative(),
       model: z.string(),
+      provider: z.string().nullable().optional(),
     }).strict().nullable(),
     samples: z.record(z.string(), z.object({
       t: z.number(),
       model: z.string(),
+      provider: z.string().nullable().optional(),
       buckets: bucketSchema,
     }).strict()),
     modelOrder: z.array(z.string()),
@@ -1205,23 +1209,26 @@ export const makeCostProjection = (configOrGetter) => {
       for (const sample of Object.values(state.samples ?? {})) {
         const b = sample.buckets ?? zero()
         const model = sample.model ?? 'unknown'
+        const provider = sample.provider ?? ''
+        const modelKey = provider ? `${provider}/${model}` : model
         tokens.uncachedInput += b.uncachedInputTokens
         tokens.cacheRead += b.cacheReadTokens
         tokens.cacheWrite += b.cacheWriteTokens
         tokens.output += b.outputTokens
-        const prevTok = tokensByModel[model] ?? { uncachedInput: 0, cacheRead: 0, cacheWrite: 0, output: 0 }
-        tokensByModel[model] = {
+        const prevTok = tokensByModel[modelKey] ?? { uncachedInput: 0, cacheRead: 0, cacheWrite: 0, output: 0 }
+        tokensByModel[modelKey] = {
           uncachedInput: prevTok.uncachedInput + b.uncachedInputTokens,
           cacheRead: prevTok.cacheRead + b.cacheReadTokens,
           cacheWrite: prevTok.cacheWrite + b.cacheWriteTokens,
           output: prevTok.output + b.outputTokens,
         }
         const c = priceBuckets(cfg, model, b, sample.t)
-        if (c > 0) costByModel[model] = round6((costByModel[model] ?? 0) + c)
+        if (c > 0) costByModel[modelKey] = round6((costByModel[modelKey] ?? 0) + c)
         cost += c
         legs.push({
           t: sample.t,
           model,
+          ...(provider ? { provider } : {}),
           uncachedInput: b.uncachedInputTokens,
           cacheRead: b.cacheReadTokens,
           cacheWrite: b.cacheWriteTokens,
@@ -1244,15 +1251,20 @@ export const makeCostProjection = (configOrGetter) => {
     key: 'queryCreditsCost',
     stateSchema,
     schema: viewSchema,
-    init: () => ({ currentModel: null, last: null, samples: {}, modelOrder: [] }),
+    init: () => ({ currentModel: null, currentProvider: null, last: null, samples: {}, modelOrder: [] }),
     apply: (state, event) => {
       let nextModel = state.currentModel
+      let nextProvider = state.currentProvider
       if (event.type === 'request/header') {
         const model = event.data.header?.config?.model
+        const provider = event.data.provider ?? event.data.header?.provider ?? event.data.header?.config?.provider
         if (typeof model === 'string' && model !== '') nextModel = model
+        if (typeof provider === 'string' && provider !== '') nextProvider = provider
       } else if (event.type === 'request/context') {
         const model = event.data.model
+        const provider = event.data.provider
         if (typeof model === 'string' && model !== '') nextModel = model
+        if (typeof provider === 'string' && provider !== '') nextProvider = provider
       }
       let usage = null
       let turn = 0
@@ -1263,23 +1275,27 @@ export const makeCostProjection = (configOrGetter) => {
       } else if (event.type === 'assistant/message' && event.data.usage !== undefined) {
         ({ turn, step, usage } = event.data)
       }
+      const changedModel = nextModel !== state.currentModel || nextProvider !== state.currentProvider
       if (usage === null) {
-        return nextModel === state.currentModel ? state : { ...state, currentModel: nextModel }
+        return changedModel ? { ...state, currentModel: nextModel, currentProvider: nextProvider } : state
       }
       const model = nextModel ?? 'unknown'
+      const provider = nextProvider ?? ''
       const buckets = bucketsOf(usage)
       const t = eventTime(event)
       const key = `${turn}:${step}`
       const previous = state.samples?.[key]
-      if (previous && previous.model === model && bucketsEqual(previous.buckets, buckets) && previous.t === t) {
-        return nextModel === state.currentModel ? state : { ...state, currentModel: nextModel }
+      if (previous && previous.model === model && previous.provider === provider && bucketsEqual(previous.buckets, buckets) && previous.t === t) {
+        return changedModel ? { ...state, currentModel: nextModel, currentProvider: nextProvider } : state
       }
-      const isNewModel = !(state.modelOrder ?? []).includes(model)
+      const modelKey = provider ? `${provider}/${model}` : model
+      const isNewModel = !(state.modelOrder ?? []).includes(modelKey)
       return {
         currentModel: nextModel,
-        last: { turn, step, model },
-        samples: { ...(state.samples ?? {}), [key]: { t, model, buckets } },
-        modelOrder: isNewModel ? [...(state.modelOrder ?? []), model] : state.modelOrder,
+        currentProvider: nextProvider,
+        last: { turn, step, model, ...(provider ? { provider } : {}) },
+        samples: { ...(state.samples ?? {}), [key]: { t, model, ...(provider ? { provider } : {}), buckets } },
+        modelOrder: isNewModel ? [...(state.modelOrder ?? []), modelKey] : state.modelOrder,
       }
     },
     view,
