@@ -15,12 +15,38 @@ DeepSeek Harness（`dsh web`）额度插件：在输入框下方显示账户额�
 - **本会话估算消耗**  
   按模型单价估算（单价可在设置里改）。DeepSeek V4 自 2026-08-17 起按北京时间自动套用峰谷价。
 - **实时生成吞吐 TPS**
-  直接消费 DSH 会话事件，在流式输出时估算并显示 `TPS n tok/s`；收到 provider 精确 usage 后自动替换估算值。可在「设置 → 展示 → 实时 TPS」关闭，不需要额外安装 `@linxin666/dsh-live-stats`。
+  直接消费 DSH 会话事件，在流式输出时估算并显示 `TPS n tok/s`；收到 provider 精确 usage 后自动替换估算值。可在「设置 → 展示 → 实时 TPS」关闭。
 - **累计消耗胶囊**  
   右下角可拖动气泡，查看今天 / 昨天 / 本周 / 本月 / 自定义时间范围内的跨会话估算总额（按当前计价货币与单价现算）。
 - **设置卡片**  
   展示、额度查询、模型单价、YAML 导出各一张卡；阈值与查询频率已收进每个供应商的额度配置。每张卡独立「放弃修改 / 保存」，改过的字段可「恢复默认」。关掉再打开，未保存的草稿还在。
   顶部「启用额度功能」总开关关闭后会隐藏额度、TPS、峰谷徽章、悬停详情与累计消耗，停止额度轮询，并锁定展示和额度查询；模型单价和 YAML 导出仍可用。
+
+## 快速使用
+
+```sh
+dsh plugin --profile web add dsh-credits
+```
+
+装完后**重启 `dsh web`**。本地开发可改为：
+
+```sh
+dsh plugin --profile web add <本目录绝对路径>
+```
+
+升级：
+
+```sh
+dsh plugin --profile web remove dsh-credits
+pnpm store prune
+dsh plugin --profile web add dsh-credits@latest
+```
+
+卸载：
+
+```sh
+dsh plugin --profile web remove dsh-credits
+```
 
 ## 界面预览
 
@@ -127,42 +153,6 @@ OpenCode Go 模式下，卡片改成三个窗口的用量百分比与重置时�
 | 未配置或单独关闭的供应商 | 不显示额度；本会话消耗与 TPS 仍可正常显示 |
 
 OpenCode Go 密钥解析顺序：`opencodeApiKey` → `OPENCODE_GO_API_KEY`（credentials / 环境变量）→ `~/.local/share/opencode/auth.json`。
-
-## 安装
-
-```sh
-dsh plugin --profile web add dsh-credits
-```
-
-装完后**重启 `dsh web`**。本地开发可改为：
-
-```sh
-dsh plugin --profile web add <本目录绝对路径>
-```
-
-升级：
-
-```sh
-dsh plugin --profile web remove dsh-credits
-pnpm store prune
-dsh plugin --profile web add dsh-credits@latest
-```
-
-卸载：
-
-```sh
-dsh plugin --profile web remove dsh-credits
-```
-
-## 从 dsh-balance 迁移
-
-`dsh-credits` 已覆盖旧插件的全部能力（官方余额、本会话估算、设置面板），并加上 Go 订阅用量、累计胶囊、跟随当前模型。装上本包并确认底部只有一条额度读数后：
-
-```sh
-dsh plugin --profile web remove dsh-balance
-```
-
-然后删掉 profile 里的本地目录（常见是 `$DSH_HOME/profiles/web/dsh-balance-local`）以及 `cordis.patch.yml` 里给 `dsh-balance` 写的 `disabled: true`。源码仓库（例如 `dsh-balance`）也可以删，不再被引用。
 
 ## 配置
 
