@@ -3529,6 +3529,8 @@ window.__ModuleLoader__.load({
 				return { right: 20, bottom: 20 };
 			});
 			const drag = react.useRef(null);
+			const capRef = react.useRef(null);
+			const [panelPos, setPanelPos] = react.useState(null);
 			const payload = snap.status === "ok" ? snap.payload : null;
 			const amount = formatMoney(payload?.cost ?? 0, payload?.currency ?? "CNY");
 			const chips = [
@@ -3565,6 +3567,19 @@ window.__ModuleLoader__.load({
 				document.addEventListener("mouseup", up);
 			};
 			const rangeLabel = (chips.find(([id]) => id === snap.range) || chips[0])[1];
+			react.useEffect(() => {
+				if (!open || !capRef.current) return;
+				const panel = capRef.current.querySelector(".dshqb_cap_panel");
+				if (!panel) return;
+				const vw = document.documentElement.clientWidth;
+				const vh = document.documentElement.clientHeight;
+				const margin = 8;
+				const pw = panel.offsetWidth || 320;
+				const ph = panel.offsetHeight || 300;
+				const right = Math.max(margin, Math.min(pos.right, vw - pw - margin));
+				const bottom = Math.max(margin, Math.min(pos.bottom, vh - ph - margin));
+				setPanelPos({ right, bottom });
+			}, [open, pos, snap.range, payload]);
 			const body = open
 				? react.createElement("div", { className: "dshqb_cap_panel", key: "panel" }, [
 					react.createElement("div", { className: "dshqb_cap_head", key: "head" }, [
@@ -3641,8 +3656,12 @@ window.__ModuleLoader__.load({
 					onClick: () => { if (!lastMoved.current) setOpen(true); }
 				}, t("spend.pill", { range: rangeLabel, amount }));
 			return react.createElement("div", {
+				ref: capRef,
 				className: "dshqb_cap",
-				style: { right: pos.right + "px", bottom: pos.bottom + "px" },
+				style: {
+					right: (open && panelPos ? panelPos.right : pos.right) + "px",
+					bottom: (open && panelPos ? panelPos.bottom : pos.bottom) + "px"
+				},
 				onMouseDown: onDragStart,
 				key: "cap"
 			}, body);
