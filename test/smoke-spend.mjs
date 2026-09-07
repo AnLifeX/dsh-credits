@@ -5,6 +5,19 @@
 import assert from 'node:assert/strict'
 import { applySpendEvent, aggregateSpend, foldSpendEvents, initSpendFold, resolveSpendRange } from '../src/spend.js'
 
+let nextSeq = 1
+const settlement = ({ type = 'assistant/message', time, turn = 0, step = 0, usage }) => ({
+  type,
+  seq: nextSeq++,
+  time,
+  data: {
+    turn,
+    step,
+    stream: [{ type: 'chunk', time, chunk: { type: 'usage', usage } }],
+    ...(type === 'assistant/message' ? { message: {}, usage } : {}),
+  },
+})
+
 const cfg = {
   currency: 'CNY',
   prices: { 'deepseek-chat': { cacheHit: 0.2, cacheMiss: 2, output: 8 } },
@@ -46,22 +59,22 @@ state = applySpendEvent(state, {
   time: monday,
   data: { header: { config: { model: 'deepseek-chat' } } },
 })
-state = applySpendEvent(state, {
-  type: 'assistant/chunk',
+state = applySpendEvent(state, settlement({
+  type: 'assistant/attempt',
   time: monday,
-  data: { turn: 0, step: 0, chunk: { type: 'usage', usage: { inputTokens: 100, outputTokens: 50, cacheReadTokens: 0, cacheWriteTokens: 0 } } },
-})
-state = applySpendEvent(state, {
-  type: 'assistant/message',
+  usage: { inputTokens: 100, outputTokens: 50, cacheReadTokens: 0, cacheWriteTokens: 0 },
+}))
+state = applySpendEvent(state, { type: 'llm/retry-started', data: { turn: 0, step: 0 } })
+state = applySpendEvent(state, settlement({
   time: monday + 1000,
-  data: { turn: 0, step: 0, usage: { inputTokens: 100, outputTokens: 60, cacheReadTokens: 0, cacheWriteTokens: 0 } },
-})
+  usage: { inputTokens: 100, outputTokens: 60, cacheReadTokens: 0, cacheWriteTokens: 0 },
+}))
 const samples = Object.values(state.samples)
-assert.equal(samples.length, 1)
-assert.equal(samples[0].buckets.outputTokens, 60, 'same turn/step must replace chunk sample')
+assert.equal(samples.length, 2, 'failed and retried settlements must both count')
+assert.equal(samples.reduce((sum, sample) => sum + sample.buckets.outputTokens, 0), 110)
 
 const tagged = foldSpendEvents([
-  { type: 'assistant/message', time: monday, data: { turn: 0, step: 0, usage: { inputTokens: 1e6, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 } } },
+  settlement({ time: monday, usage: { inputTokens: 1e6, outputTokens: 0, cacheReadTokens: 0, cacheWriteTokens: 0 } }),
 ]).map((s) => ({ ...s, sessionId: 's1' }))
 
 const agg = aggregateSpend(tagged, cfg, today.from, today.to)

@@ -7,12 +7,11 @@
  *    DeepSeek 密钥优先取 `apiKey`, 否则经 credentials 解析 `apiKeyRef`; OpenCode Go
  *    密钥优先取 `opencodeApiKey`, 再经 credentials/环境变量解析 `opencodeApiKeyRef`,
  *    最后回退读取 OpenCode CLI 的 `~/.local/share/opencode/auth.json`。
- * 2. 会话投影: 注册 `queryCreditsCost` 花费单元与 `liveTokenUsage` TPS 单元；前者
- *    在已提交的会话事件上按模型折叠 token 用量并计价，后者从流式输出事件估算
- *    生成吞吐，收到 provider usage 后替换为精确输出 token。
+ * 2. 会话投影: 注册 `queryCreditsCost` 花费单元与 `liveTokenUsage` TPS 单元；二者
+ *    从 Session v2 的 assistant settlement 及其压缩流读取精确用量和生成吞吐。
  *
- * 投影折叠规则与 dsh-token-meter 的 tokenUsage 一致(同 (turn,step) 的样本替换
- * 而非重复计数); 模型取自 `request/header` / `request/context`(last-wins)。
+ * 投影折叠规则与 dsh-token-meter 的 tokenUsage 一致：同一次尝试的 settlement
+ * 替换，`llm/retry-started` 后的新尝试累加；模型取 request 事件(last-wins)。
  */
 import Schema from '@deepseek-ai/schemastery'
 import { z } from 'zod'
@@ -20,7 +19,7 @@ import { homedir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
 import { resolveModelPrice, priceBuckets, officialV4ConfigPrices, normalizePricingCurrency } from './pricing.js'
-import { applySpendEvent, aggregateSpend, initSpendFold, resolveSpendRange } from './spend.js'
+import { applySpendEvent, aggregateSpend, initSpendFold, resolveSpendRange, usageOfSettlement } from './spend.js'
 
 export { resolveModelPrice } from './pricing.js'
 export const name = 'dsh-credits'
@@ -619,7 +618,7 @@ export const Config = Schema.object({
   showCapsule: Schema.boolean().default(true),
   /** 悬停额度/花费详情气泡 */
   showPopover: Schema.boolean().default(true),
-  /** 底部统计条是否展示实时生成吞吐 TPS */
+  /** 底部统计条是否展示最近一次生成吞吐 TPS */
   showTps: Schema.boolean().default(true),
   /** 旧版兼容字段；仅在没有 providerQuotas 的旧配置中作为默认源。 */
   provider: Schema.string().default('deepseek'),
@@ -1188,6 +1187,7 @@ export const makeCostProjection = (configOrGetter) => {
     last: z.object({
       turn: z.number().int().nonnegative(),
       step: z.number().int().nonnegative(),
+      key: z.string(),
       model: z.string(),
       provider: z.string().nullable().optional(),
     }).strict().nullable(),
@@ -1250,7 +1250,6 @@ export const makeCostProjection = (configOrGetter) => {
   return {
     key: 'queryCreditsCost',
     stateSchema,
-    schema: viewSchema,
     init: () => ({ currentModel: null, currentProvider: null, last: null, samples: {}, modelOrder: [] }),
     apply: (state, event) => {
       let nextModel = state.currentModel
@@ -1266,24 +1265,22 @@ export const makeCostProjection = (configOrGetter) => {
         if (typeof model === 'string' && model !== '') nextModel = model
         if (typeof provider === 'string' && provider !== '') nextProvider = provider
       }
-      let usage = null
-      let turn = 0
-      let step = 0
-      if (event.type === 'assistant/chunk' && event.data.chunk.type === 'usage') {
-        ({ turn, step } = event.data)
-        usage = event.data.chunk.usage
-      } else if (event.type === 'assistant/message' && event.data.usage !== undefined) {
-        ({ turn, step, usage } = event.data)
+      if (event.type === 'llm/retry-started' && state.last?.turn === event.data?.turn && state.last.step === event.data?.step) {
+        return { ...state, currentModel: nextModel, currentProvider: nextProvider, last: null }
       }
       const changedModel = nextModel !== state.currentModel || nextProvider !== state.currentProvider
-      if (usage === null) {
+      const usage = usageOfSettlement(event)
+      if (usage === undefined) {
         return changedModel ? { ...state, currentModel: nextModel, currentProvider: nextProvider } : state
       }
+      const { turn, step } = event.data
       const model = nextModel ?? 'unknown'
       const provider = nextProvider ?? ''
       const buckets = bucketsOf(usage)
       const t = eventTime(event)
-      const key = `${turn}:${step}`
+      const key = state.last?.turn === turn && state.last.step === step
+        ? state.last.key
+        : String(event.seq)
       const previous = state.samples?.[key]
       if (previous && previous.model === model && previous.provider === provider && bucketsEqual(previous.buckets, buckets) && previous.t === t) {
         return changedModel ? { ...state, currentModel: nextModel, currentProvider: nextProvider } : state
@@ -1293,200 +1290,61 @@ export const makeCostProjection = (configOrGetter) => {
       return {
         currentModel: nextModel,
         currentProvider: nextProvider,
-        last: { turn, step, model, ...(provider ? { provider } : {}) },
+        last: { turn, step, key, model, ...(provider ? { provider } : {}) },
         samples: { ...(state.samples ?? {}), [key]: { t, model, ...(provider ? { provider } : {}), buckets } },
         modelOrder: isNewModel ? [...(state.modelOrder ?? []), modelKey] : state.modelOrder,
       }
     },
-    view,
-    stateVersion: 3,
+    stateVersion: 4,
     wire: { viewSchema, view },
   }
 }
 
-/**
- * 会话实时输出吞吐投影。
- *
- * 仅消费 DSH 会话事件，不访问网络：流式 chunk 阶段按字符数估算输出 token，
- * 收到 provider usage 后替换为精确 outputTokens；步骤结束时用首个/最后一个
- * 输出事件的墙钟时间计算 tokensPerSecond，并把最近一次速率常驻到视图中。
- */
-export const makeTpsProjection = () => {
-  const charsPerToken = 4
-  const roleOverhead = 4
-  const eventTime = (event) => {
-    const t = Number(event?.time)
-    return Number.isFinite(t) && t > 0 ? t : Date.now()
-  }
-  const emptyActive = (turn = 0, step = 0) => ({
-    turn,
-    step,
-    blocks: {},
-    outputTokens: 0,
-    firstOutputTime: null,
-    latestOutputTime: null,
-    exact: false,
-  })
-  const blockTokens = (block) => {
-    if (!block) return 0
-    if (block.kind === 'fixed') return Math.max(0, Number(block.tokens) || 0)
-    if (block.kind === 'tool-call') {
-      return Math.ceil((Math.max(0, Number(block.nameCharacters) || 0) + Math.max(0, Number(block.argumentCharacters) || 0)) / charsPerToken)
-    }
-    return Math.ceil(Math.max(0, Number(block.characters) || 0) / charsPerToken)
-  }
-  const outputFromBlocks = (blocks) => {
-    const entries = Object.values(blocks ?? {})
-    if (entries.length === 0) return 0
-    return entries.reduce((sum, block) => sum + blockTokens(block), 0) + roleOverhead
-  }
-  const rateOf = (active) => {
-    if (!active || active.firstOutputTime === null || active.latestOutputTime === null) return undefined
-    const elapsed = active.latestOutputTime - active.firstOutputTime
-    if (elapsed <= 0 || active.outputTokens <= 0) return undefined
-    return active.outputTokens * 1000 / elapsed
-  }
-  const withOutputTime = (active, outputTokens, time) => {
-    if (outputTokens <= 0) return { ...active, outputTokens }
-    return {
-      ...active,
-      outputTokens,
-      firstOutputTime: active.firstOutputTime ?? time,
-      latestOutputTime: time,
+/** Session v2 压缩流中首个真实输出 token 的时间。 */
+const firstTokenTime = (stream) => {
+  for (const record of Array.isArray(stream) ? stream : []) {
+    if (record?.type === 'text-chunks' || record?.type === 'reasoning-chunks') {
+      let time = Number(record.time0)
+      for (let index = 0; index < (record.texts?.length ?? 0); index += 1) {
+        if (index > 0) time += Number(record.dt?.[index - 1])
+        if (record.texts[index] !== '') return time
+      }
+    } else if (record?.type === 'tool-call-chunks') {
+      if (record.name !== undefined) return record.time0
+      let time = Number(record.time0)
+      for (let index = 0; index < (record.args?.length ?? 0); index += 1) {
+        if (index > 0) time += Number(record.dt?.[index - 1])
+        if (record.args[index] !== '') return time
+      }
+    } else if (record?.type === 'chunk') {
+      const chunk = record.chunk
+      if ((chunk?.type === 'text-delta' || chunk?.type === 'reasoning-delta') && chunk.text !== '') return record.time
+      if (chunk?.type === 'tool-call-delta' && (chunk.name !== undefined || chunk.argumentsDelta !== '')) return record.time
     }
   }
-  const ensureActive = (state, turn, step) => {
-    if (state.active && state.active.turn === turn && state.active.step === step) return state.active
-    return emptyActive(turn, step)
-  }
+  return undefined
+}
 
-  const viewSchema = z.object({
-    tokensPerSecond: z.number().nonnegative().optional(),
-  }).strict()
-  const stateSchema = z.object({
-    active: z.object({
-      turn: z.number().int().nonnegative(),
-      step: z.number().int().nonnegative(),
-      blocks: z.record(z.string(), z.union([
-        z.object({ kind: z.literal('text'), characters: z.number().int().nonnegative() }).strict(),
-        z.object({ kind: z.literal('reasoning'), characters: z.number().int().nonnegative() }).strict(),
-        z.object({ kind: z.literal('tool-call'), nameCharacters: z.number().int().nonnegative(), argumentCharacters: z.number().int().nonnegative() }).strict(),
-        z.object({ kind: z.literal('fixed'), tokens: z.number().int().nonnegative() }).strict(),
-      ])),
-      outputTokens: z.number().int().nonnegative(),
-      firstOutputTime: z.number().nullable(),
-      latestOutputTime: z.number().nullable(),
-      exact: z.boolean(),
-    }).strict().nullable(),
-    last: z.object({ tokensPerSecond: z.number().nonnegative() }).strict().nullable(),
-  }).strict()
-  const view = (state) => {
-      const rate = rateOf(state.active) ?? state.last?.tokensPerSecond
-      return Number.isFinite(rate) ? { tokensPerSecond: rate } : {}
-    }
+/** 会话最近一次 assistant settlement 的精确输出吞吐。 */
+export const makeTpsProjection = () => {
+  const viewSchema = z.object({ tokensPerSecond: z.number().nonnegative().optional() }).strict()
+  const stateSchema = z.object({ tokensPerSecond: z.number().nonnegative().optional() }).strict()
+  const view = (state) => state
 
   return {
     key: 'liveTokenUsage',
     stateSchema,
-    schema: viewSchema,
-    init: () => ({ active: null, last: null }),
+    init: () => ({}),
     apply: (state, event) => {
-      if (event.type === 'step/start') {
-        return {
-          ...state,
-          active: emptyActive(Number(event.data?.turn) || 0, Number(event.data?.step) || 0),
-        }
-      }
-
-      if (event.type === 'assistant/chunk') {
-        const turn = Number(event.data?.turn) || 0
-        const step = Number(event.data?.step) || 0
-        const time = eventTime(event)
-        const chunk = event.data?.chunk ?? {}
-        const active = ensureActive(state, turn, step)
-        if (chunk.type === 'usage') {
-          const outputTokens = Math.max(0, Number(chunk.usage?.outputTokens) || 0)
-          return {
-            ...state,
-            active: {
-              ...active,
-              outputTokens,
-              exact: true,
-              ...(outputTokens > 0
-                ? { firstOutputTime: active.firstOutputTime ?? time, latestOutputTime: time }
-                : {}),
-              blocks: {},
-            },
-          }
-        }
-        if (active.exact) return state.active === active ? state : { ...state, active }
-
-        const index = String(chunk.index ?? 0)
-        const previous = active.blocks[index]
-        let nextBlock = null
-        if (chunk.type === 'text-delta' || chunk.type === 'reasoning-delta') {
-          const text = typeof chunk.text === 'string' ? chunk.text : ''
-          if (text === '') return state.active === active ? state : { ...state, active }
-          nextBlock = {
-            kind: chunk.type === 'reasoning-delta' ? 'reasoning' : 'text',
-            characters: (previous?.kind === (chunk.type === 'reasoning-delta' ? 'reasoning' : 'text') ? previous.characters : 0) + text.length,
-          }
-        } else if (chunk.type === 'tool-call-delta') {
-          const argumentDelta = typeof chunk.argumentsDelta === 'string' ? chunk.argumentsDelta : ''
-          if (chunk.name === undefined && argumentDelta === '') return state.active === active ? state : { ...state, active }
-          nextBlock = {
-            kind: 'tool-call',
-            nameCharacters: typeof chunk.name === 'string' ? chunk.name.length : (previous?.nameCharacters ?? 0),
-            argumentCharacters: (previous?.argumentCharacters ?? 0) + argumentDelta.length,
-          }
-        } else if (chunk.type === 'block-end') {
-          let tokens = 0
-          try { tokens = Math.ceil(JSON.stringify(chunk.block ?? null).length / charsPerToken) + roleOverhead } catch { tokens = roleOverhead }
-          nextBlock = { kind: 'fixed', tokens }
-        }
-        if (nextBlock === null) return state.active === active ? state : { ...state, active }
-        const blocks = { ...active.blocks, [index]: nextBlock }
-        const outputTokens = outputFromBlocks(blocks)
-        return { ...state, active: withOutputTime({ ...active, blocks }, outputTokens, time) }
-      }
-
-      if (event.type === 'assistant/message') {
-        const turn = Number(event.data?.turn) || 0
-        const step = Number(event.data?.step) || 0
-        const time = eventTime(event)
-        const active = ensureActive(state, turn, step)
-        if (event.data?.usage !== undefined) {
-          const outputTokens = Math.max(0, Number(event.data.usage?.outputTokens) || 0)
-          return {
-            ...state,
-            active: {
-              ...active,
-              outputTokens,
-              exact: true,
-              ...(outputTokens > 0
-                ? { firstOutputTime: active.firstOutputTime ?? time, latestOutputTime: time }
-                : {}),
-              blocks: {},
-            },
-          }
-        }
-        return active.outputTokens > 0
-          ? { ...state, active: { ...active, latestOutputTime: time } }
-          : { ...state, active }
-      }
-
-      if (event.type === 'step/end' && state.active !== null) {
-        const rate = rateOf(state.active)
-        return {
-          active: null,
-          last: Number.isFinite(rate) ? { tokensPerSecond: rate } : state.last,
-        }
-      }
-
-      return state
+      const usage = usageOfSettlement(event)
+      const started = firstTokenTime(event.data?.stream)
+      const completed = Number(event.time)
+      const outputTokens = Number(usage?.outputTokens)
+      const elapsed = completed - started
+      if (!Number.isFinite(outputTokens) || outputTokens <= 0 || !Number.isFinite(elapsed) || elapsed <= 0) return state
+      return { tokensPerSecond: outputTokens * 1000 / elapsed }
     },
-    view,
-    stateVersion: 1,
+    stateVersion: 2,
     wire: { viewSchema, view },
   }
 }
@@ -2753,7 +2611,7 @@ export function apply(ctx, config) {
   // 可选 sessionProjections: 会话花费投影 (使用动态 getter)
   ctx.inject(['sessionProjections'], (projectionCtx) => {
     let disposers = []
-    let stateVersion = 2
+    let stateVersion = 4
     const mount = () => {
       for (const dispose of disposers) {
         if (typeof dispose === 'function') {
@@ -2761,7 +2619,6 @@ export function apply(ctx, config) {
         }
       }
       disposers = []
-      // 保持 queryCreditsCost 最后注册，兼容宿主按最近注册单元读取的旧实现。
       for (const unit of [makeTpsProjection(), makeCostProjection(getConfig)]) {
         unit.stateVersion = stateVersion
         const ret = projectionCtx.sessionProjections.register(unit)

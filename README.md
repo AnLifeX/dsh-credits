@@ -4,7 +4,7 @@
 
 DeepSeek Harness（`dsh web`）额度插件：在输入框下方显示账户额度与本会话估算消耗；右下角另有可拖动的累计消耗胶囊。设置在侧栏「额度」（最后一项，货币硬币图标），分成多张可折叠卡片。
 
-> 兼容性：`dsh-credits 0.3.1` 已适配最新的 `dsh 0.1.2-alpha.4`。
+> 兼容性：当前版本适配 `dsh 0.1.3-alpha.2` 的 Session v2，不再兼容旧版会话事件。
 
 - **账户额度 + 状态灯**  
   DeepSeek 模式如 `🟢 余额 ¥97.69`；OpenCode Go 模式如 `🟢 Go 额度 月 6% · 周 12% · 5h 9%`。点击圆点可立即强刷。
@@ -14,8 +14,8 @@ DeepSeek Harness（`dsh web`）额度插件：在输入框下方显示账户额�
   默认独立换行，额度单独占底下一行；也可改成跟底部已有统计共用一行、排在最后。底部条、累计胶囊、悬停卡片都可以关掉。
 - **本会话估算消耗**  
   按模型单价估算（单价可在设置里改）。DeepSeek V4 自 2026-08-17 起按北京时间自动套用峰谷价。
-- **实时生成吞吐 TPS**
-  直接消费 DSH 会话事件，在流式输出时估算并显示 `TPS n tok/s`；收到 provider 精确 usage 后自动替换估算值。可在「设置 → 展示 → 实时 TPS」关闭。
+- **生成吞吐 TPS**
+  从 DSH Session v2 settlement 的压缩流和 provider usage 计算精确 `TPS n tok/s`。可在「设置 → 展示 → 生成 TPS」关闭。
 - **累计消耗胶囊**  
   右下角可拖动气泡，查看今天 / 昨天 / 本周 / 本月 / 自定义时间范围内的跨会话估算总额（按当前计价货币与单价现算）。
 - **设置卡片**  
@@ -169,7 +169,7 @@ OpenCode Go 密钥解析顺序：`opencodeApiKey` → `OPENCODE_GO_API_KEY`（cr
 | `dockLayout` | `own` | `own` 独立换行；`shared` 与底部已有统计共用一行 |
 | `showCapsule` | `true` | 右下角累计消耗胶囊 |
 | `showPopover` | `true` | 悬停底部读数时的双栏详情 |
-| `showTps` | `true` | 是否显示实时 TPS |
+| `showTps` | `true` | 是否显示最近一次生成 TPS |
 | `enabled` | `true` | 额度功能总开关；关闭后隐藏相关 UI、停止轮询，并锁定展示和额度查询；不影响模型单价和 YAML 导出 |
 
 ### 多个 OpenCode Go 账号
@@ -362,11 +362,21 @@ OpenCode Go 密钥解析顺序：`opencodeApiKey` → `OPENCODE_GO_API_KEY`（cr
 | `POST /query-credits/config` | 保存配置并立即生效 |
 | `POST /query-credits/test-connection` | 使用当前供应商草稿测试模板或自定义 HTTP，并返回可选字段或脱敏后的错误诊断 |
 
-本会话花费由 `queryCreditsCost` 投影折叠 token（每笔带事件时间），按该笔发生时的北京时间峰谷价计价；前端切货币时仍按各自行情重算，不会用“此刻”的单价覆盖早上的高峰用量。实时 TPS 由同一组会话事件生成 `liveTokenUsage` 投影：流式 chunk 阶段按字符估算，provider usage 到达后替换为精确输出 token，步骤结束后保留最近一次速率。累计消耗同样按事件时间计价，并落盘到 `$DSH_HOME/storages/dsh-credits-spend.json`。胶囊位置和所选时间范围记在浏览器 `localStorage`。
+本会话花费由 `queryCreditsCost` 投影折叠 Session v2 的 `assistant/message` / `assistant/attempt` settlement（每笔带事件时间），重试产生的实际用量也会计入，并按该笔发生时的北京时间峰谷价计价；前端切货币时仍按各自行情重算，不会用“此刻”的单价覆盖早上的高峰用量。TPS 由 `liveTokenUsage` 从 settlement 内的压缩流时间戳和 provider 精确 usage 计算，并保留最近一次速率。累计消耗同样计入失败与重试尝试、按事件时间计价，并落盘到 `$DSH_HOME/storages/dsh-credits-spend.json`。胶囊位置和所选时间范围记在浏览器 `localStorage`。
 
 密钥走 Harness `credentials`，默认不写进配置文件。
 
 ## 更新记录
+
+### 0.4.0
+
+迁移到 `dsh 0.1.3-alpha.2` 的 Session v2；本版本不再兼容旧版会话事件。
+
+- 本会话与累计消耗从 `assistant/message` / `assistant/attempt` settlement 读取精确 usage
+- 失败尝试和重试产生的实际 token 均计入费用，重试后不再覆盖上一笔消耗
+- TPS 改用 settlement 压缩流的真实时间戳与 provider usage 计算，并明确展示最近一次已结算速度
+- 删除旧 `assistant/chunk`、旧投影 `schema` / `view` 字段和已移除的 `dsh-client-runtime` 注入
+- `dsh-credentials` peer dependency 更新到 `0.1.3-alpha.2`
 
 ### 0.3.1
 
@@ -433,7 +443,7 @@ OpenCode Go 密钥解析顺序：`opencodeApiKey` → `OPENCODE_GO_API_KEY`（cr
 
 ## 发布到 npm
 
-**普通 `git push` 不会发包。** 只有推送符合 `v*` 的 tag（例如 `v0.3.1`）才会触发 `.github/workflows/publish.yml`。
+**普通 `git push` 不会发包。** 只有推送符合 `v*` 的 tag（例如 `v0.4.0`）才会触发 `.github/workflows/publish.yml`。
 
 第一次发布前：
 
@@ -444,8 +454,8 @@ OpenCode Go 密钥解析顺序：`opencodeApiKey` → `OPENCODE_GO_API_KEY`（cr
 5. `package.json` 的 `version` 与即将打的 tag 一致后：
 
 ```sh
-git tag v0.3.1
-git push origin v0.3.1
+git tag v0.4.0
+git push origin v0.4.0
 ```
 
 之后 Actions 会执行 `npm publish --provenance --access public`。发布成功即可：

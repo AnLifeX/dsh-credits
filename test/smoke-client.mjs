@@ -387,7 +387,7 @@ const settingsT = (key, params) => {
     'settings.showCapsuleHint': 'capsule hint',
     'settings.showPopover': '悬停详情气泡',
     'settings.showPopoverHint': 'popover hint',
-    'settings.showTps': '实时 TPS',
+    'settings.showTps': '生成 TPS',
     'settings.showTpsHint': 'tps hint',
     'settings.quotaMode': '额度查询模式',
     'settings.quotaMode.follow': '跟随当前模型供应商',
@@ -536,7 +536,7 @@ function loadClientFactory() {
   const htmlDraft = renderToStaticMarkup(ReactMock.createElement(draftSettings.comp, { t: settingsT }))
   if (!htmlDraft.includes('未保存')) throw new Error('dirty draft should show unsaved badge')
 if (!htmlDraft.includes('放弃修改')) throw new Error('dirty draft should show discard')
-  if (!htmlDraft.includes('实时 TPS')) throw new Error('TPS display toggle missing from open display settings card')
+  if (!htmlDraft.includes('生成 TPS')) throw new Error('TPS display toggle missing from open display settings card')
   if (!htmlDraft.includes('已覆盖')) throw new Error('overridden field should show badge')
   if (!htmlDraft.includes('恢复默认')) throw new Error('overridden field should show restore default')
   if (!htmlDraft.includes('dshqb_layout_choice dshqb_layout_choice_selected')) throw new Error('dirty draft should restore the selected dock layout card')

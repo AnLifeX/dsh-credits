@@ -26,6 +26,18 @@ const bucketsEqual = (a, b) =>
   a.cacheWriteTokens === b.cacheWriteTokens &&
   a.outputTokens === b.outputTokens
 
+/** DSH Session v2 的一次 assistant settlement 所报告的最终 usage。 */
+export const usageOfSettlement = (event) => {
+  if (event.type === 'assistant/message' && event.data?.usage !== undefined) return event.data.usage
+  if (event.type !== 'assistant/message' && event.type !== 'assistant/attempt') return undefined
+  const stream = Array.isArray(event.data?.stream) ? event.data.stream : []
+  for (let index = stream.length - 1; index >= 0; index -= 1) {
+    const record = stream[index]
+    if (record?.type === 'chunk' && record.chunk?.type === 'usage') return record.chunk.usage
+  }
+  return undefined
+}
+
 export const RANGE_PRESETS = ['today', 'yesterday', 'week', 'month']
 
 const startOfDay = (ms) => {
@@ -106,25 +118,23 @@ export const applySpendEvent = (state, event) => {
     if (typeof provider === 'string' && provider !== '') nextProvider = provider
   }
 
-  let usage = null
-  let turn = 0
-  let step = 0
-  if (event.type === 'assistant/chunk' && event.data?.chunk?.type === 'usage') {
-    ({ turn, step } = event.data)
-    usage = event.data.chunk.usage
-  } else if (event.type === 'assistant/message' && event.data?.usage !== undefined) {
-    ({ turn, step, usage } = event.data)
+  if (event.type === 'llm/retry-started' && state.last?.turn === event.data?.turn && state.last.step === event.data?.step) {
+    return { ...state, currentModel: nextModel, currentProvider: nextProvider, last: null }
   }
 
   const changedModel = nextModel !== state.currentModel || nextProvider !== state.currentProvider
-  if (usage === null) {
+  const usage = usageOfSettlement(event)
+  if (usage === undefined) {
     return changedModel ? { ...state, currentModel: nextModel, currentProvider: nextProvider } : state
   }
 
+  const { turn, step } = event.data
   const model = nextModel ?? 'unknown'
   const provider = nextProvider ?? ''
   const buckets = bucketsOf(usage)
-  const key = `${turn}:${step}`
+  const key = state.last?.turn === turn && state.last.step === step
+    ? state.last.key
+    : String(event.seq)
   const previous = state.samples[key]
   if (previous && previous.model === model && previous.provider === provider && bucketsEqual(previous.buckets, buckets) && previous.t === (event.time ?? previous.t)) {
     return changedModel ? { ...state, currentModel: nextModel, currentProvider: nextProvider } : state
@@ -133,7 +143,7 @@ export const applySpendEvent = (state, event) => {
   return {
     currentModel: nextModel,
     currentProvider: nextProvider,
-    last: { turn, step, model, provider },
+    last: { turn, step, key, model, provider },
     samples: {
       ...state.samples,
       [key]: { t: Number(event.time) || 0, model, provider, buckets },
