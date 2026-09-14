@@ -13,7 +13,7 @@ DeepSeek Harness（`dsh web`）额度插件：在输入框下方显示账户额�
 - **底部条布局**  
   默认独立换行，额度单独占底下一行；也可改成跟底部已有统计共用一行、排在最后。底部条、累计胶囊、悬停卡片都可以关掉。
 - **本会话估算消耗**  
-  按模型单价估算（单价可在设置里改）。DeepSeek V4 自 2026-08-17 起按北京时间自动套用峰谷价。
+  按模型单价估算（单价可在设置里改）。DeepSeek 按北京时间自动套用峰谷价：V4 自 2026-08-17 00:00 起；`deepseek-flash` / `deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` 自 2026-09-10 12:00 起切换为 V4.1 Flash 新价。
 - **生成吞吐 TPS**
   从 DSH Session v2 settlement 的压缩流和 provider usage 计算精确 `TPS n tok/s`。可在「设置 → 展示 → 生成 TPS」关闭。
 - **累计消耗胶囊**  
@@ -219,12 +219,12 @@ OpenCode Go 密钥解析顺序：`opencodeApiKey` → `OPENCODE_GO_API_KEY`（cr
         refreshIntervalMs: 300000
     currency: CNY
     prices:
-      deepseek-v4-flash:
-        cacheHit: 0.1
-        cacheMiss: 3
-        output: 9
-        peak: { cacheHit: 0.1, cacheMiss: 3, output: 9 }
-        offPeak: { cacheHit: 0.05, cacheMiss: 1.5, output: 4.5 }
+      deepseek-flash:
+        cacheHit: 0.04
+        cacheMiss: 2
+        output: 8
+        peak: { cacheHit: 0.04, cacheMiss: 2, output: 8 }
+        offPeak: { cacheHit: 0.02, cacheMiss: 1, output: 4 }
       deepseek-v4-pro:
         cacheHit: 0.3
         cacheMiss: 9
@@ -251,12 +251,12 @@ OpenCode Go 密钥解析顺序：`opencodeApiKey` → `OPENCODE_GO_API_KEY`（cr
         refreshIntervalMs: 300000
     currency: USD
     prices:
-      deepseek-v4-flash:
-        cacheHit: 0.014
-        cacheMiss: 0.42
-        output: 1.26
-        peak: { cacheHit: 0.014, cacheMiss: 0.42, output: 1.26 }
-        offPeak: { cacheHit: 0.007, cacheMiss: 0.21, output: 0.63 }
+      deepseek-flash:
+        cacheHit: 0.006
+        cacheMiss: 0.3
+        output: 1.2
+        peak: { cacheHit: 0.006, cacheMiss: 0.3, output: 1.2 }
+        offPeak: { cacheHit: 0.003, cacheMiss: 0.15, output: 0.6 }
       deepseek-v4-pro:
         cacheHit: 0.042
         cacheMiss: 1.26
@@ -265,7 +265,7 @@ OpenCode Go 密钥解析顺序：`opencodeApiKey` → `OPENCODE_GO_API_KEY`（cr
         offPeak: { cacheHit: 0.021, cacheMiss: 0.63, output: 1.89 }
 ```
 
-`prices` 是「当前 `currency` 下每 1M token」的单价。V4 可写 `peak` / `offPeak`（高峰 / 低谷）。内置 `deepseek-v4-flash` / `deepseek-v4-pro` / `deepseek-v4-flash-vision-exp` 如果只有三个刊例字段，插件仍按官方峰谷表计价（兼容旧配置）。自行添加的模型只写三字段则全天按该价计，等效峰谷倍率 1。高峰为北京时间周一至周五 09:00–12:00、14:00–18:00，其余时段（含周末全天）为低谷。DeepSeek 账户的 CNY / USD 是两套独立钱包：底部会列出选定货币，以及其它仍有余额的钱包；悬停卡片列出全部钱包。计价货币只影响本会话/累计估算和状态灯，不会把其它钱包藏掉。计价仅支持官方提供的 CNY / USD 两套价格，不做汇率换算；旧版 EUR 实际复用了 USD 数值，升级后会按 USD 显示。V4 在 2026-08-17 之后按北京时间走峰谷价，人民币和美元同步切换。
+`prices` 是「当前 `currency` 下每 1M token」的单价。V4 / V4.1 可写 `peak` / `offPeak`（高峰 / 低谷）。内置 `deepseek-flash` / `deepseek-v4-flash` / `deepseek-v4-pro` / `deepseek-v4-flash-vision-exp` 如果只有三个刊例字段，插件仍按内置时间表计价（兼容旧配置）；配置值恰好等于某段历史官方价时也会继续按时间表重算，只有用户手改过的峰谷 / 单价才作为自定义覆盖。自行添加的模型只写三字段则全天按该价计，等效峰谷倍率 1。高峰为北京时间周一至周五 09:00–12:00、14:00–18:00，其余时段（含周末全天）为低谷。DeepSeek 账户的 CNY / USD 是两套独立钱包：底部会列出选定货币，以及其它仍有余额的钱包；悬停卡片列出全部钱包。计价货币只影响本会话/累计估算和状态灯，不会把其它钱包藏掉。计价仅支持官方提供的 CNY / USD 两套价格，不做汇率换算；旧版 EUR 实际复用了 USD 数值，升级后会按 USD 显示。CNY / USD 各自照官方价目列出：V4.1 Flash 低谷 `$0.003 / $0.15 / $0.60`、高峰 `$0.006 / $0.30 / $1.20`；V4 Flash（含 vision-exp）低谷 `$0.007 / $0.22 / $0.66`、高峰 `$0.014 / $0.44 / $1.32`，V4 Pro 低谷 `$0.022 / $0.66 / $1.98`、高峰 `$0.044 / $1.32 / $3.96`。时间线：V4 峰谷自 2026-08-17 00:00 起；V4.1 Flash 自 2026-09-10 12:00 起。历史用量始终按该笔发生的时间点计价。没有精确价表的 DeepSeek 新模型会按名字回退：含 `flash` → 默认 Flash，含 `pro` → 默认 Pro，其它 `deepseek*` → 默认 Flash；本会话消耗卡片会在模型名后显示黄色感叹号并提示回退到了哪个默认价。完全没有可回退定价的模型（例如 `glm`）也会列出，金额显示“无法计算”。
 
 ### 自定义 HTTP（高级 YAML）
 
@@ -362,7 +362,7 @@ OpenCode Go 密钥解析顺序：`opencodeApiKey` → `OPENCODE_GO_API_KEY`（cr
 | `POST /query-credits/config` | 保存配置并立即生效 |
 | `POST /query-credits/test-connection` | 使用当前供应商草稿测试模板或自定义 HTTP，并返回可选字段或脱敏后的错误诊断 |
 
-本会话花费由 `queryCreditsCost` 投影折叠 Session v2 的 `assistant/message` / `assistant/attempt` settlement（每笔带事件时间），重试产生的实际用量也会计入，并按该笔发生时的北京时间峰谷价计价；前端切货币时仍按各自行情重算，不会用“此刻”的单价覆盖早上的高峰用量。TPS 由 `liveTokenUsage` 从 settlement 内的压缩流时间戳和 provider 精确 usage 计算，并保留最近一次速率。累计消耗同样计入失败与重试尝试、按事件时间计价，并落盘到 `$DSH_HOME/storages/dsh-credits-spend.json`。胶囊位置和所选时间范围记在浏览器 `localStorage`。
+本会话花费由 `queryCreditsCost` 投影折叠 Session v2 的 `assistant/message` / `assistant/attempt` settlement（每笔带事件时间），重试产生的实际用量也会计入，并按该笔发生时的北京时间峰谷价计价；前端切货币时仍按各自行情重算，不会用“此刻”的单价覆盖早上的高峰用量。TPS 由 `liveTokenUsage` 计算：从 settlement 压缩流还原“首个输出 token → 最后一个输出 token”的时间窗，配合 provider 精确 usage 得到该步平均输出速度。当前步尚未算出时沿用上一步的数值并置为斜体，本步结算后换成新值并恢复正体。累计消耗同样计入失败与重试尝试、按事件时间计价，并落盘到 `$DSH_HOME/storages/dsh-credits-spend.json`。胶囊位置和所选时间范围记在浏览器 `localStorage`。
 
 密钥走 Harness `credentials`，默认不写进配置文件。
 
@@ -370,12 +370,22 @@ OpenCode Go 密钥解析顺序：`opencodeApiKey` → `OPENCODE_GO_API_KEY`（cr
 
 ### 0.4.0
 
-迁移到 `dsh 0.1.3-alpha.2` 的 Session v2；本版本不再兼容旧版会话事件。
+迁移到 DSH Session v2（`dsh 0.1.3-alpha.2` 起）；不再兼容旧版会话事件。
 
 - 本会话与累计消耗从 `assistant/message` / `assistant/attempt` settlement 读取精确 usage
 - 失败尝试和重试产生的实际 token 均计入费用，重试后不再覆盖上一笔消耗
-- TPS 改用 settlement 压缩流的真实时间戳与 provider usage 计算，并明确展示最近一次已结算速度
-- 删除旧 `assistant/chunk`、旧投影 `schema` / `view` 字段和已移除的 `dsh-client-runtime` 注入
+- TPS 取 settlement 压缩流里“首个输出 token → 最后一个输出 token”的时间窗，配 provider 精确 usage 算出该步平均速度，并保留最近一次数值；当前步尚未算出时显示上一步的数值并置为斜体，本步结算后换新值并恢复正体
+- 新增 `deepseek-flash` 内置定价
+- `deepseek-flash` / `deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` 自 2026-09-10 12:00（北京时间）起按 V4.1 Flash 新表计费：CNY 低谷 `0.02 / 1 / 4`、高峰 `0.04 / 2 / 8`；USD 低谷 `0.003 / 0.15 / 0.60`、高峰 `0.006 / 0.30 / 1.20`
+- CNY / USD 两套价目均照官方页列出，不做汇率换算
+- 设置 → 模型单价新增「检查官方定价」：抓官方定价页与内置表比对，把差异列成候选，勾选后写入草稿；不自动改价，解析失败静默降级
+- 配置里保存的历史官方价仍按内置时间表重算；只有手改过的峰谷 / 单价才作为自定义覆盖
+- 没有精确价表的 DeepSeek 新模型按名字回退到默认定价：含 `flash` → 默认 Flash，含 `pro` → 默认 Pro，其它 `deepseek*` → 默认 Flash；本会话消耗卡片在模型名后标出黄色感叹号并提示所用回退定价
+- 完全没有可回退定价的模型（例如 `glm`）仍会列出，金额显示“无法计算”
+- 临时预览模型 `deepseek-v4.1-flash-expires-on-0910` 不再内置
+- 会话投影状态版本更新，旧缓存自动失效重折
+- 保存设置不再重挂投影
+- 移除旧投影 `schema` / `view` 字段和已移除的 `dsh-client-runtime` 注入
 - `dsh-credentials` peer dependency 更新到 `0.1.3-alpha.2`
 
 ### 0.3.1
@@ -500,3 +510,15 @@ A: 当前不能。一个供应商绑定只发送一个 HTTP 请求，可以在�
 
 **Q: 8 月 17 日峰谷价会自动切吗？**  
 A: 会。北京时间 2026-08-17 00:00 之后，V4 Flash / Pro / Flash Vision Exp 在周一至周五 09:00–12:00、14:00–18:00 按高峰价；工作日其余时段及周末全天按低谷价。
+
+**Q: 9 月 10 日的 V4.1 Flash 新价会自动切吗？**  
+A: 会。北京时间 2026-09-10 12:00 起 `deepseek-flash` / `deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` 按 V4.1 Flash 新价计费。历史样本始终按该笔发生的时间点计价。
+
+**Q: 用了官方还没收录 / 不存在的模型（例如 `deepseek-v5-flash`、`glm`）会怎样？**  
+A: DeepSeek 系新模型按名字回退到默认 Flash / Pro 定价，并在本会话消耗卡片里用黄色感叹号标出回退到了哪个价；完全无法回退的模型（例如 `glm`）仍会列出，金额显示“无法计算”。需要精确金额时可在设置里为对应模型补一条自定义单价。
+
+**Q: TPS 多久刷新一次？数字为什么有时候是斜体？**  
+A: 每一步刷新一次，显示该步的平均输出速度（时间窗取压缩流里“首个输出 token → 最后一个输出 token”，不含收尾等待）。斜体表示“这不是当前这步的最终数值”——当前步还在生成、尚未算出时先显示上一步的数值并置为斜体，本步结算后换成新值并恢复正体。
+
+**Q: 官方调价了怎么办？**  
+A: 设置 → 模型单价里有「检查官方定价」按钮：抓官方定价页与内置表比对，把有差异的项列为候选，勾选后写入草稿，保存前可以再核对。内置表本身会随插件版本更新。
