@@ -241,6 +241,9 @@ const props = {
       'status.danger': '告急',
       'sessionCost': '本会话约 {amount}',
       'tps': 'TPS {rate} tok/s',
+      'tpsEstimatedTitle': '生成中：按流式字符数估算的实时速度，本步结束后会换成官方精确值',
+      'tpsPendingTitle': '当前步骤生成中，显示的是上一步的速度',
+      'tpsExactTitle': '本步平均输出速度（官方 usage 口径）',
       'card.balanceTitle': '📊 账户余额',
       'card.sessionTitle': '⚡ 本会话消耗',
       'card.total': '总额: ',
@@ -269,6 +272,9 @@ const props = {
       'tip.error': '获取失败: {error}',
       'model.unknown': '未知模型',
       'model.other': '其他模型',
+      'model.fallbackPrice': '未找到该模型的官方定价，已回退为 {model} 的默认定价估算',
+      'model.noPrice': '未找到该模型的定价，金额无法计算',
+      'model.cannotCompute': '无法计算',
       'unit.minutes': '{n} 分钟',
       'unit.seconds': '{n} 秒',
       'spend.pill': '{range} {amount}',
@@ -307,6 +313,7 @@ const htmlGreen = renderToStaticMarkup(ReactMock.createElement(Comp, props))
 console.log('rendered (green):', htmlGreen)
 if (!htmlGreen.includes('100.23')) throw new Error('balance not rendered')
 if (!htmlGreen.includes('TPS 31.4 tok/s')) throw new Error('TPS should render in the bottom dock')
+if (htmlGreen.includes('dshqb_tps_stale')) throw new Error('a settled TPS reading must not use the stale style')
 if (!htmlGreen.includes('dshqb_dot_success')) throw new Error('green status dot missing')
 if (!htmlGreen.includes('dshqb_dot_btn')) throw new Error('status button class missing')
 if (!htmlGreen.includes('<button')) throw new Error('status button element missing')
@@ -330,14 +337,16 @@ if (!htmlGreen.includes('命中: 60')) throw new Error('hit token count missing'
 if (!htmlGreen.includes('dshqb_pricing_wrap')) throw new Error('pricing wrap missing')
 if (!htmlGreen.includes('dshqb_pricing_popover')) throw new Error('pricing popover missing')
 if (!htmlGreen.includes('📋 DeepSeek V4 定价参考')) throw new Error('v4 pricing title missing')
+if (!htmlGreen.includes('deepseek-flash')) throw new Error('deepseek-flash model missing')
 if (!htmlGreen.includes('deepseek-v4-flash')) throw new Error('v4 flash model missing')
 if (!htmlGreen.includes('deepseek-v4-pro')) throw new Error('v4 pro model missing')
-if (!htmlGreen.includes('命中 ¥0.1')) throw new Error('v4 peak hit rate missing')
-if (!htmlGreen.includes('未命中 ¥3')) throw new Error('v4 peak miss rate missing')
-if (!htmlGreen.includes('输出 ¥9')) throw new Error('v4 peak output rate missing')
-if (!htmlGreen.includes('命中 ¥0.05')) throw new Error('v4 off-peak hit rate missing')
-if (!htmlGreen.includes('未命中 ¥1.5')) throw new Error('v4 off-peak miss rate missing')
-if (!htmlGreen.includes('输出 ¥4.5')) throw new Error('v4 off-peak output rate missing')
+if (!htmlGreen.includes('deepseek-v4-flash-vision-exp')) throw new Error('vision-exp model missing')
+if (!htmlGreen.includes('命中 ¥0.04')) throw new Error('V4.1 Flash peak hit rate missing')
+if (!htmlGreen.includes('未命中 ¥2')) throw new Error('V4.1 Flash peak miss rate missing')
+if (!htmlGreen.includes('输出 ¥8')) throw new Error('V4.1 Flash peak output rate missing')
+if (!htmlGreen.includes('命中 ¥0.02')) throw new Error('V4.1 Flash off-peak hit rate missing')
+if (!htmlGreen.includes('未命中 ¥1')) throw new Error('V4.1 Flash off-peak miss rate missing')
+if (!htmlGreen.includes('输出 ¥4')) throw new Error('V4.1 Flash off-peak output rate missing')
 // 验证非 V4 模型被成功过滤不展示在定价气泡中
 if (htmlGreen.includes('• deepseek-chat</span><div class="dshqb_pricing_rates"')) throw new Error('non-v4 model should be filtered out')
 if (!htmlGreen.includes('CNY 钱包')) throw new Error('CNY wallet row missing')
@@ -435,9 +444,19 @@ if (code.includes('settings.addFillKind')) throw new Error('add form must not us
 if (code.includes('[name]: table')) throw new Error('adding a model must not auto-seed official peak/off-peak')
 if (!code.includes('dshqb_btn_del')) throw new Error('model delete button missing')
 if (!code.includes('PINNED_V4_MODELS')) throw new Error('pinned v4 models allowlist missing')
+if (!code.includes('settings.pricingCheck')) throw new Error('official pricing check button i18n missing')
+if (!code.includes('settings.pricingCheckApply')) throw new Error('official pricing apply action i18n missing')
+if (!code.includes('settings.pricingCheckUpToDate')) throw new Error('official pricing up-to-date copy missing')
+if (!code.includes('showToast(t("settings.pricingCheckUpToDate"))')) throw new Error('an up-to-date result must be a toast, not an inline line')
+if (!code.includes('showToast(t("settings.pricingCheckFailed"')) throw new Error('a check failure must be a toast, matching the other failure notices')
+if (!code.includes('/query-credits/pricing/check')) throw new Error('official pricing check must call the plugin route')
+if (!code.includes('dshqb_pricing_check_box')) throw new Error('candidate list container missing')
+if (!code.includes('applyOfficialCandidates')) throw new Error('applying candidates to the draft must be implemented')
+if (!code.includes('runOfficialPricingCheck')) throw new Error('official pricing check handler missing')
 if (code.includes('!model.toLowerCase().includes("v4")')) throw new Error('delete button must not key off the v4 substring')
-const defaultPriceBlock = code.slice(code.indexOf('const DEFAULT_PRICES_CNY'), code.indexOf('const DEFAULT_SETTINGS'))
-if (!defaultPriceBlock.includes('deepseek-v4-flash-vision-exp')) throw new Error('vision-exp must be present in default model prices')
+const defaultPriceBlock = code.slice(code.indexOf('function officialPricesFor'), code.indexOf('const DEFAULT_SETTINGS'))
+if (!code.includes('"deepseek-v4-flash-vision-exp"')) throw new Error('vision-exp must be present in built-in model prices')
+if (!defaultPriceBlock.includes('PINNED_V4_MODELS')) throw new Error('default prices must be derived from the pinned model list')
 if (defaultPriceBlock.includes('deepseek-chat') || defaultPriceBlock.includes('deepseek-reasoner')) throw new Error('currency defaults must not auto-add legacy chat/reasoner models')
 if (code.includes('EUR (欧元 €)')) throw new Error('pricing must not offer a fake EUR option backed by USD numbers')
 if (!code.includes('["USD", "EUR"].includes') || !code.includes('? "USD" : "CNY"')) throw new Error('legacy EUR settings must migrate to the truthful USD label')
@@ -1082,6 +1101,121 @@ await new Promise((r) => setTimeout(r, 400))
 const htmlDisabled = renderToStaticMarkup(ReactMock.createElement(DisabledComp, followProps))
 if (htmlDisabled !== '') throw new Error('enabled=false should hide all quota UI')
 console.log('GLOBAL ENABLE FLAG CLIENT SMOKE TEST PASSED')
+
+// ---------- 回退定价 / 无定价标注 ----------
+installFetch(() => ({
+  ok: true,
+  fetchedAt: Date.now(),
+  refreshIntervalMs: 300000,
+  clientPollIntervalMs: 30000,
+  currency: 'CNY',
+  thresholds: { warning: 10, danger: 5 },
+  isAvailable: true,
+  balances: [{ currency: 'CNY', total: 100.23, granted: 0, toppedUp: 100.23 }],
+  prices: {},
+  defaultPrices: { cacheHit: 0.1, cacheMiss: 1, output: 2 },
+}))
+new Function('window', 'require', code)(globalThis.window, (id) => {
+  if (id === 'react') return ReactMock
+  if (id === '@deepseek-ai/dsh-client-ui-primitives') return stubPrimitives(ReactMock)
+  throw new Error('unexpected require: ' + id)
+})
+const fallbackApi = captured.factory((id) => {
+  if (id === 'react') return ReactMock
+  if (id === '@deepseek-ai/dsh-client-ui-primitives') return stubPrimitives(ReactMock)
+  throw new Error('unexpected require: ' + id)
+})
+const fallbackRegs = []
+fallbackApi.apply(makeSlotCtx(fallbackRegs))
+const FallbackComp = slotOf(fallbackRegs, 'conversation.composer.dock').comp
+const fallbackProps = {
+  ...props,
+  useProjection: (key) => key === 'liveTokenUsage' ? ({ tokensPerSecond: 0 }) : ({
+    models: ['deepseek-v5-flash-preview', 'glm-4.6'],
+    cost: 0,
+    costByModel: { 'deepseek-v5-flash-preview': 0, 'glm-4.6': 0 },
+    tokens: { uncachedInput: 2000000, cacheRead: 0, cacheWrite: 0, output: 0 },
+    legs: [
+      { t: Date.parse('2026-09-11T01:00:00.000Z'), model: 'deepseek-v5-flash-preview', uncachedInput: 1000000, cacheRead: 0, cacheWrite: 0, output: 0 },
+      { t: Date.parse('2026-09-11T01:00:00.000Z'), model: 'glm-4.6', uncachedInput: 1000000, cacheRead: 0, cacheWrite: 0, output: 0 },
+    ],
+    currency: 'CNY',
+  }),
+}
+renderToStaticMarkup(ReactMock.createElement(FallbackComp, fallbackProps))
+await new Promise((r) => setTimeout(r, 400))
+const htmlFallback = renderToStaticMarkup(ReactMock.createElement(FallbackComp, fallbackProps))
+if (!htmlFallback.includes('deepseek-v5-flash-preview')) throw new Error('fallback model row missing')
+if (!htmlFallback.includes('glm-4.6')) throw new Error('unpriced model row missing')
+if ((htmlFallback.match(/dshqb_warn_badge/g) ?? []).length < 2) throw new Error('both fallback and unpriced rows must show the warning badge')
+if (!htmlFallback.includes('已回退为 deepseek-flash 的默认定价估算')) throw new Error('family fallback tooltip missing')
+if (!htmlFallback.includes('未找到该模型的定价，金额无法计算')) throw new Error('unpriced tooltip missing')
+if (!htmlFallback.includes('无法计算')) throw new Error('unpriced amount should show cannot-compute')
+if (!htmlFallback.includes('¥2.00')) throw new Error('family fallback amount should use the default Flash price')
+console.log('FALLBACK / UNPRICED PRICING CLIENT SMOKE TEST PASSED')
+
+// ---------- TPS 估算 / 精确两种显示 ----------
+installFetch(() => ({
+  ok: true,
+  fetchedAt: Date.now(),
+  refreshIntervalMs: 300000,
+  clientPollIntervalMs: 30000,
+  currency: 'CNY',
+  thresholds: { warning: 10, danger: 5 },
+  isAvailable: true,
+  balances: [{ currency: 'CNY', total: 100.23, granted: 0, toppedUp: 100.23 }],
+  prices: {},
+  defaultPrices: {},
+}))
+new Function('window', 'require', code)(globalThis.window, (id) => {
+  if (id === 'react') return ReactMock
+  if (id === '@deepseek-ai/dsh-client-ui-primitives') return stubPrimitives(ReactMock)
+  throw new Error('unexpected require: ' + id)
+})
+const tpsApi = captured.factory((id) => {
+  if (id === 'react') return ReactMock
+  if (id === '@deepseek-ai/dsh-client-ui-primitives') return stubPrimitives(ReactMock)
+  throw new Error('unexpected require: ' + id)
+})
+const tpsRegs = []
+tpsApi.apply(makeSlotCtx(tpsRegs))
+const TpsComp = slotOf(tpsRegs, 'conversation.composer.dock').comp
+
+// 本步进行中、沿用上一步数值：斜体 + 说明"显示的是上一步"。
+const pendingProps = {
+  ...props,
+  useProjection: (key) => key === 'liveTokenUsage' ? ({ tokensPerSecond: 128.5, pending: true }) : props.useProjection(key),
+}
+renderToStaticMarkup(ReactMock.createElement(TpsComp, pendingProps))
+await new Promise((r) => setTimeout(r, 400))
+const htmlPending = renderToStaticMarkup(ReactMock.createElement(TpsComp, pendingProps))
+if (!htmlPending.includes('TPS 129 tok/s')) throw new Error('pending TPS should still show the previous number')
+if (!htmlPending.includes('dshqb_tps_stale')) throw new Error('a carried-over TPS reading must render in the stale (italic) style')
+if (!htmlPending.includes('上一步的速度')) throw new Error('pending TPS should explain that it shows the previous step')
+
+// 流式估算：同样斜体，但说明是估算值。
+const estProps = {
+  ...props,
+  useProjection: (key) => key === 'liveTokenUsage' ? ({ tokensPerSecond: 128.5, estimate: true }) : props.useProjection(key),
+}
+renderToStaticMarkup(ReactMock.createElement(TpsComp, estProps))
+await new Promise((r) => setTimeout(r, 400))
+const htmlEst = renderToStaticMarkup(ReactMock.createElement(TpsComp, estProps))
+if (!htmlEst.includes('dshqb_tps_stale')) throw new Error('an estimated TPS reading must render in the stale (italic) style')
+if (!htmlEst.includes('按流式字符数估算')) throw new Error('estimated TPS should explain that it is an estimate')
+
+// 本步已结算：正体、标题为官方口径。
+const exactProps = {
+  ...props,
+  useProjection: (key) => key === 'liveTokenUsage' ? ({ tokensPerSecond: 128.5 }) : props.useProjection(key),
+}
+renderToStaticMarkup(ReactMock.createElement(TpsComp, exactProps))
+await new Promise((r) => setTimeout(r, 400))
+const htmlExact = renderToStaticMarkup(ReactMock.createElement(TpsComp, exactProps))
+if (!htmlExact.includes('TPS 129 tok/s')) throw new Error('exact TPS should render the current step value')
+if (htmlExact.includes('dshqb_tps_stale')) throw new Error('a settled TPS reading must not be italic')
+if (!htmlExact.includes('本步平均输出速度')) throw new Error('exact TPS should explain the official semantics')
+console.log('TPS PENDING / ESTIMATE / EXACT CLIENT SMOKE TEST PASSED')
 
 console.log('CLIENT SMOKE TEST PASSED (ZERO-DEPENDENCY)')
 process.exit(0)

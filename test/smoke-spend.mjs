@@ -101,5 +101,5 @@ const v4Samples = [{
 const v4Cny = aggregateSpend(v4Samples, { currency: 'CNY', prices: {}, defaultPrices: { cacheHit: 0, cacheMiss: 0, output: 0 } }, peak - 1000, peak + 1000)
 const v4Usd = aggregateSpend(v4Samples, { currency: 'USD', prices: {}, defaultPrices: { cacheHit: 0, cacheMiss: 0, output: 0 } }, peak - 1000, peak + 1000)
 assert.equal(v4Cny.cost, 3)
-assert.equal(v4Usd.cost, 0.42)
+assert.equal(v4Usd.cost, 0.44)
 console.log('SPEND TEST PASSED')

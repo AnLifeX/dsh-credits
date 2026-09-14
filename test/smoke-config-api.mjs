@@ -712,6 +712,47 @@ assert.equal(resGetConfig.data.config.showPopover, true)
   assert.equal(typeof resSpend.data.cost, 'number')
   console.log('GET /query-credits/spend passed')
 
+  // 官方定价检查路由：用桩 fetch 提供官方页夹具，测试不联网。
+  const pricingFixture = `
+    <table>
+      <tr><td colspan="2">模型</td><td>deepseek-flash</td></tr>
+      <tr><td rowspan="6">价格</td><td rowspan="2">百万tokens输入（缓存命中）</td><td>空闲时段</td><td>0.02元</td></tr>
+      <tr><td>高峰时段</td><td>0.04元</td></tr>
+      <tr><td rowspan="2">百万tokens输入（缓存未命中）</td><td>空闲时段</td><td>1元</td></tr>
+      <tr><td>高峰时段</td><td>2元</td></tr>
+      <tr><td rowspan="2">百万tokens输出</td><td>空闲时段</td><td>4元</td></tr>
+      <tr><td>高峰时段</td><td>8元</td></tr>
+    </table>`
+  const realFetch = globalThis.fetch
+  globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => pricingFixture })
+  let resPricingCheck
+  try {
+    resPricingCheck = await invokeRoute('/query-credits/pricing/check', 'POST', {})
+  } finally {
+    globalThis.fetch = realFetch
+  }
+  assert.equal(resPricingCheck.status, 200)
+  assert.equal(resPricingCheck.data.ok, true)
+  assert.ok(Array.isArray(resPricingCheck.data.candidates), 'candidates must be an array')
+  const flashCandidate = resPricingCheck.data.candidates.find((item) => item.model === 'deepseek-flash')
+  assert.ok(flashCandidate, 'the parsed model must appear as a candidate')
+  assert.equal(flashCandidate.currency, 'CNY')
+  assert.equal(flashCandidate.changed, false, 'a candidate matching the built-in table must not be flagged as changed')
+  assert.deepEqual(flashCandidate.peak, { cacheHit: 0.04, cacheMiss: 2, output: 8 })
+  assert.deepEqual(flashCandidate.offPeak, { cacheHit: 0.02, cacheMiss: 1, output: 4 })
+  // 页面结构不可识别时必须优雅降级，不能 500、也不能抛错。
+  globalThis.fetch = async () => ({ ok: true, status: 200, text: async () => '<html>redesigned</html>' })
+  let resPricingFail
+  try {
+    resPricingFail = await invokeRoute('/query-credits/pricing/check', 'POST', {})
+  } finally {
+    globalThis.fetch = realFetch
+  }
+  assert.equal(resPricingFail.status, 200, 'a parse failure must not surface as an HTTP error')
+  assert.equal(resPricingFail.data.ok, false, 'a parse failure must be reported as ok:false')
+  assert.equal(typeof resPricingFail.data.error, 'string')
+  console.log('POST /query-credits/pricing/check passed')
+
   console.log('ALL CONFIG API TESTS PASSED')
   process.exit(0)
 }

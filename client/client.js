@@ -40,6 +40,7 @@ window.__ModuleLoader__.load({
 				".dshqb_sep{display:inline-flex;align-items:center;justify-content:center;color:var(--dsw-alias-separator-primary,var(--dsw-alias-border-l3,rgba(128,128,128,0.25)));margin:0 10px;user-select:none}",
 				".dshqb_trigger{position:relative;display:inline-flex;align-items:center;cursor:default}",
 				".dshqb_amount{color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums;display:inline-flex;align-items:center}",
+				".dshqb_tps_stale{opacity:.7;font-style:italic}",
 				".dshqb_error{color:var(--dsw-alias-state-error-primary,#ef4444);display:inline-flex;align-items:center}",
 				".dshqb_dot{display:block;width:7px;height:7px;border-radius:50%;margin-right:6px;flex-shrink:0;transition:background-color .2s ease,box-shadow .2s ease,transform .2s ease}",
 				".dshqb_dot_btn{cursor:pointer;border:none;padding:0;background:transparent;outline:none;display:inline-flex;align-items:center;justify-content:center;line-height:1}",
@@ -80,6 +81,10 @@ window.__ModuleLoader__.load({
 				".dshqb_card_sub{font-size:11px;color:var(--dsw-alias-label-tertiary);display:flex;gap:8px}",
 				".dshqb_card_models{margin:4px 0 0;padding:0;list-style:none;font-size:11px;color:var(--dsw-alias-label-secondary);display:flex;flex-direction:column;gap:2px}",
 				".dshqb_card_models li{display:flex;justify-content:space-between;font-variant-numeric:tabular-nums}",
+				".dshqb_model_name{display:inline-flex;align-items:center;gap:4px;min-width:0;overflow-wrap:anywhere}",
+				".dshqb_warn_badge{display:inline-flex;align-items:center;justify-content:center;width:14px;height:14px;flex:none;border-radius:50%;background:#f5a623;color:#fff;font-size:10px;font-weight:700;line-height:1;border:0;padding:0;cursor:help;font-family:inherit}",
+				".dshqb_warn_badge:hover{background:#e59400}",
+				".dshqb_model_amount_unpriced{color:#c98a00;white-space:nowrap}",
 				".dshqb_card_hint{font-size:10.5px;color:var(--dsw-alias-label-tertiary);margin-top:auto;padding-top:6px;border-top:1px dashed var(--dsw-alias-separator-primary,var(--dsw-alias-border-l3,rgba(128,128,128,0.15)));display:flex;flex-direction:column;gap:3px;min-width:0;white-space:normal;overflow-wrap:anywhere}",
 				".dshqb_card_tokens{display:flex;flex-direction:column;gap:2px;font-size:10.5px;color:var(--dsw-alias-label-secondary);line-height:1.35}",
 				".dshqb_card_hit{font-size:10px;color:var(--dsw-alias-label-tertiary);opacity:0.9}",
@@ -171,7 +176,13 @@ window.__ModuleLoader__.load({
 				".dshqb_period_peak{background:rgba(245,158,11,0.14);color:var(--dsw-alias-state-warn-primary,var(--dsw-alias-state-warning-primary,#f59e0b))}",
 				".dshqb_period_offpeak{background:rgba(16,185,129,0.14);color:var(--dsw-alias-state-success-primary,#10b981)}",
 				".dshqb_period_flat{background:rgba(128,128,128,0.12);color:var(--dsw-alias-label-secondary)}",
-				".dshqb_pricing_reset_bar{display:flex;justify-content:flex-end;margin-top:6px}",
+				".dshqb_pricing_reset_bar{display:flex;justify-content:flex-end;gap:6px;margin-top:6px}",
+				".dshqb_pricing_check_box{margin-top:6px;padding:6px 8px;border:1px dashed var(--dsw-alias-border-l2,rgba(128,128,128,.28));border-radius:6px;display:flex;flex-direction:column;gap:4px}",
+				".dshqb_pricing_check_note{font-size:11px;color:var(--dsw-alias-label-secondary)}",
+				".dshqb_pricing_check_row{display:flex;align-items:baseline;gap:6px;font-size:11px}",
+				".dshqb_pricing_check_model{font-weight:600;white-space:nowrap}",
+				".dshqb_pricing_check_val{font-family:var(--dsw-font-mono-console,ui-monospace,monospace);font-size:10.5px;color:var(--dsw-alias-label-tertiary);overflow-wrap:anywhere}",
+				".dshqb_pricing_check_actions{display:flex;justify-content:flex-end;gap:6px;margin-top:2px}",
 				".dshqb_pricing_tier_row{display:flex;align-items:center;gap:6px;flex-wrap:wrap;font-size:11px;color:var(--dsw-alias-label-secondary);font-variant-numeric:tabular-nums}",
 				".dshqb_input_num{width:80px;padding:4px 8px;font-size:12px}",
 				".dshqb_btn_del{appearance:none;color:var(--dsw-alias-label-secondary);background:transparent;border:1px solid transparent;cursor:pointer;padding:4px 9px;border-radius:6px;font:inherit;font-size:11.5px;font-weight:500;line-height:1.35;white-space:nowrap;transition:color .15s ease,background-color .15s ease,border-color .15s ease,transform .15s ease}",
@@ -510,22 +521,39 @@ window.__ModuleLoader__.load({
 			if (total < warning) return "warning";
 			return "success";
 		}
-		/** 与服务端 src/pricing.js 同一套 V4 峰谷表; 客户端按每笔 legs[].t 计价。 */
-		const V4_CUTOFF_MS = 1786896000000;
-		const PINNED_V4_MODELS = ["deepseek-v4-flash", "deepseek-v4-pro", "deepseek-v4-flash-vision-exp"];
+		/** 与服务端 src/pricing.js 同一套 V4 / V4.1 时间表; 客户端按每笔 legs[].t 计价。 */
+		const V4_CUTOFF_MS = 1786896000000; // 2026-08-17T00:00:00+08:00
+		const V41_FLASH_CUTOFF_MS = 1789012800000; // 2026-09-10T12:00:00+08:00
+		const PINNED_V4_MODELS = ["deepseek-flash", "deepseek-v4-flash", "deepseek-v4-pro", "deepseek-v4-flash-vision-exp"];
 		const V4_CNY = {
 			"deepseek-v4-flash": { listed: { cacheHit: 0.02, cacheMiss: 1, output: 2 }, peak: { cacheHit: 0.10, cacheMiss: 3.0, output: 9.0 }, offPeak: { cacheHit: 0.05, cacheMiss: 1.5, output: 4.5 } },
 			"deepseek-v4-pro": { listed: { cacheHit: 0.025, cacheMiss: 3, output: 6 }, peak: { cacheHit: 0.30, cacheMiss: 9.0, output: 27.0 }, offPeak: { cacheHit: 0.15, cacheMiss: 4.5, output: 13.5 } },
 			"deepseek-v4-flash-vision-exp": { listed: { cacheHit: 0.02, cacheMiss: 1, output: 2 }, peak: { cacheHit: 0.10, cacheMiss: 3.0, output: 9.0 }, offPeak: { cacheHit: 0.05, cacheMiss: 1.5, output: 4.5 } }
 		};
-		const scaleUsd = (p) => ({ cacheHit: Math.round(p.cacheHit * 0.14 * 1e6) / 1e6, cacheMiss: Math.round(p.cacheMiss * 0.14 * 1e6) / 1e6, output: Math.round(p.output * 0.14 * 1e6) / 1e6 });
-		const V4_USD = Object.fromEntries(Object.entries(V4_CNY).map(([model, tiers]) => [model, {
-			listed: scaleUsd(tiers.listed),
-			peak: scaleUsd(tiers.peak),
-			offPeak: scaleUsd(tiers.offPeak)
-		}]));
+		const V4_USD = {
+			"deepseek-v4-flash": { listed: { cacheHit: 0.0028, cacheMiss: 0.14, output: 0.28 }, peak: { cacheHit: 0.014, cacheMiss: 0.44, output: 1.32 }, offPeak: { cacheHit: 0.007, cacheMiss: 0.22, output: 0.66 } },
+			"deepseek-v4-pro": { listed: { cacheHit: 0.003625, cacheMiss: 0.435, output: 0.87 }, peak: { cacheHit: 0.044, cacheMiss: 1.32, output: 3.96 }, offPeak: { cacheHit: 0.022, cacheMiss: 0.66, output: 1.98 } },
+			"deepseek-v4-flash-vision-exp": { listed: { cacheHit: 0.0028, cacheMiss: 0.14, output: 0.28 }, peak: { cacheHit: 0.014, cacheMiss: 0.44, output: 1.32 }, offPeak: { cacheHit: 0.007, cacheMiss: 0.22, output: 0.66 } }
+		};
+		/** V4.1 Flash 官方价（2026-09-10 12:00 起）。 */
+		const V41_FLASH_TIERS = {
+			CNY: { peak: { cacheHit: 0.04, cacheMiss: 2, output: 8 }, offPeak: { cacheHit: 0.02, cacheMiss: 1, output: 4 } },
+			USD: { peak: { cacheHit: 0.006, cacheMiss: 0.30, output: 1.20 }, offPeak: { cacheHit: 0.003, cacheMiss: 0.15, output: 0.60 } }
+		};
+		/** 走 V4.1 Flash 新价的模型。 */
+		const V41_TIER_MODELS = ["deepseek-flash", "deepseek-v4-flash", "deepseek-v4-flash-vision-exp"];
+		const V41_CNY = Object.fromEntries(V41_TIER_MODELS.map((model) => [model, { peak: { ...V41_FLASH_TIERS.CNY.peak }, offPeak: { ...V41_FLASH_TIERS.CNY.offPeak } }]));
+		const V41_USD = Object.fromEntries(V41_TIER_MODELS.map((model) => [model, { peak: { ...V41_FLASH_TIERS.USD.peak }, offPeak: { ...V41_FLASH_TIERS.USD.offPeak } }]));
+		/** V4.1 Flash 上线前，deepseek-flash 沿用的是旧 V4 Flash 计费。 */
+		const OLD_V4_ALIASES = { "deepseek-flash": "deepseek-v4-flash" };
 		function v4TableFor(currency) {
-			return currency === "USD" ? V4_USD : V4_CNY;
+			return normalizePricingCurrency(currency) === "USD" ? V4_USD : V4_CNY;
+		}
+		function v41TableFor(currency) {
+			return normalizePricingCurrency(currency) === "USD" ? V41_USD : V41_CNY;
+		}
+		function oldV4TableFor(model, currency) {
+			return v4TableFor(currency)?.[OLD_V4_ALIASES[model] ?? model];
 		}
 		function normalizePricingCurrency(currency) {
 			return ["USD", "EUR"].includes(String(currency ?? "").trim().toUpperCase()) ? "USD" : "CNY";
@@ -576,8 +604,8 @@ window.__ModuleLoader__.load({
 				return { ...cloneRate(rates.peak), peak: cloneRate(rates.peak), offPeak: cloneRate(rates.offPeak) };
 			}
 			if (PINNED_V4_MODELS.includes(model)) {
-				const table = v4TableFor(currency)?.[model];
-				if (table) return v4SettingsFromTable(table);
+				const tiers = officialTiersFor(model, currency);
+				if (tiers) return v4SettingsFromTable(tiers);
 			}
 			return { cacheHit: Number(rates?.cacheHit ?? 0), cacheMiss: Number(rates?.cacheMiss ?? 0), output: Number(rates?.output ?? 0) };
 		}
@@ -597,28 +625,77 @@ window.__ModuleLoader__.load({
 		function currentTariffPeriod(timestamp = Date.now()) {
 			return isPeakBeijing(timestamp) ? "peak" : "offPeak";
 		}
-		function resolveClientPrice(cfg, model, timestamp) {
-			const currency = normalizePricingCurrency(cfg.currency);
-			const table = v4TableFor(currency)?.[model];
-			const configured = cfg.prices?.[model];
-			if (hasTariffTiers(configured)) {
-				if (table && timestamp < V4_CUTOFF_MS) return table.listed;
-				return cloneRate(isPeakBeijing(timestamp) ? configured.peak : configured.offPeak);
-			}
-			if (isFiniteRate(configured) && !(table && PINNED_V4_MODELS.includes(model))) {
-				return cloneRate(configured);
-			}
-			if (table) {
-				if (timestamp < V4_CUTOFF_MS) return table.listed;
-				return isPeakBeijing(timestamp) ? table.peak : table.offPeak;
-			}
-			return configured ?? cfg.defaultPrices ?? { cacheHit: 0, cacheMiss: 0, output: 0 };
+		/** 指定时间点下该模型处于哪一档官方价表：旧刊例 → 旧峰谷 → V4.1 Flash 新价。 */
+		function officialTiersFor(model, currency, timestamp = Date.now()) {
+			const v41 = v41TableFor(currency)?.[model];
+			const v4 = oldV4TableFor(model, currency);
+			if (v41 && timestamp >= V41_FLASH_CUTOFF_MS) return { peak: cloneRate(v41.peak), offPeak: cloneRate(v41.offPeak) };
+			if (v4) return { peak: cloneRate(v4.peak), offPeak: cloneRate(v4.offPeak), listed: cloneRate(v4.listed) };
+			if (v41) return { peak: cloneRate(v41.peak), offPeak: cloneRate(v41.offPeak) };
+			return null;
 		}
-		function priceLeg(cfg, leg) {
-			const p = resolveClientPrice(cfg, leg.model, Number(leg.t) || 0);
-			return ((Number(leg.uncachedInput) + Number(leg.cacheWrite)) * Number(p.cacheMiss ?? 0)
-				+ Number(leg.cacheRead) * Number(p.cacheHit ?? 0)
-				+ Number(leg.output) * Number(p.output ?? 0)) / 1e6;
+		/** 指定时间点、指定模型的官方单价（旧刊例 / 峰 / 谷）。 */
+		function officialRateFor(model, currency, timestamp = Date.now()) {
+			const v4 = oldV4TableFor(model, currency);
+			const tiers = officialTiersFor(model, currency, timestamp);
+			if (!tiers) return undefined;
+			if (v4 && timestamp < V4_CUTOFF_MS) return cloneRate(v4.listed);
+			return isPeakBeijing(timestamp) ? cloneRate(tiers.peak) : cloneRate(tiers.offPeak);
+		}
+		function ratesEqual(a, b) {
+			return isFiniteRate(a) && isFiniteRate(b)
+				&& Number(a.cacheHit) === Number(b.cacheHit)
+				&& Number(a.cacheMiss) === Number(b.cacheMiss)
+				&& Number(a.output) === Number(b.output);
+		}
+		function officialSnapshots(model, currency) {
+			const out = [];
+			const v4 = oldV4TableFor(model, currency);
+			if (v4) out.push(v4);
+			const v41 = v41TableFor(currency)?.[model];
+			if (v41) out.push(v41);
+			return out;
+		}
+		/** 配置值等于任一历史官方快照时仍视为内置官方价，按时间表计价；手改值才算自定义。 */
+		function matchesOfficialTiers(model, currency, configured) {
+			if (!hasTariffTiers(configured)) return false;
+			return officialSnapshots(model, currency).some((snapshot) =>
+				ratesEqual(configured.peak, snapshot.peak) && ratesEqual(configured.offPeak, snapshot.offPeak));
+		}
+		/** 没有精确价表时按模型名回退到默认 Flash / Pro 定价；非 DeepSeek 模型不回退。 */
+		function familyModelFor(model) {
+			const id = String(model ?? "").trim().toLowerCase();
+			if (!id) return null;
+			if (id.includes("flash")) return "deepseek-flash";
+			if (id.includes("pro")) return "deepseek-v4-pro";
+			if (id.includes("deepseek")) return "deepseek-flash";
+			return null;
+		}
+		/** 解析单价并附带来源: official | configured | family | none。 */
+		function resolveClientPriceInfo(cfg, model, timestamp) {
+			const currency = normalizePricingCurrency(cfg.currency);
+			const configured = cfg.prices?.[model];
+			const official = officialRateFor(model, currency, timestamp);
+			const pinned = PINNED_V4_MODELS.includes(model);
+			if (official !== undefined && (
+				configured === undefined ||
+				(pinned && isFiniteRate(configured) && !hasTariffTiers(configured)) ||
+				matchesOfficialTiers(model, currency, configured)
+			)) {
+				return { rate: official, source: "official" };
+			}
+			if (hasTariffTiers(configured)) {
+				const v4 = oldV4TableFor(model, currency);
+				if (v4 && timestamp < V4_CUTOFF_MS) return { rate: cloneRate(v4.listed), source: "configured" };
+				return { rate: cloneRate(isPeakBeijing(timestamp) ? configured.peak : configured.offPeak), source: "configured" };
+			}
+			if (isFiniteRate(configured)) return { rate: cloneRate(configured), source: "configured" };
+			const fallbackModel = familyModelFor(model);
+			if (fallbackModel) {
+				const rate = officialRateFor(fallbackModel, currency, timestamp);
+				if (rate !== undefined) return { rate, source: "family", fallbackModel };
+			}
+			return { rate: undefined, source: "none" };
 		}
 		/** 用当前计价货币按每笔事件时间重算本会话; 不用 /query-credits 里“此刻”的 V4 单价。 */
 		function priceSession(cost, payload) {
@@ -630,12 +707,14 @@ window.__ModuleLoader__.load({
 			};
 			const legs = Array.isArray(cost?.legs) ? cost.legs : [];
 			if (!cost) {
-				return { cost: 0, costByModel: {}, models: [], tokens: undefined, currency, legs: [] };
+				return { cost: 0, costByModel: {}, modelStatus: {}, unpriced: false, models: [], tokens: undefined, currency, legs: [] };
 			}
 			if (legs.length === 0) {
 				return {
 					cost: cost.cost ?? 0,
 					costByModel: cost.costByModel ?? {},
+					modelStatus: {},
+					unpriced: false,
 					models: cost.models ?? [],
 					tokens: cost.tokens,
 					currency: cost.currency ?? currency,
@@ -643,16 +722,34 @@ window.__ModuleLoader__.load({
 				};
 			}
 			const costByModel = {};
+			const modelStatus = {};
+			const statusRank = (source) => source === "none" ? 3 : source === "family" ? 2 : 1;
 			let total = 0;
+			let unpriced = false;
 			for (const leg of legs) {
-				const c = priceLeg(cfg, leg);
 				const modelKey = leg.provider ? `${leg.provider}/${leg.model}` : leg.model;
-				if (c > 0) costByModel[modelKey] = Math.round(((costByModel[modelKey] ?? 0) + c) * 1e6) / 1e6;
+				const info = resolveClientPriceInfo(cfg, leg.model, Number(leg.t) || 0);
+				const prev = modelStatus[modelKey];
+				if (!prev || statusRank(info.source) > statusRank(prev.source)) {
+					modelStatus[modelKey] = { source: info.source, fallbackModel: info.fallbackModel };
+				}
+				if (costByModel[modelKey] === undefined) costByModel[modelKey] = 0;
+				if (!info.rate) {
+					unpriced = true;
+					continue;
+				}
+				const p = info.rate;
+				const c = ((Number(leg.uncachedInput) + Number(leg.cacheWrite)) * Number(p.cacheMiss ?? 0)
+					+ Number(leg.cacheRead) * Number(p.cacheHit ?? 0)
+					+ Number(leg.output) * Number(p.output ?? 0)) / 1e6;
+				if (c > 0) costByModel[modelKey] = Math.round((costByModel[modelKey] + c) * 1e6) / 1e6;
 				total += c;
 			}
 			return {
 				cost: Math.round(total * 1e6) / 1e6,
 				costByModel,
+				modelStatus,
+				unpriced,
 				models: cost.models ?? [],
 				tokens: cost.tokens,
 				currency,
@@ -853,6 +950,9 @@ window.__ModuleLoader__.load({
 			"btn.refreshing": "正在刷新余额...",
 			"sessionCost": "本会话约 {amount}",
 			"tps": "TPS {rate} tok/s",
+			"tpsEstimatedTitle": "生成中：按流式字符数估算的实时速度，本步结束后会换成官方精确值",
+			"tpsPendingTitle": "当前步骤生成中，显示的是上一步的速度",
+			"tpsExactTitle": "本步平均输出速度（官方 usage 口径）",
 			"card.balanceTitle": "📊 账户余额",
 			"card.sessionTitle": "⚡ 本会话消耗",
 			"card.total": "总额: ",
@@ -865,6 +965,9 @@ window.__ModuleLoader__.load({
 			"card.tokensHit": "命中: {hit} ({hitRate}%)",
 			"card.noCost": "本会话暂未产生消耗",
 			"card.pricingHint": "💡 计价规则与单价请见右侧 [?]",
+			"model.fallbackPrice": "未找到该模型的官方定价，已回退为 {model} 的默认定价估算",
+			"model.noPrice": "未找到该模型的定价，金额无法计算",
+			"model.cannotCompute": "无法计算",
 			"tariff.peak": "梁文峰时刻",
 			"tariff.offPeak": "梁文谷时刻",
 			"tariff.peakTitle": "梁文峰时刻：北京时间周一至周五 09:00–12:00、14:00–18:00\n梁文谷时刻：其余时段（含周末）",
@@ -1125,6 +1228,16 @@ window.__ModuleLoader__.load({
 			"settings.pricingFlat": "固定",
 			"settings.removeModel": "移除该模型",
 			"settings.pricingReset": "恢复官方默认单价",
+			"settings.pricingCheck": "检查官方定价",
+			"settings.pricingCheckRunning": "检查中…",
+			"settings.pricingCheckFailed": "检查失败：{error}",
+			"settings.pricingCheckUnknownError": "无法读取官方定价页",
+			"settings.pricingCheckUpToDate": "已是最新，未发现差异。",
+			"settings.pricingCheckFound": "发现 {count} 项差异，勾选后应用到草稿：",
+			"settings.pricingCheckChanged": "有变化",
+			"settings.pricingCheckNew": "新增模型",
+			"settings.pricingCheckApply": "应用到草稿",
+			"settings.pricingCheckDismiss": "关闭",
 			"settings.addModel": "➕ 添加自定义模型",
 			"settings.addModelName": "模型名称 (如 deepseek-chat)",
 			"settings.addFillingPeak": "当前填写：高峰价",
@@ -1166,6 +1279,9 @@ window.__ModuleLoader__.load({
 			"btn.refreshing": "Refreshing balance...",
 			"sessionCost": "~{amount} this session",
 			"tps": "TPS {rate} tok/s",
+			"tpsEstimatedTitle": "Generating: live rate estimated from streamed characters; replaced by the official value when this step finishes",
+			"tpsPendingTitle": "Generating; showing the previous step's rate",
+			"tpsExactTitle": "Average output rate of the last step (official usage)",
 			"card.balanceTitle": "📊 Account Balance",
 			"card.sessionTitle": "⚡ Session Cost",
 			"card.total": "Total: ",
@@ -1178,6 +1294,9 @@ window.__ModuleLoader__.load({
 			"card.tokensHit": "Cache hit: {hit} ({hitRate}%)",
 			"card.noCost": "No cost in this session yet",
 			"card.pricingHint": "💡 View pricing & rates via [?]",
+			"model.fallbackPrice": "No exact price found for this model; estimated with the default {model} pricing",
+			"model.noPrice": "No pricing found for this model; the amount cannot be computed",
+			"model.cannotCompute": "Cannot compute",
 			"tariff.peak": "Liangwen Peak Time",
 			"tariff.offPeak": "Liangwen Valley Time",
 			"tariff.peakTitle": "Peak period: Beijing time Mon–Fri 09:00–12:00, 14:00–18:00\nValley period: all other times, including weekends",
@@ -1437,6 +1556,16 @@ window.__ModuleLoader__.load({
 			"settings.pricingFlat": "Flat",
 			"settings.removeModel": "Remove this model",
 			"settings.pricingReset": "Reset to Default Rates",
+			"settings.pricingCheck": "Check Official Pricing",
+			"settings.pricingCheckRunning": "Checking…",
+			"settings.pricingCheckFailed": "Check failed: {error}",
+			"settings.pricingCheckUnknownError": "could not read the official pricing page",
+			"settings.pricingCheckUpToDate": "Up to date; no differences found.",
+			"settings.pricingCheckFound": "{count} difference(s) found. Tick to apply to the draft:",
+			"settings.pricingCheckChanged": "changed",
+			"settings.pricingCheckNew": "new model",
+			"settings.pricingCheckApply": "Apply to Draft",
+			"settings.pricingCheckDismiss": "Dismiss",
 			"settings.addModel": "➕ Add Custom Model",
 			"settings.addModelName": "Model Name (e.g. deepseek-chat)",
 			"settings.addFillingPeak": "Currently filling: peak",
@@ -1469,21 +1598,18 @@ window.__ModuleLoader__.load({
 		//#endregion
 
 		//#region settings modal component
-		const DEFAULT_PRICES_CNY = {
-			"deepseek-v4-flash": v4SettingsFromTable(V4_CNY["deepseek-v4-flash"]),
-			"deepseek-v4-pro": v4SettingsFromTable(V4_CNY["deepseek-v4-pro"]),
-			"deepseek-v4-flash-vision-exp": v4SettingsFromTable(V4_CNY["deepseek-v4-flash-vision-exp"])
-		};
-		const DEFAULT_PRICES_USD = {
-			"deepseek-v4-flash": v4SettingsFromTable(V4_USD["deepseek-v4-flash"]),
-			"deepseek-v4-pro": v4SettingsFromTable(V4_USD["deepseek-v4-pro"]),
-			"deepseek-v4-flash-vision-exp": v4SettingsFromTable(V4_USD["deepseek-v4-flash-vision-exp"])
-		};
-		const DEFAULT_PRICES = { ...DEFAULT_PRICES_CNY };
-
+		/** 当前时点生效的官方价；设置页按它判断"已改"。 */
 		function officialPricesFor(currency) {
-			return normalizePricingCurrency(currency) === "USD" ? DEFAULT_PRICES_USD : DEFAULT_PRICES_CNY;
+			const out = {};
+			for (const model of PINNED_V4_MODELS) {
+				const tiers = officialTiersFor(model, currency);
+				if (tiers) out[model] = v4SettingsFromTable(tiers);
+			}
+			return out;
 		}
+		const DEFAULT_PRICES_CNY = officialPricesFor("CNY");
+		const DEFAULT_PRICES_USD = officialPricesFor("USD");
+		const DEFAULT_PRICES = { ...DEFAULT_PRICES_CNY };
 		function officialDefaultPrices(currency) {
 			return normalizePricingCurrency(currency) === "USD"
 				? { cacheHit: 0.014, cacheMiss: 0.14, output: 0.28 }
@@ -2076,6 +2202,7 @@ window.__ModuleLoader__.load({
 			const [newModelMiss, setNewModelMiss] = react.useState(1.0);
 			const [newModelOut, setNewModelOut] = react.useState(2.0);
 			const [newModelMultiplier, setNewModelMultiplier] = react.useState(1);
+			const [officialCheck, setOfficialCheck] = react.useState({ state: "idle", candidates: [], error: "", selected: {} });
 			const [customSourceDraft, setCustomSourceDraft] = react.useState(null);
 			const [editingSourceId, setEditingSourceId] = react.useState(null);
 			const [editingProviderId, setEditingProviderId] = react.useState(null);
@@ -2086,6 +2213,53 @@ window.__ModuleLoader__.load({
 			const view = enabledOverride === null ? baseView : { ...baseView, enabled: enabledOverride };
 			const quotaEnabled = view.enabled !== false;
 			const dirtyOf = (cardId) => isCardDirty(cardId, drafts[cardId], baseline);
+
+			/**
+			 * 抓官方定价页并与内置表比对。有差异时列出候选（仅当前货币），
+			 * 无差异或失败走 toast，不在页面上留一行说明。
+			 */
+			const runOfficialPricingCheck = async () => {
+				setOfficialCheck({ state: "checking", candidates: [], error: "", selected: {} });
+				const fail = (message) => {
+					setOfficialCheck({ state: "idle", candidates: [], error: "", selected: {} });
+					showToast(t("settings.pricingCheckFailed", { error: message }), "error", 5000);
+				};
+				try {
+					const res = await fetch("/query-credits/pricing/check", {
+						method: "POST",
+						headers: { "Content-Type": "application/json" },
+						body: "{}"
+					});
+					const data = await res.json();
+					if (!data.ok) {
+						fail(data.error || t("settings.pricingCheckUnknownError"));
+						return;
+					}
+					const candidates = Array.isArray(data.candidates) ? data.candidates : [];
+					const actionable = candidates.filter((item) => item.currency === currency && (item.changed || !item.known));
+					if (actionable.length === 0) {
+						setOfficialCheck({ state: "idle", candidates: [], error: "", selected: {} });
+						showToast(t("settings.pricingCheckUpToDate"));
+						return;
+					}
+					const selected = {};
+					for (const item of actionable) selected[item.currency + "|" + item.model] = true;
+					setOfficialCheck({ state: "ok", candidates, error: "", selected, fetchedAt: data.fetchedAt });
+				} catch (error) {
+					fail(String(error?.message ?? error));
+				}
+			};
+
+			const applyOfficialCandidates = () => {
+				const next = { ...(view.prices || {}) };
+				for (const item of officialCheck.candidates) {
+					if (item.currency !== view.currency) continue;
+					if (!officialCheck.selected[item.currency + "|" + item.model]) continue;
+					next[item.model] = { ...cloneRate(item.peak), peak: cloneRate(item.peak), offPeak: cloneRate(item.offPeak) };
+				}
+				patchCard("pricing", { prices: next });
+				setOfficialCheck({ state: "idle", candidates: [], error: "", selected: {} });
+			};
 
 			const commitMem = (nextBaseline, nextDrafts, nextOpen) => {
 				if (nextBaseline !== undefined) settingsDraftMem.baseline = nextBaseline;
@@ -3257,13 +3431,66 @@ window.__ModuleLoader__.load({
 						onClick: () => {
 							const next = { ...(view.prices || {}) };
 							for (const m of PINNED_V4_MODELS) {
-								const table = v4TableFor(currency)?.[m];
-								if (table) next[m] = v4SettingsFromTable(table);
+								const tiers = officialTiersFor(m, currency);
+								if (tiers) next[m] = v4SettingsFromTable(tiers);
 							}
 							patchCard("pricing", { prices: next });
 						}
-					}, t("settings.pricingReset"))
+					}, t("settings.pricingReset")),
+					react.createElement("button", {
+						type: "button",
+						className: "dshqb_model_reset",
+						disabled: officialCheck.state === "checking",
+						onClick: runOfficialPricingCheck,
+						key: "official_check"
+					}, t(officialCheck.state === "checking" ? "settings.pricingCheckRunning" : "settings.pricingCheck"))
 				),
+				officialCheck.state === "ok"
+					? (() => {
+						const actionable = officialCheck.candidates.filter((item) => item.currency === currency && (item.changed || !item.known));
+						if (actionable.length === 0) return null;
+						const rows = actionable.map((item) => {
+							const key = item.currency + "|" + item.model;
+							return react.createElement("label", { className: "dshqb_pricing_check_row", key },
+								react.createElement("input", {
+									type: "checkbox",
+									checked: Boolean(officialCheck.selected[key]),
+									onChange: (e) => setOfficialCheck((prev) => ({
+										...prev,
+										selected: { ...prev.selected, [key]: e.target.checked }
+									})),
+									key: "cb"
+								}),
+								react.createElement("span", { className: "dshqb_pricing_check_model", key: "m" }, item.model),
+								react.createElement("span", { className: "dshqb_pricing_check_val", key: "v" },
+									t(item.known ? "settings.pricingCheckChanged" : "settings.pricingCheckNew") + " · " +
+									t("settings.pricingPeak") + " " + formatPrice(item.peak.cacheHit) + " / " + formatPrice(item.peak.cacheMiss) + " / " + formatPrice(item.peak.output) + " · " +
+									t("settings.pricingOffPeak") + " " + formatPrice(item.offPeak.cacheHit) + " / " + formatPrice(item.offPeak.cacheMiss) + " / " + formatPrice(item.offPeak.output))
+							);
+						});
+						const selectedCount = actionable.filter((item) => officialCheck.selected[item.currency + "|" + item.model]).length;
+						return react.createElement("div", { className: "dshqb_pricing_check_box", key: "check_box" }, [
+							react.createElement("div", { className: "dshqb_pricing_check_note", key: "note" },
+								t("settings.pricingCheckFound", { count: actionable.length })),
+							...rows,
+							react.createElement("div", { className: "dshqb_pricing_check_actions", key: "actions" }, [
+								react.createElement("button", {
+									type: "button",
+									className: "dshqb_model_reset",
+									disabled: selectedCount === 0,
+									onClick: applyOfficialCandidates,
+									key: "apply"
+								}, t("settings.pricingCheckApply")),
+								react.createElement("button", {
+									type: "button",
+									className: "dshqb_model_reset",
+									onClick: () => setOfficialCheck({ state: "idle", candidates: [], error: "", selected: {} }),
+									key: "dismiss"
+								}, t("settings.pricingCheckDismiss"))
+							])
+						]);
+					})()
+					: null,
 				react.createElement("div", { className: "dshqb_add_model_box", key: "add_box" }, [
 					react.createElement("div", { className: "dshqb_add_model_row", key: "row" }, [
 						react.createElement("input", {
@@ -4047,33 +4274,68 @@ window.__ModuleLoader__.load({
 
 			// 2. 本会话消耗读数节点与右栏卡片内容
 			let costNode = null;
-			const hasCost = cost !== undefined && cost.cost > 0;
-			if (hasCost) {
-				const amount = formatMoney(cost.cost, cost.currency ?? "CNY");
-				costNode = react.createElement("span", { className: "dshqb_amount", key: "cost" }, t("sessionCost", { amount }));
+			const hasUsage = cost !== undefined && (cost.cost > 0 || cost.unpriced === true || (cost.models ?? []).length > 0);
+			const sessionAmountText = () => {
+				const base = formatMoney(cost?.cost ?? 0, cost?.currency ?? "CNY");
+				if (!cost?.unpriced) return base;
+				return cost.cost > 0 ? base + "+" : t("model.cannotCompute");
+			};
+			if (hasUsage) {
+				costNode = react.createElement("span", { className: "dshqb_amount", key: "cost" }, t("sessionCost", { amount: sessionAmountText() }));
 			}
 			const hasTps = showTps && Number.isFinite(liveUsage?.tokensPerSecond) && liveUsage.tokensPerSecond > 0;
+			// 斜体表示"这不是当前这步的最终数值"：本步生成中沿用上一步旧值（pending），
+			// 或本步只有流式估算值（estimate）。结算出本步数值后恢复正体。
+			const tpsPending = hasTps && liveUsage.pending === true;
+			const tpsEstimated = hasTps && liveUsage.estimate === true;
+			const tpsStale = tpsPending || tpsEstimated;
 			const tpsNode = hasTps
-				? react.createElement("span", { className: "dshqb_amount dshqb_tps", key: "tps" }, t("tps", { rate: formatTokensPerSecond(liveUsage.tokensPerSecond) }))
+				? react.createElement("span", {
+					className: "dshqb_amount dshqb_tps" + (tpsStale ? " dshqb_tps_stale" : ""),
+					key: "tps",
+					title: t(tpsPending ? "tpsPendingTitle" : tpsEstimated ? "tpsEstimatedTitle" : "tpsExactTitle")
+				}, t("tps", { rate: formatTokensPerSecond(liveUsage.tokensPerSecond) }))
 				: null;
 
 			const rightCol = react.createElement("div", { className: "dshqb_col", key: "right" }, [
 				react.createElement("div", { className: "dshqb_card_header", key: "head" }, [
 					react.createElement("span", { className: "dshqb_card_title", key: "title" }, t("card.sessionTitle")),
-					react.createElement("span", { className: "dshqb_card_val_main", key: "val" }, hasCost ? formatMoney(cost.cost, cost.currency ?? "CNY") : formatMoney(0, cost?.currency ?? "CNY"))
+					react.createElement("span", { className: "dshqb_card_val_main", key: "val" }, hasUsage ? sessionAmountText() : formatMoney(0, cost?.currency ?? "CNY"))
 				]),
-				hasCost
+				hasUsage
 					? react.createElement("ul", { className: "dshqb_card_models", key: "models" },
-						(cost.models ?? []).filter((m) => (cost.costByModel[m] ?? 0) > 0).map((m, i) =>
-							react.createElement("li", { key: i }, [
-								react.createElement("span", { key: "m" }, "• " + (m === "unknown" ? t("model.unknown") : m)),
-								react.createElement("span", { key: "c" }, formatMoney(cost.costByModel[m], cost.currency ?? "CNY"))
-							])
-						)
+						(cost.models ?? []).map((m, i) => {
+							const status = cost.modelStatus?.[m];
+							const isNone = status?.source === "none";
+							const tip = isNone
+								? t("model.noPrice")
+								: status?.source === "family"
+									? t("model.fallbackPrice", { model: status.fallbackModel ?? "" })
+									: null;
+							return react.createElement("li", { key: i }, [
+								react.createElement("span", { className: "dshqb_model_name", key: "m" }, [
+									"• " + (m === "unknown" ? t("model.unknown") : m),
+									tip
+										? react.createElement(HoverTooltip, { content: tip, key: "warn" },
+											react.createElement("button", {
+												type: "button",
+												className: "dshqb_warn_badge",
+												"aria-label": tip,
+												title: tip,
+												onClick: (e) => e.stopPropagation(),
+												key: "icon"
+											}, "!"))
+										: null
+								]),
+								isNone
+									? react.createElement("span", { className: "dshqb_model_amount_unpriced", key: "c" }, t("model.cannotCompute"))
+									: react.createElement("span", { key: "c" }, formatMoney(cost.costByModel[m] ?? 0, cost.currency ?? "CNY"))
+							]);
+						})
 					)
 					: react.createElement("div", { className: "dshqb_card_sub", key: "models" }, t("card.noCost")),
 				react.createElement("div", { className: "dshqb_card_hint", key: "hint" }, [
-					hasCost
+					hasUsage
 						? (() => {
 							const totalInput = (cost.tokens?.uncachedInput ?? 0) + (cost.tokens?.cacheRead ?? 0) + (cost.tokens?.cacheWrite ?? 0);
 							const cacheHit = cost.tokens?.cacheRead ?? 0;
@@ -4104,7 +4366,6 @@ window.__ModuleLoader__.load({
 				const currency = typeof payload.currency === "string" ? payload.currency : "CNY";
 				const prices = payload.prices !== null && typeof payload.prices === "object" ? payload.prices : {};
 				
-				const table = v4TableFor(currency);
 				const names = [];
 				for (const m of PINNED_V4_MODELS) names.push(m);
 				for (const m of Object.keys(prices)) {
@@ -4137,11 +4398,13 @@ window.__ModuleLoader__.load({
 					react.createElement("div", { className: "dshqb_pricing_models", key: "models" },
 						names.map((model, idx) => {
 							const stored = prices[model];
-							const tiers = hasTariffTiers(stored)
-								? { peak: stored.peak, offPeak: stored.offPeak }
-								: (PINNED_V4_MODELS.includes(model) && table[model]
-									? { peak: table[model].peak, offPeak: table[model].offPeak }
-									: null);
+							const pinned = PINNED_V4_MODELS.includes(model);
+							const currentOfficial = pinned ? officialTiersFor(model, currency) : null;
+							const pinnedFlat = pinned && isFiniteRate(stored) && !hasTariffTiers(stored);
+							const managed = Boolean(currentOfficial) && (stored === undefined || pinnedFlat || matchesOfficialTiers(model, currency, stored));
+							const tiers = managed && currentOfficial
+								? { peak: currentOfficial.peak, offPeak: currentOfficial.offPeak }
+								: (hasTariffTiers(stored) ? { peak: stored.peak, offPeak: stored.offPeak } : null);
 							return react.createElement("div", { className: "dshqb_pricing_card_item", key: idx }, [
 								react.createElement("div", { className: "dshqb_pricing_model_name", key: "name" }, "• " + model),
 								tiers

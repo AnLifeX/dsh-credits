@@ -18,10 +18,11 @@ import { z } from 'zod'
 import { homedir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
-import { resolveModelPrice, priceBuckets, officialV4ConfigPrices, normalizePricingCurrency } from './pricing.js'
+import { priceBuckets, officialV4ConfigPrices, normalizePricingCurrency } from './pricing.js'
+import { buildPricingCandidates, fetchOfficialPricing } from './pricing-source.js'
 import { applySpendEvent, aggregateSpend, initSpendFold, resolveSpendRange, usageOfSettlement } from './spend.js'
 
-export { resolveModelPrice } from './pricing.js'
+export { resolveModelPrice, resolveModelPriceInfo, familyModelFor } from './pricing.js'
 export const name = 'dsh-credits'
 
 /** 支持的额度数据源。 */
@@ -1295,57 +1296,285 @@ export const makeCostProjection = (configOrGetter) => {
         modelOrder: isNewModel ? [...(state.modelOrder ?? []), modelKey] : state.modelOrder,
       }
     },
-    stateVersion: 4,
+    // 状态结构变更时升版，让旧缓存失效重折。单价在 view() 时按每笔事件的时间计算，
+    // 改价不需要重挂投影。
+    stateVersion: 5,
     wire: { viewSchema, view },
   }
 }
 
-/** Session v2 压缩流中首个真实输出 token 的时间。 */
-const firstTokenTime = (stream) => {
+/**
+ * 压缩流里真实产出 token 的时间窗（首个非空增量 → 最后一个非空增量）。
+ * 两端都用 token 自身的时间，不用结算到达时间，避免把收尾等待算进分母。
+ */
+const streamWindow = (stream) => {
+  let first
+  let last
+  const mark = (time) => {
+    const t = Number(time)
+    if (!Number.isFinite(t)) return
+    if (first === undefined) first = t
+    if (last === undefined || t > last) last = t
+  }
   for (const record of Array.isArray(stream) ? stream : []) {
     if (record?.type === 'text-chunks' || record?.type === 'reasoning-chunks') {
+      const texts = record.texts ?? []
       let time = Number(record.time0)
-      for (let index = 0; index < (record.texts?.length ?? 0); index += 1) {
-        if (index > 0) time += Number(record.dt?.[index - 1])
-        if (record.texts[index] !== '') return time
+      for (let index = 0; index < texts.length; index += 1) {
+        if (index > 0) time += Number(record.dt?.[index - 1] ?? 0)
+        if (texts[index] !== '' && texts[index] !== undefined) mark(time)
       }
     } else if (record?.type === 'tool-call-chunks') {
-      if (record.name !== undefined) return record.time0
+      if (record.name !== undefined) mark(record.time0)
+      const args = record.args ?? []
       let time = Number(record.time0)
-      for (let index = 0; index < (record.args?.length ?? 0); index += 1) {
-        if (index > 0) time += Number(record.dt?.[index - 1])
-        if (record.args[index] !== '') return time
+      for (let index = 0; index < args.length; index += 1) {
+        if (index > 0) time += Number(record.dt?.[index - 1] ?? 0)
+        if (args[index] !== '' && args[index] !== undefined) mark(time)
       }
     } else if (record?.type === 'chunk') {
       const chunk = record.chunk
-      if ((chunk?.type === 'text-delta' || chunk?.type === 'reasoning-delta') && chunk.text !== '') return record.time
-      if (chunk?.type === 'tool-call-delta' && (chunk.name !== undefined || chunk.argumentsDelta !== '')) return record.time
+      if ((chunk?.type === 'text-delta' || chunk?.type === 'reasoning-delta') && chunk.text !== '') mark(record.time)
+      else if (chunk?.type === 'tool-call-delta' && (chunk.name !== undefined || chunk.argumentsDelta !== '')) mark(record.time)
     }
   }
-  return undefined
+  return { first, last }
 }
 
-/** 会话最近一次 assistant settlement 的精确输出吞吐。 */
+/** 估算输出 token 用的字符/token 比。 */
+const CHARS_PER_TOKEN = 3
+/** CJK 字符的 token 权重。 */
+const CJK_TOKEN_WEIGHT = 2.7
+/** 低于该窗口（ms）的样本不作为速率展示，避免毫秒级抖动被放大。 */
+const MIN_RATE_WINDOW_MS = 200
+/** CJK 按 CJK_TOKEN_WEIGHT 计，其余按 CHARS_PER_TOKEN 折算。 */
+const estimateTokens = (text) => {
+  if (typeof text !== 'string' || text === '') return 0
+  let cjk = 0
+  let total = 0
+  for (const char of text) {
+    total += 1
+    const code = char.codePointAt(0)
+    if (code >= 0x2e80 && code <= 0x9fff) cjk += 1
+    else if (code >= 0xf900 && code <= 0xfaff) cjk += 1
+    else if (code >= 0xff00 && code <= 0xff60) cjk += 1
+    else if (code >= 0x20000 && code <= 0x2ffff) cjk += 1
+  }
+  const rest = total - cjk
+  return cjk * CJK_TOKEN_WEIGHT + rest / CHARS_PER_TOKEN
+}
+
+/**
+ * 一段 chunks 记录展开成 `{ text, time }[]`。
+ * `time0` 在事件根上，`dt` / `texts`（或 `args`）在 `data` 里；缺 `time0` 时退回事件根的 `time`。
+ */
+const expandChunks = (event) => {
+  const data = event?.data ?? {}
+  const texts = data.texts ?? data.args ?? []
+  const start = Number(event?.time0)
+  const base = Number.isFinite(start) ? start : Number(event?.time)
+  const out = []
+  let time = base
+  for (let index = 0; index < texts.length; index += 1) {
+    if (index > 0) {
+      const dt = Number(data.dt?.[index - 1] ?? 0)
+      time += Number.isFinite(dt) ? dt : 0
+    }
+    out.push({ text: texts[index], time })
+  }
+  return out.filter((item) => typeof item.text === 'string' && item.text !== '')
+}
+
+/**
+ * 会话实时输出吞吐投影。
+ *
+ * 消费 DSH Session v2 的两种事件：
+ * - 流式 `text-chunks` / `reasoning-chunks` / `tool-call-chunks` / `assistant/chunk`：
+ *   按段累加字符数估算输出 token，用段自身的时间轴推进 `latestOutputTime`，实时刷新速率。
+ * - `assistant/message` / `assistant/attempt` settlement（或流内 `usage` chunk）：
+ *   用 provider 精确 `outputTokens` 替换估算值，`exact = true`，之后同一步的增量不再计入。
+ *
+ * 速率口径：本步从首个输出 token 到最后一个输出 token 的平均值
+ * （`outputTokens * 1000 / (latest - first)`），完成后常驻为最近一次速率。
+ */
 export const makeTpsProjection = () => {
-  const viewSchema = z.object({ tokensPerSecond: z.number().nonnegative().optional() }).strict()
-  const stateSchema = z.object({ tokensPerSecond: z.number().nonnegative().optional() }).strict()
-  const view = (state) => state
+  const viewSchema = z.object({
+    tokensPerSecond: z.number().nonnegative().optional(),
+    estimate: z.boolean().optional(),
+    pending: z.boolean().optional(),
+  }).strict()
+  const activeSchema = z.object({
+    turn: z.number(),
+    step: z.number(),
+    outputTokens: z.number().nonnegative(),
+    firstOutputTime: z.number().nullable(),
+    latestOutputTime: z.number().nullable(),
+    exact: z.boolean(),
+  }).strict()
+  const stateSchema = z.object({
+    active: activeSchema.nullable(),
+    last: z.object({ tokensPerSecond: z.number().nonnegative() }).strict().nullable(),
+  }).strict()
+
+  const emptyActive = (turn, step) => ({
+    turn,
+    step,
+    outputTokens: 0,
+    firstOutputTime: null,
+    latestOutputTime: null,
+    exact: false,
+  })
+
+  const rateOf = (active) => {
+    if (!active || active.firstOutputTime === null || active.latestOutputTime === null) return undefined
+    const elapsed = active.latestOutputTime - active.firstOutputTime
+    if (!Number.isFinite(elapsed) || elapsed <= 0 || active.outputTokens <= 0) return undefined
+    // 窗口过短时速率会被 1~2ms 的抖动放大成几十万 tok/s：这种样本不可信，
+    // 宁可不显示（或保留上一段的稳定值），也不要给出离谱数字。
+    if (elapsed < MIN_RATE_WINDOW_MS) return undefined
+    return active.outputTokens * 1000 / elapsed
+  }
+
+  /** 累加一段产出；时间早于首 token 的异常值直接忽略，避免负时长。 */
+  const withOutput = (active, tokens, time) => {
+    if (!(tokens > 0) || !Number.isFinite(time)) return active
+    const first = active.firstOutputTime ?? time
+    const latest = active.latestOutputTime === null ? time : Math.max(active.latestOutputTime, time)
+    return {
+      ...active,
+      outputTokens: active.outputTokens + tokens,
+      firstOutputTime: first,
+      latestOutputTime: latest,
+    }
+  }
+
+  /**
+   * 用一次完整 usage 覆盖成精确值；时间窗两端尽量取 token 自身的产出时间，
+   * 拿不到才退回调用方给的兜底时间。
+   */
+  const withExact = (active, outputTokens, window) => {
+    const start = Number.isFinite(window?.first) ? window.first : undefined
+    const end = Number.isFinite(window?.last) ? window.last : undefined
+    const firstOutputTime = active.firstOutputTime ?? start ?? null
+    let latestOutputTime = active.latestOutputTime
+    if (end !== undefined) latestOutputTime = latestOutputTime === null ? end : Math.max(latestOutputTime, end)
+    return {
+      ...active,
+      outputTokens: outputTokens > 0 ? outputTokens : 0,
+      exact: true,
+      firstOutputTime,
+      latestOutputTime,
+    }
+  }
+
+  const ensureActive = (state, turn, step) => (
+    state.active && state.active.turn === turn && state.active.step === step
+      ? state.active
+      : emptyActive(turn, step)
+  )
 
   return {
     key: 'liveTokenUsage',
     stateSchema,
-    init: () => ({}),
+    init: () => ({ active: null, last: null }),
     apply: (state, event) => {
+      const type = event?.type
+
+      if (type === 'step/start') {
+        return { ...state, active: emptyActive(Number(event.data?.turn) || 0, Number(event.data?.step) || 0) }
+      }
+
+      // 本步结束：把速率定稿到 last，清空 active，之后视图继续显示最近一次速率。
+      if (type === 'step/end') {
+        if (state.active === null) return state
+        const rate = rateOf(state.active)
+        return {
+          active: null,
+          last: Number.isFinite(rate) ? { tokensPerSecond: rate } : state.last,
+        }
+      }
+
+      // 流式记录：`time0` 在事件根上，`texts` / `dt` 在 data 里（Session v2 压缩后的形态）。
+      if (type === 'text-chunks' || type === 'reasoning-chunks' || type === 'tool-call-chunks') {
+        const turn = Number(event.data?.turn) || 0
+        const step = Number(event.data?.step) || 0
+        const active = ensureActive(state, turn, step)
+        if (active.exact) return state.active === active ? state : { ...state, active }
+        let next = active
+        for (const piece of expandChunks(event)) {
+          next = withOutput(next, estimateTokens(piece.text), piece.time)
+        }
+        return next === active ? (state.active === active ? state : { ...state, active }) : { ...state, active: next }
+      }
+
+      // 未压缩的逐 delta 形态（保留兼容）。
+      if (type === 'assistant/chunk') {
+        const turn = Number(event.data?.turn) || 0
+        const step = Number(event.data?.step) || 0
+        const time = Number(event.time)
+        const chunk = event.data?.chunk ?? {}
+        const active = ensureActive(state, turn, step)
+
+        if (chunk.type === 'usage') {
+          const outputTokens = Math.max(0, Number(chunk.usage?.outputTokens) || 0)
+          return { ...state, active: withExact(active, outputTokens, time) }
+        }
+        if (active.exact) return state.active === active ? state : { ...state, active }
+
+        let text = null
+        if (chunk.type === 'text-delta' || chunk.type === 'reasoning-delta') text = chunk.text
+        else if (chunk.type === 'tool-call-delta') text = (chunk.name ?? '') + (chunk.argumentsDelta ?? '')
+        // block-end 是"这段已经结束"的收尾事件，到达时刻远晚于 token 真正产出的时刻，
+        // 只累加字符数、不推进 latestOutputTime，否则会把窗口压缩成几毫秒。
+        else if (chunk.type === 'block-end') {
+          const blob = (() => { try { return JSON.stringify(chunk.block ?? '') } catch { return '' } })()
+          const grew = estimateTokens(blob)
+          return grew > 0
+            ? { ...state, active: { ...active, outputTokens: active.outputTokens + grew } }
+            : (state.active === active ? state : { ...state, active })
+        }
+        if (text === null) return state.active === active ? state : { ...state, active }
+        const next = withOutput(active, estimateTokens(text), Number.isFinite(time) ? time : undefined)
+        return next === active ? (state.active === active ? state : { ...state, active }) : { ...state, active: next }
+      }
+
+      // settlement：用官方精确 outputTokens 收敛；时间窗取自压缩流里 token 自身的产出时间。
       const usage = usageOfSettlement(event)
-      const started = firstTokenTime(event.data?.stream)
-      const completed = Number(event.time)
-      const outputTokens = Number(usage?.outputTokens)
-      const elapsed = completed - started
-      if (!Number.isFinite(outputTokens) || outputTokens <= 0 || !Number.isFinite(elapsed) || elapsed <= 0) return state
-      return { tokensPerSecond: outputTokens * 1000 / elapsed }
+      if (usage === undefined) return state
+      const turn = Number(event.data?.turn) || 0
+      const step = Number(event.data?.step) || 0
+      const active = ensureActive(state, turn, step)
+      const window = streamWindow(event.data?.stream)
+      const settledAt = Number(event.time)
+      const outputTokens = Math.max(0, Number(usage.outputTokens) || 0)
+      // 没有流记录时，两端都退回结算时间（此时无法给出有意义的时长，速率会被抑制）。
+      const fallback = Number.isFinite(settledAt) ? { first: settledAt, last: settledAt } : {}
+      const merged = {
+        first: Number.isFinite(window.first) ? window.first : fallback.first,
+        last: Number.isFinite(window.last) ? window.last : fallback.last,
+      }
+      return { ...state, active: withExact(active, outputTokens, merged) }
     },
-    stateVersion: 2,
-    wire: { viewSchema, view },
+    // 状态结构变更时升版，让旧缓存失效重折。
+    stateVersion: 5,
+    wire: {
+      viewSchema,
+      view: (state) => {
+        // 本步已有可算的数值（结算精确值，或流式累加出的估算值）。
+        const live = rateOf(state.active)
+        if (Number.isFinite(live)) {
+          return state.active.exact === false
+            ? { tokensPerSecond: live, estimate: true }
+            : { tokensPerSecond: live }
+        }
+        // 本步还在进行、又算不出数值：沿用上一步的已结算速率，并标 pending 让 UI 弱化显示。
+        const last = state.last?.tokensPerSecond
+        if (!Number.isFinite(last)) return {}
+        return state.active === null
+          ? { tokensPerSecond: last }
+          : { tokensPerSecond: last, pending: true }
+      },
+    },
   }
 }
 
@@ -1400,7 +1629,6 @@ export function apply(ctx, config) {
   }
 
   const getConfig = () => runtimeConfig
-  let remountCostProjection = () => {}
 
   const spendFolds = new Map()
   const spendFile = join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'storages', 'dsh-credits-spend.json')
@@ -2252,11 +2480,9 @@ export function apply(ctx, config) {
           warning: runtimeConfig.warningThreshold,
           danger: runtimeConfig.dangerThreshold,
         },
-        prices: {
-          ...runtimeConfig.prices,
-          'deepseek-v4-flash': resolveModelPrice(runtimeConfig, 'deepseek-v4-flash'),
-          'deepseek-v4-pro': resolveModelPrice(runtimeConfig, 'deepseek-v4-pro'),
-        },
+        // 直接透出配置价；内置官方模型的实际单价由客户端按每笔事件时间解析，
+        // 不再在这里替换成“此刻”的单值（会丢掉 peak/offPeak 与历史时间表）。
+        prices: { ...runtimeConfig.prices },
         defaultPrices: runtimeConfig.defaultPrices,
         quotaSources: adapters.map((adapter) => ({
           id: adapter.id,
@@ -2411,7 +2637,8 @@ export function apply(ctx, config) {
               runtimeConfig.defaultPrices = { ...runtimeConfig.defaultPrices, ...body.defaultPrices }
             }
             runtimeConfig.pricingEpoch = Number(runtimeConfig.pricingEpoch ?? 0) + 1
-            try { remountCostProjection() } catch { /* 宿主可能拒绝同 key 重挂; 客户端按最新单价重算 */ }
+            // 单价在 view() 时动态读取 getConfig()，改价无需重挂投影；重挂反而会清空
+            // 本会话的 TPS，并在宿主拒绝同 key 重注册时留下空注册。
 
             // 配置变更后重设刷新循环并立即拉取一次最新数据
             resetLoop()
@@ -2606,31 +2833,68 @@ export function apply(ctx, config) {
         })
       },
     }), 'dsh-credits: spend route')
+
+    // 官方定价检查：抓官方页 → 与内置表比对 → 返回候选。不写任何配置，失败也不影响计价。
+    webCtx.effect(() => webCtx.webServer.register({
+      kind: 'exact',
+      path: '/query-credits/pricing/check',
+      async handler(req, res) {
+        if (req.method !== 'POST') {
+          res.writeHead(405, { Allow: 'POST' })
+          res.end()
+          return
+        }
+        let result
+        try {
+          result = await fetchOfficialPricing()
+        } catch (error) {
+          result = { ok: false, error: String(error?.message ?? error) }
+        }
+        if (!result.ok) {
+          sendJson(res, 200, { ok: false, error: result.error })
+          return
+        }
+        sendJson(res, 200, {
+          ok: true,
+          fetchedAt: result.fetchedAt,
+          candidates: buildPricingCandidates(result.prices, (currency) => officialV4ConfigPrices(currency)),
+          ...(result.errors?.length ? { errors: result.errors } : {}),
+        })
+      },
+    }), 'dsh-credits: pricing check route')
   })
 
   // 可选 sessionProjections: 会话花费投影 (使用动态 getter)
   ctx.inject(['sessionProjections'], (projectionCtx) => {
     let disposers = []
-    let stateVersion = 4
-    const mount = () => {
-      for (const dispose of disposers) {
-        if (typeof dispose === 'function') {
-          try { dispose() } catch { /* 旧单元卸载失败时仍注册新单元 */ }
-        }
-      }
-      disposers = []
-      for (const unit of [makeTpsProjection(), makeCostProjection(getConfig)]) {
-        unit.stateVersion = stateVersion
-        const ret = projectionCtx.sessionProjections.register(unit)
-        const dispose = typeof ret === 'function'
-          ? ret
-          : (ret && typeof ret.dispose === 'function' ? () => ret.dispose() : null)
-        if (dispose) disposers.push(dispose)
-      }
+    const registerUnit = (unit) => {
+      const ret = projectionCtx.sessionProjections.register(unit)
+      if (typeof ret === 'function') return ret
+      if (ret && typeof ret.dispose === 'function') return () => ret.dispose()
+      return null
     }
-    remountCostProjection = () => {
-      stateVersion += 1
-      mount()
+    // 事务式挂载：先把新单元全部注册成功，再释放旧单元；任何一步失败都回滚到旧单元，
+    // 避免出现“旧单元已 dispose、新单元没注册上”导致 TPS / 花费整段消失。
+    const mount = () => {
+      const next = []
+      try {
+        for (const unit of [makeTpsProjection(), makeCostProjection(getConfig)]) {
+          const dispose = registerUnit(unit)
+          if (dispose) next.push(dispose)
+        }
+      } catch (error) {
+        for (const dispose of next) {
+          try { dispose() } catch { /* 回滚失败也保留旧单元 */ }
+        }
+        ctx.logger?.warn?.('dsh-credits: 注册 session projection 失败，已保留旧单元', error)
+        return false
+      }
+      const previous = disposers
+      disposers = next
+      for (const dispose of previous) {
+        try { dispose() } catch { /* 新单元已生效，旧单元卸载失败无碍 */ }
+      }
+      return true
     }
     mount()
   })
