@@ -17,7 +17,6 @@ window.__ModuleLoader__.load({
 		var exports = module.exports;
 		Object.defineProperty(exports, Symbol.toStringTag, { value: "Module" });
 		let react = require("react");
-		let _ui_primitives = require("@deepseek-ai/dsh-client-ui-primitives");
 
 		//#region styles
 		const CSS_ID = "dsh-credits/styles.css";
@@ -466,6 +465,8 @@ window.__ModuleLoader__.load({
 				: { ...payload, provider: source };
 			if (!view || typeof view !== "object") return next;
 			if (view.kind === "balance" || (!view.kind && view.balances)) {
+				next.balances = view.balances;
+				next.isAvailable = view.isAvailable;
 				delete next.usage;
 				delete next.metrics;
 			} else if (view.kind === "usage" || (!view.kind && view.usage)) {
@@ -484,6 +485,7 @@ window.__ModuleLoader__.load({
 			const kind = info?.errorKind;
 			if (kind === "quota-timeout" || /aborted|timeout|timed out/i.test(error)) return t("quota.timeout");
 			if (error === "api-key-missing") return t("balanceMissing");
+			if (error === "deepseek-account-signed-out") return t("quota.accountSignedOut");
 			if (error === "quota-credential-missing") return t("quota.credentialMissing");
 			if (error === "quota-url-missing") return t("quota.urlMissing");
 			if (/quota-header-credential-missing/.test(error)) return t("quota.credentialMissing");
@@ -495,6 +497,7 @@ window.__ModuleLoader__.load({
 			const kind = info?.errorKind;
 			if (kind === "quota-timeout" || /aborted|timeout|timed out/i.test(error)) return t("quota.timeoutShort");
 			if (error === "api-key-missing") return t("balanceMissing");
+			if (error === "deepseek-account-signed-out") return t("quota.accountSignedOut");
 			if (error === "quota-credential-missing") return t("quota.credentialMissing");
 			return fallback;
 		}
@@ -614,11 +617,14 @@ window.__ModuleLoader__.load({
 			for (const [model, rates] of Object.entries(prices || {})) next[model] = hydrateModelPrice(model, rates, currency);
 			return next;
 		}
+		let holidayOffDays = new Set();
 		function isPeakBeijing(timestamp) {
 			const beijing = new Date(Number(timestamp) + 8 * 3600 * 1000);
+			if (!Number.isFinite(beijing.getTime())) return false;
 			const hour = beijing.getUTCHours();
 			const dow = beijing.getUTCDay();
 			if (dow === 0 || dow === 6) return false;
+			if (holidayOffDays.has(beijing.toISOString().slice(0, 10))) return false;
 			return (hour >= 9 && hour < 12) || (hour >= 14 && hour < 18);
 		}
 		/** 当前北京时间峰谷时段; 与 V4 计价时段保持一致。 */
@@ -805,6 +811,7 @@ window.__ModuleLoader__.load({
 					});
 					if (!res.ok) throw new Error("HTTP " + res.status);
 					const data = await res.json();
+					holidayOffDays = new Set(data.holidayCalendar?.offDays ?? []);
 					if (typeof data.clientPollIntervalMs === "number" && data.clientPollIntervalMs >= 5000) {
 						pollMs = Math.min(data.clientPollIntervalMs, 3600000);
 					}
@@ -970,8 +977,8 @@ window.__ModuleLoader__.load({
 			"model.cannotCompute": "无法计算",
 			"tariff.peak": "梁文峰时刻",
 			"tariff.offPeak": "梁文谷时刻",
-			"tariff.peakTitle": "梁文峰时刻：北京时间周一至周五 09:00–12:00、14:00–18:00\n梁文谷时刻：其余时段（含周末）",
-			"tariff.offPeakTitle": "梁文峰时刻：北京时间周一至周五 09:00–12:00、14:00–18:00\n梁文谷时刻：其余时段（含周末）",
+			"tariff.peakTitle": "梁文峰时刻：北京时间周一至周五（不含中国法定节假日）09:00–12:00、14:00–18:00\n梁文谷时刻：其余时段（含节假日、周末及调休补班周末）",
+			"tariff.offPeakTitle": "梁文峰时刻：北京时间周一至周五（不含中国法定节假日）09:00–12:00、14:00–18:00\n梁文谷时刻：其余时段（含节假日、周末及调休补班周末）",
 			"card.error": "【账户余额】异常: {error}",
 			/* OpenCode Go quota translations */
 			"quota.readout": "Go 额度 月 {monthly} · 周 {weekly} · 5h {rolling}",
@@ -994,6 +1001,7 @@ window.__ModuleLoader__.load({
 			"quota.timeout": "额度接口请求超时，请检查网络后点击刷新重试",
 			"quota.timeoutShort": "额度接口超时，点击重试",
 			"quota.credentialMissing": "尚未配置该额度接口的凭证",
+			"quota.accountSignedOut": "请先登录 DeepSeek 账号",
 			"quota.urlMissing": "未配置额度接口 URL",
 			"quota.requestFailed": "额度接口请求失败，请稍后点击刷新重试",
 			"btn.refreshCustom": "点击立即刷新额度",
@@ -1299,8 +1307,8 @@ window.__ModuleLoader__.load({
 			"model.cannotCompute": "Cannot compute",
 			"tariff.peak": "Liangwen Peak Time",
 			"tariff.offPeak": "Liangwen Valley Time",
-			"tariff.peakTitle": "Peak period: Beijing time Mon–Fri 09:00–12:00, 14:00–18:00\nValley period: all other times, including weekends",
-			"tariff.offPeakTitle": "Peak period: Beijing time Mon–Fri 09:00–12:00, 14:00–18:00\nValley period: all other times, including weekends",
+			"tariff.peakTitle": "Peak period: Beijing time Mon–Fri (excluding Chinese public holidays) 09:00–12:00, 14:00–18:00\nValley period: all other times, including Chinese public holidays and weekends, even make-up workdays",
+			"tariff.offPeakTitle": "Peak period: Beijing time Mon–Fri (excluding Chinese public holidays) 09:00–12:00, 14:00–18:00\nValley period: all other times, including Chinese public holidays and weekends, even make-up workdays",
 			"card.error": "【Account Balance】Error: {error}",
 			/* OpenCode Go quota translations */
 			"quota.readout": "Go quota M {monthly} · W {weekly} · 5h {rolling}",
@@ -1323,6 +1331,7 @@ window.__ModuleLoader__.load({
 			"quota.timeout": "Quota request timed out. Check your network, then click refresh to retry.",
 			"quota.timeoutShort": "Quota request timed out, click to retry",
 			"quota.credentialMissing": "Credentials for this quota endpoint are not configured",
+			"quota.accountSignedOut": "Sign in to your DeepSeek account",
 			"quota.urlMissing": "Quota endpoint URL is not configured",
 			"quota.requestFailed": "Quota request failed. Please click refresh to retry later.",
 			"btn.refreshCustom": "Click to refresh quota",
@@ -4440,7 +4449,10 @@ window.__ModuleLoader__.load({
 						rel: "noreferrer",
 						"aria-label": t("pricing.aria"),
 						title: t("pricing.aria"),
-						children: react.createElement(_ui_primitives.IconQuestionOutline14, { size: 14 })
+						children: react.createElement("svg", { width: 14, height: 14, viewBox: "0 0 16 16", fill: "none", stroke: "currentColor", "aria-hidden": true }, [
+							react.createElement("circle", { cx: 8, cy: 8, r: 6.25, key: "circle" }),
+							react.createElement("path", { d: "M6.25 6a1.75 1.75 0 0 1 3.5 0c0 1.25-1.75 1.25-1.75 2.5M8 10.5v1", strokeWidth: 1.4, key: "question" })
+						])
 					}),
 					pricingPopover
 				]);

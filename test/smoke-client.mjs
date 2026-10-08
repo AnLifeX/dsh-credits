@@ -4,6 +4,8 @@
  * 运行: node test/smoke-client.mjs
  */
 import { readFileSync } from 'node:fs'
+import assert from 'node:assert/strict'
+import { HOLIDAY_CALENDAR, isPeakBeijing } from '../src/pricing.js'
 
 const bundlePath = new URL('../client/client.js', import.meta.url)
 
@@ -52,6 +54,7 @@ const ReactMock = {
     return getSnapshot()
   },
   createElement: (type, props, ...children) => {
+    if (type == null) throw new Error('invalid React element type: ' + type)
     const flattened = children.flat(Infinity).filter((c) => c !== null && c !== undefined && c !== false && c !== true)
     const finalChildren = flattened.length > 0 ? (flattened.length === 1 ? flattened[0] : flattened) : props?.children
     return {
@@ -93,7 +96,6 @@ function renderToStaticMarkup(vnode) {
 function stubPrimitives(React) {
   return {
     Tooltip: ({ label, children }) => React.createElement('span', { 'data-label': typeof label === 'string' ? label : '' }, children ?? null),
-    IconQuestionOutline14: () => React.createElement('span', null, '?'),
   }
 }
 
@@ -206,7 +208,7 @@ function installFetch(balancePayload) {
     if (href.includes('/query-credits/spend')) {
       return { ok: true, json: async () => ({ ...mockSpend }) }
     }
-    return { ok: true, json: async () => balancePayload() }
+    return { ok: true, json: async () => ({ holidayCalendar: HOLIDAY_CALENDAR, ...balancePayload() }) }
   }
 }
 
@@ -258,8 +260,8 @@ const props = {
       'card.pricingHint': '💡 计价规则与单价请见右侧 [?]',
       'tariff.peak': '梁文峰时刻',
       'tariff.offPeak': '梁文谷时刻',
-      'tariff.peakTitle': '梁文峰时刻：北京时间周一至周五 09:00–12:00、14:00–18:00\n梁文谷时刻：其余时段（含周末）',
-      'tariff.offPeakTitle': '梁文峰时刻：北京时间周一至周五 09:00–12:00、14:00–18:00\n梁文谷时刻：其余时段（含周末）',
+      'tariff.peakTitle': '梁文峰时刻：北京时间周一至周五（不含中国法定节假日）09:00–12:00、14:00–18:00\n梁文谷时刻：其余时段（含节假日、周末及调休补班周末）',
+      'tariff.offPeakTitle': '梁文峰时刻：北京时间周一至周五（不含中国法定节假日）09:00–12:00、14:00–18:00\n梁文谷时刻：其余时段（含节假日、周末及调休补班周末）',
       'pricing.title': '📋 DeepSeek V4 定价参考',
       'pricing.rateBadge': '每 1M tokens · {currency}',
       'pricing.hit': '命中 {price}',
@@ -330,7 +332,7 @@ if (!htmlGreen.includes('⚡ 本会话消耗')) throw new Error('session title m
 if (htmlGreen.includes('dshqb_card_settings_link')) throw new Error('settings link should not appear in hover card')
 if (htmlGreen.includes('打开偏好设置')) throw new Error('settings entry should not appear in hover card')
 if (htmlGreen.includes('title="插件设置"')) throw new Error('in-session settings gear should be removed')
-if (htmlGreen.includes('<svg')) throw new Error('gear svg should be removed from session bar')
+if (!htmlGreen.includes('<svg') || code.includes('IconQuestionOutline14')) throw new Error('pricing help must render without the removed host icon export')
 if (!htmlGreen.includes('dshqb_card_tokens')) throw new Error('tokens container class missing')
 if (!htmlGreen.includes('dshqb_card_hit')) throw new Error('hit container class missing')
 if (!htmlGreen.includes('命中: 60')) throw new Error('hit token count missing')
@@ -355,7 +357,7 @@ if (!htmlGreen.includes('$0.00')) throw new Error('zero USD wallet should still 
 if (!htmlGreen.includes('dshqb_card_badge_btn')) throw new Error('balance status badge should be a refresh button')
 if (!htmlGreen.includes('梁文峰时刻') && !htmlGreen.includes('梁文谷时刻')) throw new Error('tariff badge should show current peak/valley period')
 if (htmlGreen.includes('dshqb_tariff_tooltip')) throw new Error('old tariff tooltip should be removed')
-if (!htmlGreen.includes('dshqb_hover_tip') || !htmlGreen.includes('梁文峰时刻：北京时间周一至周五 09:00–12:00、14:00–18:00') || !htmlGreen.includes('梁文谷时刻：其余时段（含周末）')) throw new Error('tariff badge should show the exact two-line Beijing-time tooltip')
+if (!htmlGreen.includes('dshqb_hover_tip') || !htmlGreen.includes('梁文峰时刻：北京时间周一至周五（不含中国法定节假日）09:00–12:00、14:00–18:00') || !htmlGreen.includes('梁文谷时刻：其余时段（含节假日、周末及调休补班周末）')) throw new Error('tariff badge should show the exact two-line Beijing-time tooltip')
 if (htmlGreen.includes('title="梁文峰时刻') || htmlGreen.includes('title="梁文谷时刻')) throw new Error('tariff tooltip should not duplicate as a native title')
 if (!htmlGreen.includes('dshqb_tariff_badge dshqb_card_badge dshqb_card_badge_btn') && !htmlGreen.includes('dshqb_card_badge dshqb_card_badge_btn dshqb_tariff_badge')) throw new Error('tariff badge should use the same button format as status badges')
 if (htmlGreen.indexOf('梁文') > htmlGreen.indexOf('● 充足')) throw new Error('tariff badge should be left of balance status badge')
@@ -686,8 +688,8 @@ const quotaDict = {
   'quota.unavailable': 'OpenCode Go 额度不可用',
   'tariff.peak': '梁文峰时刻',
   'tariff.offPeak': '梁文谷时刻',
-  'tariff.peakTitle': '梁文峰时刻：北京时间周一至周五 09:00–12:00、14:00–18:00\n梁文谷时刻：其余时段（含周末）',
-  'tariff.offPeakTitle': '梁文峰时刻：北京时间周一至周五 09:00–12:00、14:00–18:00\n梁文谷时刻：其余时段（含周末）',
+  'tariff.peakTitle': '梁文峰时刻：北京时间周一至周五（不含中国法定节假日）09:00–12:00、14:00–18:00\n梁文谷时刻：其余时段（含节假日、周末及调休补班周末）',
+  'tariff.offPeakTitle': '梁文峰时刻：北京时间周一至周五（不含中国法定节假日）09:00–12:00、14:00–18:00\n梁文谷时刻：其余时段（含节假日、周末及调休补班周末）',
   'btn.refreshQuota': '点击立即刷新 OpenCode Go 额度',
   'btn.refreshingQuota': '正在刷新 OpenCode Go 额度...',
   'status.sufficient': '充足',
@@ -1217,5 +1219,32 @@ if (htmlExact.includes('dshqb_tps_stale')) throw new Error('a settled TPS readin
 if (!htmlExact.includes('本步平均输出速度')) throw new Error('exact TPS should explain the official semantics')
 console.log('TPS PENDING / ESTIMATE / EXACT CLIENT SMOKE TEST PASSED')
 
+new Function('window', code.replace('exports.apply = apply;',
+  'exports.refresh = refresh; exports.isPeakBeijing = isPeakBeijing; exports.officialRateFor = officialRateFor; exports.mergeQuotaView = mergeQuotaView; exports.quotaErrorMessage = quotaErrorMessage; exports.quotaErrorShort = quotaErrorShort; exports.apply = apply;'))(globalThis.window)
+const accountHelpers = captured.factory((id) => {
+  if (id === 'react') return ReactMock
+  if (id === '@deepseek-ai/dsh-client-ui-primitives') return stubPrimitives(ReactMock)
+  throw new Error('unexpected require: ' + id)
+})
+const signedOut = { kind: 'balance', ok: false, error: 'deepseek-account-signed-out' }
+await accountHelpers.refresh()
+for (let day = Date.parse('2026-01-01T00:00:00Z'); day < Date.parse('2027-01-01T00:00:00Z'); day += 86400000) {
+  for (const hour of [0, 1, 3, 4, 6, 9, 10, 16]) {
+    const time = day + hour * 3600000
+    assert.equal(accountHelpers.isPeakBeijing(time), isPeakBeijing(time), `client/host tariff mismatch at ${new Date(time).toISOString()}`)
+  }
+}
+assert.equal(accountHelpers.officialRateFor('deepseek-v4-pro', 'CNY', Date.parse('2026-10-01T10:00:00+08:00')).cacheMiss, 4.5)
+assert.equal(accountHelpers.officialRateFor('deepseek-v4-pro', 'CNY', Date.parse('2026-10-08T10:00:00+08:00')).cacheMiss, 9)
+console.log('HOLIDAY CLIENT / HOST PRICING PARITY PASSED')
+const signedOutView = accountHelpers.mergeQuotaView({
+  kind: 'balance', ok: true, isAvailable: true,
+  balances: [{ currency: 'CNY', total: 88.5 }],
+  views: { 'provider:deepseek-account': signedOut },
+}, 'provider:deepseek-account')
+if (signedOutView.balances !== undefined || signedOutView.isAvailable !== undefined) throw new Error('signed-out account must not inherit the default API-key wallet')
+if (accountHelpers.quotaErrorMessage(signedOut, (key) => key) !== 'quota.accountSignedOut') throw new Error('account error must prompt sign-in')
+if (accountHelpers.quotaErrorShort(signedOut, (key) => key) !== 'quota.accountSignedOut') throw new Error('account readout must prompt sign-in')
+console.log('ACCOUNT SIGN-OUT CLIENT SMOKE TEST PASSED')
 console.log('CLIENT SMOKE TEST PASSED (ZERO-DEPENDENCY)')
 process.exit(0)

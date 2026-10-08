@@ -4,7 +4,7 @@
  * 运行: node test/smoke-config-api.mjs
  */
 import assert from 'node:assert/strict'
-import { EventEmitter } from 'node:events'
+import { EventEmitter, on } from 'node:events'
 import {
   apply,
   buildCustomHttpRequest,
@@ -21,9 +21,24 @@ import {
 // 模拟 webServer 上下文与注册表
 const routes = new Map()
 const credentialSecrets = new Map()
+const accountChanges = new EventEmitter()
+let accountEnabled = false
+let accountBalance = async () => ({
+  status: 'ready',
+  value: [{ currency: 'CNY', balance: '10.50' }, { currency: 'USD', balance: '2' }],
+  bonusWallets: [{ currency: 'CNY', balance: '6' }],
+})
+const accountClients = []
+const accountService = {
+  async getBalance(client) { accountClients.push(client); return accountBalance() },
+  async *watch(signal) {
+    for await (const [state] of on(accountChanges, 'change', { signal })) yield state
+  },
+}
 
 const mockCtx = {
   get(key) {
+    if (key === 'deepseekAccount') return accountService
     if (key === 'credentials') {
       return {
         async resolve(ref) {
@@ -48,6 +63,7 @@ const mockCtx = {
     if (key === 'llm') {
       return {
         listProviders: () => [
+          ...(accountEnabled ? [{ id: 'deepseek-account', name: 'DeepSeek Account' }] : []),
           { id: 'opencode-go', name: 'OpenCode Go' },
           { id: 'go-work', name: 'Work Go' },
           { id: 'go-personal', name: 'Personal Go' },
@@ -91,6 +107,7 @@ const mockCtx = {
     fn()
   },
   inject(keys, fn) {
+    if (keys.includes('deepseekAccount')) fn({ deepseekAccount: accountService, effect: (cb) => cb() })
     if (keys.includes('webServer')) {
       const webCtx = {
         effect(cb) { cb() },
@@ -120,9 +137,11 @@ const mockCtx = {
 }
 
 const customRequests = []
+let httpCalls = 0
 
 // 网络 stub: DeepSeek 返回余额, OpenCode Go 返回三个窗口用量。
 globalThis.fetch = async (url, options = {}) => {
+  httpCalls++
   const target = String(url)
   if (target.includes('opencode')) {
     const authorization = String(options.headers?.Authorization ?? '')
@@ -328,6 +347,9 @@ assert.equal(resGetConfig.data.config.showPopover, true)
   console.log('GET /query-credits (opencode-go) passed')
 
   const resDeepseekView = await invokeRoute('/query-credits', 'GET', null, 'source=deepseek&force=1')
+  assert.deepEqual(resDeepseekView.data.holidayCalendar.years, [2026])
+  assert.ok(resDeepseekView.data.holidayCalendar.offDays.includes('2026-10-01'))
+  assert.equal(resDeepseekView.data.holidayCalendar.offDays.includes('2026-10-10'), false)
   assert.equal(resDeepseekView.data.provider, 'deepseek')
   assert.ok(resDeepseekView.data.defaultProvider.startsWith('provider:'))
   assert.ok(Array.isArray(resDeepseekView.data.balances))
@@ -574,6 +596,7 @@ assert.equal(resGetConfig.data.config.showPopover, true)
 
   assert.deepEqual(matchQuotaTemplateForProvider('my-kimi-route', 'https://api.kimi.com/coding/v1'), { builtin: false, id: 'kimi-coding' })
   assert.deepEqual(matchQuotaTemplateForProvider('deepseek-official'), { builtin: true, id: 'deepseek' })
+  assert.deepEqual(matchQuotaTemplateForProvider('deepseek-account', 'https://api.deepseek.com'), { builtin: false, id: 'deepseek-account' })
   assert.deepEqual(matchQuotaTemplateForProvider('openrouter'), { builtin: false, id: 'openrouter-balance' })
   assert.equal(matchQuotaTemplateForProvider('siliconflow-cn', 'https://api.siliconflow.cn/v1'), null)
   assert.deepEqual(matchQuotaTemplateForProvider('custom-minimax', 'https://api.minimaxi.com/v1'), { builtin: false, id: 'minimax-cn-coding' })
@@ -753,6 +776,67 @@ assert.equal(resGetConfig.data.config.showPopover, true)
   assert.equal(typeof resPricingFail.data.error, 'string')
   console.log('POST /query-credits/pricing/check passed')
 
+  accountEnabled = true
+  await invokeRoute('/query-credits/config', 'POST', { enabled: true })
+  const accountConfig = await invokeRoute('/query-credits/config', 'GET')
+  const accountBinding = accountConfig.data.config.providerQuotas.find((binding) => binding.providerId === 'deepseek-account')
+  assert.equal(accountBinding.enabled, true)
+  assert.equal(accountBinding.templateId, 'deepseek-account')
+  const beforeAccountHttp = httpCalls
+  const accountTest = await invokeRoute('/query-credits/test-connection', 'POST', { binding: accountBinding })
+  assert.equal(accountTest.data.ok, true)
+  assert.deepEqual(accountTest.data.balances, [
+    { currency: 'CNY', total: 16.5, toppedUp: 10.5, granted: 6 },
+    { currency: 'USD', total: 2, toppedUp: 2, granted: 0 },
+  ])
+  assert.equal(httpCalls, beforeAccountHttp, 'account queries must use the host service, never API-key HTTP')
+  assert.equal(typeof accountClients[0].version, 'string')
+  assert.equal(typeof accountClients[0].locale, 'string')
+  assert.equal(accountClients[0].timezoneOffsetSeconds, -new Date().getTimezoneOffset() * 60)
+  accountBalance = async () => ({ status: 'ready', value: [], bonusWallets: [{ currency: 'CNY', balance: '6' }] })
+  const bonusOnly = await invokeRoute('/query-credits/test-connection', 'POST', { binding: accountBinding })
+  assert.deepEqual(bonusOnly.data.balances, [{ currency: 'CNY', total: 6, toppedUp: 0, granted: 6 }])
+  accountBalance = async () => ({ status: 'ready', value: [], bonusWallets: [] })
+  const emptyWallets = await invokeRoute('/query-credits/test-connection', 'POST', { binding: accountBinding })
+  assert.equal(emptyWallets.data.ok, true)
+  assert.deepEqual(emptyWallets.data.balances, [])
+
+  const originalNow = Date.now
+  let accountNow = originalNow()
+  Date.now = () => accountNow
+  const accountQuery = () => {
+    accountNow += 3000 // 越过强刷防抖，不等待真实时间。
+    return invokeRoute('/query-credits', 'GET', null, 'source=provider%3Adeepseek-account&force=1')
+  }
+  assert.equal((await accountQuery()).data.ok, true)
+  accountBalance = async () => ({ status: 'failed' })
+  const accountFailure = (await accountQuery()).data
+  assert.equal(accountFailure.ok, false)
+  assert.equal(accountFailure.error, 'deepseek-account-balance-failed')
+  assert.equal(accountFailure.balances, undefined, 'failed account queries must not reuse another login\'s cached balance')
+  accountBalance = async () => null
+  assert.equal((await accountQuery()).data.error, 'deepseek-account-signed-out')
+
+  let finishOldBalance
+  accountBalance = () => new Promise((resolve) => { finishOldBalance = resolve })
+  const oldQuery = accountQuery()
+  for (let i = 0; i < 100 && !finishOldBalance; i++) await new Promise((resolve) => setImmediate(resolve))
+  assert.ok(finishOldBalance, 'the old account request must be in flight')
+  accountBalance = async () => ({ status: 'ready', value: [{ currency: 'CNY', balance: '3' }], bonusWallets: [] })
+  accountChanges.emit('change', { status: 'credential-stored' })
+  await new Promise((resolve) => setImmediate(resolve))
+  const pendingView = (await invokeRoute('/query-credits', 'GET', null, 'source=provider%3Adeepseek-account')).data
+  assert.equal(pendingView.balances, undefined, 'account changes must clear cached balances immediately')
+  finishOldBalance({ status: 'ready', value: [{ currency: 'CNY', balance: '999' }], bonusWallets: [] })
+  await oldQuery
+  const newAccount = (await accountQuery()).data
+  assert.equal(newAccount.balances[0].total, 3, 'an old in-flight request must not overwrite the new account balance')
+  accountBalance = async () => null
+  accountChanges.emit('change', { status: 'signed-out' })
+  await new Promise((resolve) => setImmediate(resolve))
+  assert.equal((await accountQuery()).data.balances, undefined)
+  Date.now = originalNow
+  console.log('DeepSeek account balances / sign-out / account change passed')
   console.log('ALL CONFIG API TESTS PASSED')
   process.exit(0)
 }

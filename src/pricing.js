@@ -8,11 +8,21 @@
  *   deepseek-v4-flash-vision-exp 全部按新表计费。
  *
  * CNY / USD 是两套独立官方价目，各自照官方页数值列出，不做汇率换算。
- * 高峰：北京时间周一至周五 09:00–12:00、14:00–18:00；其余（含周末）为低谷。
+ * 高峰：北京时间周一至周五（排除中国法定节假日）09:00–12:00、14:00–18:00。
  * 设置里的 prices[model].peak / .offPeak 可覆盖官方峰谷；如果配置值与任一历史官方
  * 快照一致，仍按内置时间表计费，只有用户手改过的值才当作自定义覆盖。
  * 没有精确价表的 DeepSeek 新模型按名字回退到默认 Flash / Pro（familyModelFor）。
  */
+
+import calendar2026 from './data/holidays-2026.json' with { type: 'json' }
+
+// 手动更新年度文件；前端通过额度响应复用这份日历，不另存一份日期表。
+const calendars = [calendar2026]
+export const HOLIDAY_CALENDAR = {
+  years: calendars.map((calendar) => calendar.year),
+  offDays: calendars.flatMap((calendar) => calendar.days.filter((day) => day.isOffDay).map((day) => day.date)),
+}
+const holidayOffDays = new Set(HOLIDAY_CALENDAR.offDays)
 
 /** 2026-08-17T00:00:00+08:00：V4 峰谷价生效。 */
 export const V4_CUTOFF_MS = 1786896000000
@@ -109,12 +119,15 @@ export const normalizePricingCurrency = (currency) => ['USD', 'EUR'].includes(St
 
 export const hasTariffTiers = (p) => isFiniteRate(p?.peak) && isFiniteRate(p?.offPeak)
 
-/** 北京时间周一至周五 09:00–12:00、14:00–18:00 为高峰，周末全天低谷。 */
+/** 周末（含补班）及中国节假日全天低谷。 */
 export const isPeakBeijing = (timestamp) => {
   const beijing = new Date(Number(timestamp) + 8 * 3600 * 1000)
+  if (!Number.isFinite(beijing.getTime())) return false
   const hour = beijing.getUTCHours()
   const dow = beijing.getUTCDay()
   if (dow === 0 || dow === 6) return false
+  // ponytail: 未收录年份仍按星期判断；跨年使用前应手动补齐年度日历。
+  if (holidayOffDays.has(beijing.toISOString().slice(0, 10))) return false
   return (hour >= 9 && hour < 12) || (hour >= 14 && hour < 18)
 }
 

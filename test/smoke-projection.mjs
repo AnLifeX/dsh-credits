@@ -4,7 +4,7 @@
  * 运行: node test/smoke-projection.mjs
  */
 import { makeCostProjection, makeTpsProjection, resolveModelPrice, resolveModelPriceInfo, familyModelFor } from '../src/index.js'
-import { normalizePricingCurrency, officialV4ConfigPrices, PRICING_CURRENCIES, V41_FLASH_CUTOFF_MS } from '../src/pricing.js'
+import { normalizePricingCurrency, officialV4ConfigPrices, PRICING_CURRENCIES, V41_FLASH_CUTOFF_MS, isPeakBeijing, HOLIDAY_CALENDAR } from '../src/pricing.js'
 import assert from 'node:assert/strict'
 
 let nextSeq = 1
@@ -37,7 +37,7 @@ const flashAfterOffPeak = Date.parse('2026-09-10T04:00:00.000Z') // 北京 12:00
 const flashAfterPeak = Date.parse('2026-09-11T01:00:00.000Z') // 北京 09:00 高峰
 const proBeforePeak = Date.parse('2026-09-14T01:00:00.000Z') // 北京 09:00 高峰
 const proAfterOffPeak = Date.parse('2026-09-14T04:00:00.000Z') // 北京 12:00 低谷
-const proWellAfter = Date.parse('2026-10-01T01:00:00.000Z') // 撤销下线后很久，仍是高峰
+const proWellAfter = Date.parse('2026-10-08T01:00:00.000Z') // 国庆假期后普通工作日高峰
 assert.equal(resolveModelPrice({ currency: 'CNY' }, 'deepseek-flash', flashBeforePeak).cacheMiss, 3, 'deepseek-flash still uses the old V4 Flash price before 9/10 12:00')
 assert.equal(resolveModelPrice({ currency: 'CNY' }, 'deepseek-flash', flashAfterOffPeak).cacheMiss, 1, 'deepseek-flash must use V4.1 Flash off-peak after 9/10 12:00')
 assert.equal(resolveModelPrice({ currency: 'CNY' }, 'deepseek-flash', flashAfterPeak).cacheMiss, 2, 'deepseek-flash must use V4.1 Flash peak after 9/10 12:00')
@@ -49,6 +49,23 @@ assert.equal(resolveModelPrice({ currency: 'CNY' }, 'deepseek-v4-pro', proWellAf
 assert.equal(resolveModelPrice({ currency: 'CNY' }, 'deepseek-v4-pro', proWellAfter).output, 27, 'V4 Pro output stays on its own table')
 assert.equal(officialV4ConfigPrices('CNY', proWellAfter)['deepseek-v4-pro'].cacheMiss, 9, 'built-in defaults must not advertise V4.1 Flash prices for V4 Pro')
 assert.ok(flashCutoff < proWellAfter, 'the flash cutoff still precedes later timestamps')
+
+assert.deepEqual(HOLIDAY_CALENDAR.years, [2026])
+for (const date of ['2026-09-25', '2026-10-01', '2026-10-07']) {
+  for (const hour of ['09', '11', '14', '17']) {
+    const time = Date.parse(`${date}T${hour}:00:00+08:00`)
+    assert.equal(isPeakBeijing(time), false, `${date} must be off-peak throughout the holiday`)
+    assert.equal(resolveModelPrice({ currency: 'CNY' }, 'deepseek-v4-pro', time).cacheMiss, 4.5)
+  }
+}
+for (const date of ['2026-09-20', '2026-10-10']) {
+  assert.equal(isPeakBeijing(Date.parse(`${date}T10:00:00+08:00`)), false, 'make-up work weekends must remain off-peak')
+}
+for (const [time, peak] of [['08:59:59', false], ['09:00:00', true], ['12:00:00', false], ['14:00:00', true], ['18:00:00', false]]) {
+  assert.equal(isPeakBeijing(Date.parse(`2026-10-08T${time}+08:00`)), peak)
+}
+assert.equal(isPeakBeijing(Date.parse('2026-10-08T00:30:00Z')), false, 'use Beijing time rather than UTC')
+assert.equal(isPeakBeijing(NaN), false)
 
 // 配置里保存的是历史官方价（例如升级前落盘的旧 V4 峰谷）时，仍要按内置时间表重算，
 // 不能把旧价套到新时段，也不能把它当成用户自定义价。

@@ -18,7 +18,8 @@ import { z } from 'zod'
 import { homedir } from 'node:os'
 import { join, dirname } from 'node:path'
 import { readFile, writeFile, mkdir } from 'node:fs/promises'
-import { priceBuckets, officialV4ConfigPrices, normalizePricingCurrency } from './pricing.js'
+import { createRequire } from 'node:module'
+import { priceBuckets, officialV4ConfigPrices, normalizePricingCurrency, HOLIDAY_CALENDAR } from './pricing.js'
 import { buildPricingCandidates, fetchOfficialPricing } from './pricing-source.js'
 import { applySpendEvent, aggregateSpend, initSpendFold, resolveSpendRange, usageOfSettlement } from './spend.js'
 
@@ -82,6 +83,16 @@ export const QUOTA_SOURCE_TEMPLATES = [
       id: 'deepseek', name: 'DeepSeek 官方余额', kind: 'balance', providerIds: ['deepseek', 'deepseek-official'],
       request: { url: 'https://api.deepseek.com/user/balance', authRef: 'DEEPSEEK_API_KEY', authStyle: 'bearer' },
       template: 'deepseek',
+    },
+  },
+  {
+    id: 'deepseek-account',
+    category: 'balance',
+    name: 'DeepSeek 登录账号余额',
+    description: '复用 DSH 登录账号，查询充值与赠送余额，无需 API Key',
+    source: {
+      id: 'deepseek-account', name: 'DeepSeek 登录账号余额', kind: 'balance', providerIds: ['deepseek-account'],
+      template: 'deepseek-account',
     },
   },
   {
@@ -188,6 +199,7 @@ export const getQuotaSourceTemplate = (id) =>
 export const matchQuotaTemplateForProvider = (provider, baseURL = '') => {
   const id = normalizeProvider(provider)
   const url = String(baseURL ?? '').trim().toLowerCase()
+  if (id === 'deepseek-account') return { builtin: false, id: 'deepseek-account' }
   if (id === 'deepseek' || id === 'deepseek-official' || url.includes('api.deepseek.com')) return { builtin: true, id: 'deepseek' }
   if (id === 'opencode-go' || url.includes('opencode.ai/zen/go')) return { builtin: true, id: 'opencode-go' }
   const direct = QUOTA_SOURCE_TEMPLATES.find((template) =>
@@ -2029,6 +2041,7 @@ export function apply(ctx, config) {
   const caches = new Map()
   const inflights = new Map()
   const consecutiveFailures = new Map()
+  let accountEpoch = 0
 
   const ensureCache = (id) => {
     if (!caches.has(id)) caches.set(id, emptyQuotaCache())
@@ -2044,6 +2057,33 @@ export function apply(ctx, config) {
   }
 
   const fetchCustomQuota = async (adapter, options = {}) => {
+    if (adapter.template === 'deepseek-account') {
+      const account = ctx.get('deepseekAccount')
+      if (!account?.getBalance) throw new Error('deepseek-account-unavailable')
+      let version = ''
+      try {
+        const manifest = createRequire(import.meta.url).resolve('@deepseek-ai/dsh-credentials/package.json')
+        version = JSON.parse(await readFile(manifest, 'utf8')).version
+      } catch { /* 未提供版本元数据的宿主不冒充插件版本。 */ }
+      const result = await account.getBalance({
+        version,
+        locale: Intl.DateTimeFormat().resolvedOptions().locale,
+        timezoneOffsetSeconds: -new Date().getTimezoneOffset() * 60,
+      })
+      if (result === null) throw new Error('deepseek-account-signed-out')
+      if (result?.status !== 'ready') throw new Error('deepseek-account-balance-failed')
+      const balances = [...new Set([
+        ...result.value.map((wallet) => wallet.currency),
+        ...result.bonusWallets.map((wallet) => wallet.currency),
+      ])].map((currency) => {
+        const sum = (wallets) => wallets.filter((wallet) => wallet.currency === currency)
+          .reduce((total, wallet) => total + toAmount(wallet.balance), 0)
+        const toppedUp = sum(result.value)
+        const granted = sum(result.bonusWallets)
+        return { currency, total: toppedUp + granted, granted, toppedUp }
+      })
+      return { provider: adapter.id, kind: 'balance', isAvailable: true, balances }
+    }
     const request = adapter.request ?? {}
     const url = String(request.url ?? '').trim()
     if (!url) throw new Error('quota-url-missing')
@@ -2179,10 +2219,12 @@ export function apply(ctx, config) {
     ensureCache(adapter.id)
     if (inflights.get(adapter.id) !== null) return inflights.get(adapter.id)
     inflights.set(adapter.id, (async () => {
+      const epoch = accountEpoch
       try {
         const payload = adapter.builtin === false
           ? await fetchCustomQuota(adapter)
           : await fetchBuiltinQuota(adapter)
+        if (adapter.template === 'deepseek-account' && epoch !== accountEpoch) return
         caches.set(adapter.id, {
           state: 'ok',
           payload,
@@ -2195,9 +2237,10 @@ export function apply(ctx, config) {
         })
         consecutiveFailures.set(adapter.id, 0)
       } catch (error) {
+        if (adapter.template === 'deepseek-account' && epoch !== accountEpoch) return
         const message = error instanceof Error ? error.message : String(error)
         const transient = isTransientQuotaError(error)
-        const prev = caches.get(adapter.id) ?? emptyQuotaCache()
+        const prev = adapter.template === 'deepseek-account' ? emptyQuotaCache() : (caches.get(adapter.id) ?? emptyQuotaCache())
         const fastRetryCount = prev.fastRetryCount ?? 0
         const retryable = transient && fastRetryCount === 0
         const errorKind = transient
@@ -2227,6 +2270,31 @@ export function apply(ctx, config) {
     if (provider) return refreshOne(provider)
     return Promise.all(getActiveRuntimeAdapterIds().map((id) => refreshOne(id)))
   }
+
+  ctx.inject(['deepseekAccount'], (accountCtx) => {
+    accountCtx.effect(() => {
+      const controller = new AbortController()
+      const watch = async () => {
+        for await (const _state of accountCtx.deepseekAccount.watch(controller.signal)) {
+          accountEpoch++
+          const ids = getRuntimeAdapters().filter((adapter) => adapter.template === 'deepseek-account').map((adapter) => adapter.id)
+          for (const id of ids) caches.set(id, emptyQuotaCache())
+          Promise.all(ids.map(async (id) => {
+            await inflights.get(id)
+            if (!controller.signal.aborted && runtimeConfig.enabled !== false) await refreshOne(id)
+          })).catch(() => ctx.logger.warn('dsh-credits: account refresh failed'))
+        }
+      }
+      watch().catch(() => { if (!controller.signal.aborted) ctx.logger.warn('dsh-credits: account state watch failed') })
+      return () => {
+        controller.abort()
+        accountEpoch++
+        for (const adapter of getRuntimeAdapters()) {
+          if (adapter.template === 'deepseek-account') caches.set(adapter.id, emptyQuotaCache())
+        }
+      }
+    }, 'dsh-credits: account changes')
+  })
 
   const adapterRefreshInterval = (id) => {
     const adapter = getQuotaAdapter(id)
@@ -2476,6 +2544,7 @@ export function apply(ctx, config) {
         clientPollIntervalMs: runtimeConfig.clientPollIntervalMs,
         currency: runtimeConfig.currency,
         pricingEpoch: Number(runtimeConfig.pricingEpoch ?? 0),
+        holidayCalendar: HOLIDAY_CALENDAR,
         thresholds: {
           warning: runtimeConfig.warningThreshold,
           danger: runtimeConfig.dangerThreshold,
