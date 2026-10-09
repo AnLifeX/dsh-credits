@@ -619,8 +619,6 @@ const ProviderQuota = Schema.object({
 })
 
 export const Config = Schema.object({
-  /** 整个额度功能总开关；关闭后不查询额度且前端隐藏所有额度 UI */
-  enabled: Schema.boolean().default(true),
   /** 旧版兼容字段；新设置页使用 providerQuotas，不再暴露全局查询模式。 */
   quotaMode: Schema.union(QUOTA_MODES).default('follow'),
   /** 底部统计条是否展示额度读数 */
@@ -1613,7 +1611,6 @@ const readJsonBody = (req) => new Promise((resolve, reject) => {
 export function apply(ctx, config) {
   // 运行时可变配置（优先使用用户在设置面板中动态修改的值）
   let runtimeConfig = {
-    enabled: config.enabled !== false,
     quotaMode: config.quotaMode === 'custom' ? 'custom' : 'follow',
     showDock: config.showDock !== false,
     dockLayout: normalizeDockLayout(config.dockLayout),
@@ -2266,7 +2263,6 @@ export function apply(ctx, config) {
   }
 
   const refresh = (provider = null) => {
-    if (runtimeConfig.enabled === false) return Promise.resolve()
     if (provider) return refreshOne(provider)
     return Promise.all(getActiveRuntimeAdapterIds().map((id) => refreshOne(id)))
   }
@@ -2281,7 +2277,7 @@ export function apply(ctx, config) {
           for (const id of ids) caches.set(id, emptyQuotaCache())
           Promise.all(ids.map(async (id) => {
             await inflights.get(id)
-            if (!controller.signal.aborted && runtimeConfig.enabled !== false) await refreshOne(id)
+            if (!controller.signal.aborted) await refreshOne(id)
           })).catch(() => ctx.logger.warn('dsh-credits: account refresh failed'))
         }
       }
@@ -2328,10 +2324,6 @@ export function apply(ctx, config) {
       loopTimer = null
     }
     const run = () => {
-      if (runtimeConfig.enabled === false) {
-        loopTimer = null
-        return
-      }
       const now = Date.now()
       const ids = getActiveRuntimeAdapterIds()
       const due = ids.filter((id) => {
@@ -2430,7 +2422,6 @@ export function apply(ctx, config) {
 
   const getSanitizedConfig = async () => {
     return {
-      enabled: runtimeConfig.enabled !== false,
       quotaMode: runtimeConfig.quotaMode === 'custom' ? 'custom' : 'follow',
       showDock: runtimeConfig.showDock !== false,
       dockLayout: normalizeDockLayout(runtimeConfig.dockLayout),
@@ -2528,7 +2519,6 @@ export function apply(ctx, config) {
       const views = Object.fromEntries(getRuntimeAdapterIds().map((id) => [id, serializeView(id)]))
       return {
         ok: view.ok,
-        enabled: runtimeConfig.enabled !== false,
         provider: picked,
         kind: view.kind,
         sourceName: view.name,
@@ -2632,73 +2622,69 @@ export function apply(ctx, config) {
           try {
             const body = await readJsonBody(req)
             // 局部合并与类型校验
-            if (typeof body.enabled === 'boolean') runtimeConfig.enabled = body.enabled
-            if (runtimeConfig.enabled !== false) {
-              if (typeof body.quotaMode === 'string' && QUOTA_MODES.includes(body.quotaMode)) runtimeConfig.quotaMode = body.quotaMode
-              if (typeof body.showDock === 'boolean') runtimeConfig.showDock = body.showDock
-              if (typeof body.dockLayout === 'string' && DOCK_LAYOUTS.includes(body.dockLayout)) runtimeConfig.dockLayout = body.dockLayout
-              if (typeof body.showCapsule === 'boolean') runtimeConfig.showCapsule = body.showCapsule
-              if (typeof body.showPopover === 'boolean') runtimeConfig.showPopover = body.showPopover
-              if (typeof body.showTps === 'boolean') runtimeConfig.showTps = body.showTps
-              if (typeof body.provider === 'string' && body.provider.trim()) runtimeConfig.provider = body.provider.trim()
-              if (typeof body.apiKey === 'string') runtimeConfig.apiKey = body.apiKey.trim()
-              if (typeof body.apiKeyRef === 'string' && body.apiKeyRef.trim()) runtimeConfig.apiKeyRef = body.apiKeyRef.trim()
-              if (typeof body.baseUrl === 'string' && body.baseUrl.trim()) runtimeConfig.baseUrl = body.baseUrl.trim()
-              if (typeof body.opencodeApiKey === 'string') runtimeConfig.opencodeApiKey = body.opencodeApiKey.trim()
-              if (typeof body.opencodeApiKeyRef === 'string' && body.opencodeApiKeyRef.trim()) runtimeConfig.opencodeApiKeyRef = body.opencodeApiKeyRef.trim()
-              if (typeof body.opencodeBaseUrl === 'string' && body.opencodeBaseUrl.trim()) runtimeConfig.opencodeBaseUrl = body.opencodeBaseUrl.trim()
-              if (Array.isArray(body.quotaSources)) {
-                const prevSources = runtimeConfig.quotaSources ?? []
-                const nextSources = []
-                for (const s of body.quotaSources) {
-                  const prev = prevSources.find((p) => p.id === s.id)
-                  const request = await persistDirectQuotaCredential(prev?.request, s.request, `source:${s.id}`)
-                  nextSources.push(normalizeQuotaSourceConfig({
-                    ...s,
-                    request,
-                  }))
-                }
-                if (new Set(nextSources.map((source) => source.id)).size !== nextSources.length) {
-                  throw new Error('quota-source-id-duplicate')
-                }
-                runtimeConfig.quotaSources = nextSources
+            if (typeof body.quotaMode === 'string' && QUOTA_MODES.includes(body.quotaMode)) runtimeConfig.quotaMode = body.quotaMode
+            if (typeof body.showDock === 'boolean') runtimeConfig.showDock = body.showDock
+            if (typeof body.dockLayout === 'string' && DOCK_LAYOUTS.includes(body.dockLayout)) runtimeConfig.dockLayout = body.dockLayout
+            if (typeof body.showCapsule === 'boolean') runtimeConfig.showCapsule = body.showCapsule
+            if (typeof body.showPopover === 'boolean') runtimeConfig.showPopover = body.showPopover
+            if (typeof body.showTps === 'boolean') runtimeConfig.showTps = body.showTps
+            if (typeof body.provider === 'string' && body.provider.trim()) runtimeConfig.provider = body.provider.trim()
+            if (typeof body.apiKey === 'string') runtimeConfig.apiKey = body.apiKey.trim()
+            if (typeof body.apiKeyRef === 'string' && body.apiKeyRef.trim()) runtimeConfig.apiKeyRef = body.apiKeyRef.trim()
+            if (typeof body.baseUrl === 'string' && body.baseUrl.trim()) runtimeConfig.baseUrl = body.baseUrl.trim()
+            if (typeof body.opencodeApiKey === 'string') runtimeConfig.opencodeApiKey = body.opencodeApiKey.trim()
+            if (typeof body.opencodeApiKeyRef === 'string' && body.opencodeApiKeyRef.trim()) runtimeConfig.opencodeApiKeyRef = body.opencodeApiKeyRef.trim()
+            if (typeof body.opencodeBaseUrl === 'string' && body.opencodeBaseUrl.trim()) runtimeConfig.opencodeBaseUrl = body.opencodeBaseUrl.trim()
+            if (Array.isArray(body.quotaSources)) {
+              const prevSources = runtimeConfig.quotaSources ?? []
+              const nextSources = []
+              for (const s of body.quotaSources) {
+                const prev = prevSources.find((p) => p.id === s.id)
+                const request = await persistDirectQuotaCredential(prev?.request, s.request, `source:${s.id}`)
+                nextSources.push(normalizeQuotaSourceConfig({
+                  ...s,
+                  request,
+                }))
               }
-              if (Array.isArray(body.providerQuotas)) {
-                const prevBindings = runtimeConfig.providerQuotas ?? []
-                const nextBindings = []
-                for (const rawBinding of body.providerQuotas) {
-                  const prev = prevBindings.find((binding) => normalizeProvider(binding.providerId) === normalizeProvider(rawBinding?.providerId))
-                  if (rawBinding?.sourceType !== 'custom' || !rawBinding.source) {
-                    nextBindings.push(normalizeProviderQuotaConfig(rawBinding))
-                    continue
-                  }
-                  const request = await persistDirectQuotaCredential(
-                    prev?.source?.request,
-                    rawBinding.source.request,
-                    `provider:${rawBinding.providerId}`,
-                  )
-                  nextBindings.push(normalizeProviderQuotaConfig({
-                    ...rawBinding,
-                    source: {
-                      ...rawBinding.source,
-                      request,
-                    },
-                  }))
-                }
-                const normalizedProviderIds = nextBindings.map((binding) => normalizeProvider(binding.providerId))
-                if (new Set(normalizedProviderIds).size !== normalizedProviderIds.length) {
-                  throw new Error('provider-quota-provider-duplicate')
-                }
-                runtimeConfig.providerQuotas = nextBindings
+              if (new Set(nextSources.map((source) => source.id)).size !== nextSources.length) {
+                throw new Error('quota-source-id-duplicate')
               }
-              if (typeof body.warningThreshold === 'number' && body.warningThreshold >= 0) runtimeConfig.warningThreshold = body.warningThreshold
-              if (typeof body.dangerThreshold === 'number' && body.dangerThreshold >= 0) runtimeConfig.dangerThreshold = body.dangerThreshold
-              if (typeof body.refreshIntervalMs === 'number' && body.refreshIntervalMs >= 1000) runtimeConfig.refreshIntervalMs = body.refreshIntervalMs
-              if (typeof body.clientPollIntervalMs === 'number' && body.clientPollIntervalMs >= 1000) runtimeConfig.clientPollIntervalMs = body.clientPollIntervalMs
-              if (typeof body.timeoutMs === 'number' && body.timeoutMs >= 1000) runtimeConfig.timeoutMs = body.timeoutMs
-              if (typeof body.currency === 'string' && body.currency.trim()) runtimeConfig.currency = normalizePricingCurrency(body.currency)
+              runtimeConfig.quotaSources = nextSources
             }
-            // 总开关只停用额度相关功能；模型单价与 YAML 导出仍然可独立使用。
+            if (Array.isArray(body.providerQuotas)) {
+              const prevBindings = runtimeConfig.providerQuotas ?? []
+              const nextBindings = []
+              for (const rawBinding of body.providerQuotas) {
+                const prev = prevBindings.find((binding) => normalizeProvider(binding.providerId) === normalizeProvider(rawBinding?.providerId))
+                if (rawBinding?.sourceType !== 'custom' || !rawBinding.source) {
+                  nextBindings.push(normalizeProviderQuotaConfig(rawBinding))
+                  continue
+                }
+                const request = await persistDirectQuotaCredential(
+                  prev?.source?.request,
+                  rawBinding.source.request,
+                  `provider:${rawBinding.providerId}`,
+                )
+                nextBindings.push(normalizeProviderQuotaConfig({
+                  ...rawBinding,
+                  source: {
+                    ...rawBinding.source,
+                    request,
+                  },
+                }))
+              }
+              const normalizedProviderIds = nextBindings.map((binding) => normalizeProvider(binding.providerId))
+              if (new Set(normalizedProviderIds).size !== normalizedProviderIds.length) {
+                throw new Error('provider-quota-provider-duplicate')
+              }
+              runtimeConfig.providerQuotas = nextBindings
+            }
+            if (typeof body.warningThreshold === 'number' && body.warningThreshold >= 0) runtimeConfig.warningThreshold = body.warningThreshold
+            if (typeof body.dangerThreshold === 'number' && body.dangerThreshold >= 0) runtimeConfig.dangerThreshold = body.dangerThreshold
+            if (typeof body.refreshIntervalMs === 'number' && body.refreshIntervalMs >= 1000) runtimeConfig.refreshIntervalMs = body.refreshIntervalMs
+            if (typeof body.clientPollIntervalMs === 'number' && body.clientPollIntervalMs >= 1000) runtimeConfig.clientPollIntervalMs = body.clientPollIntervalMs
+            if (typeof body.timeoutMs === 'number' && body.timeoutMs >= 1000) runtimeConfig.timeoutMs = body.timeoutMs
+            if (typeof body.currency === 'string' && body.currency.trim()) runtimeConfig.currency = normalizePricingCurrency(body.currency)
             if (body.prices && typeof body.prices === 'object') {
               runtimeConfig.prices = { ...body.prices }
             }

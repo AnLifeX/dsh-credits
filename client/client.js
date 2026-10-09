@@ -225,8 +225,6 @@ window.__ModuleLoader__.load({
 				".dshqb_settings_intro{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;padding:0 2px}",
 				".dshqb_settings_intro_copy{display:flex;flex-direction:column;gap:4px;min-width:0}",
 				".dshqb_settings_intro_title{font-size:15px;font-weight:600;color:var(--dsw-alias-label-primary)}",
-				".dshqb_settings_title_control{display:flex;align-items:center;justify-content:flex-end;gap:9px;min-height:25px;flex:0 0 auto}",
-				".dshqb_settings_title_control_label{font-size:12.5px;font-weight:500;line-height:1.4;color:var(--dsw-alias-label-secondary);white-space:nowrap}",
 				".dshqb_pcard_list{display:flex;flex-direction:column;gap:12px;margin:0;padding:0;list-style:none}",
 				".dshqb_pcard{border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.16));background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-1,#fff));border-radius:12px;list-style:none;overflow:hidden;transition:border-color .16s,background .16s}",
 				".dshqb_pcard:hover{border-color:var(--dsw-alias-label-dimmed,rgba(128,128,128,0.45))}",
@@ -274,9 +272,6 @@ window.__ModuleLoader__.load({
 				".dshqb_switch_input:checked+.dshqb_switch_track:after{transform:translateX(16px)}",
 				".dshqb_switch_input:focus-visible+.dshqb_switch_track{outline:2px solid var(--dsw-alias-brand-primary,#3b82f6);outline-offset:2px}",
 				".dshqb_switch_input:disabled+.dshqb_switch_track{cursor:not-allowed;opacity:.55}",
-				".dshqb_switch_large{width:44px;height:25px}",
-				".dshqb_switch_large .dshqb_switch_track:after{width:19px;height:19px;top:3px;left:3px}",
-				".dshqb_switch_large .dshqb_switch_input:checked+.dshqb_switch_track:after{transform:translateX(19px)}",
 				".dshqb_layout_choices{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px}",
 				".dshqb_layout_choice{appearance:none;min-width:0;display:flex;align-items:center;gap:9px;padding:11px 12px;border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,.18));border-radius:8px;background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.04));color:var(--dsw-alias-label-secondary);font:inherit;text-align:left;cursor:pointer;transition:border-color .15s ease,background-color .15s ease,color .15s ease,transform .15s ease}",
 				".dshqb_layout_choice:hover:not(:disabled){border-color:var(--dsw-alias-label-dimmed,rgba(128,128,128,.45));color:var(--dsw-alias-label-primary)}",
@@ -288,7 +283,6 @@ window.__ModuleLoader__.load({
 				".dshqb_layout_choice_selected .dshqb_layout_choice_mark{border-color:var(--dsw-alias-brand-primary,#3b82f6);opacity:1}",
 				".dshqb_layout_choice_selected .dshqb_layout_choice_mark:after{content:'';position:absolute;inset:3px;border-radius:50%;background:var(--dsw-alias-brand-primary,#3b82f6)}",
 				".dshqb_layout_choice_label{min-width:0;font-size:12.5px;font-weight:500;line-height:1.4}",
-				".dshqb_settings_locked{opacity:.5;pointer-events:none;user-select:none;filter:grayscale(.2)}",
 				".dshqb_settings_fieldset{display:block;min-width:0;margin:0;padding:0;border:0}",
 				".dshqb_settings_cards{display:flex;flex-direction:column;gap:12px}",
 				".dshqb_source_section{display:flex;flex-direction:column;gap:12px;padding:14px 0;border-top:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,.12))}",
@@ -345,7 +339,7 @@ window.__ModuleLoader__.load({
 				".dshqb_metric_editor{display:flex;flex-direction:column;gap:4px;padding:8px 10px;border:1px solid var(--dsw-alias-border-l3,rgba(128,128,128,.12));border-radius:8px;background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.035))}",
 				".dshqb_metric_editor_head{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11.5px;font-weight:600;color:var(--dsw-alias-label-secondary)}",
 				".dshqb_secret_input{display:flex;flex-direction:column;gap:5px}.dshqb_secret_status{font-size:11px;line-height:1.35;color:var(--dsw-alias-success,#16a34a)}",
-				"@media (max-width:620px){.dshqb_template_grid{grid-template-columns:1fr}.dshqb_custom_source_row{grid-template-columns:minmax(0,1fr) auto}.dshqb_custom_source_row>.dshqb_btn:last-child{grid-column:2}.dshqb_source_head{flex-direction:column;align-items:stretch}.dshqb_settings_intro{gap:12px}.dshqb_settings_title_control_label{display:none}}",
+				"@media (max-width:620px){.dshqb_template_grid{grid-template-columns:1fr}.dshqb_custom_source_row{grid-template-columns:minmax(0,1fr) auto}.dshqb_custom_source_row>.dshqb_btn:last-child{grid-column:2}.dshqb_source_head{flex-direction:column;align-items:stretch}.dshqb_settings_intro{gap:12px}}",
 				"@media (max-width:620px){.dshqb_header_row{grid-template-columns:1fr auto}.dshqb_header_row>.dshqb_input:nth-child(2){grid-column:1}}",
 				".dshqb_confirm_mask{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;background:var(--dsw-alias-bg-mask-1,rgba(0,0,0,0.45));backdrop-filter:blur(6px)}",
 				".dshqb_confirm{width:min(380px,100%);background:var(--dsw-alias-bg-layer-1,var(--dsw-alias-bg-base,#fff));border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.18));border-radius:12px;box-shadow:var(--dsw-shadow-lv3,0 16px 40px rgba(0,0,0,0.22));padding:18px 18px 16px;display:flex;flex-direction:column;gap:8px;box-sizing:border-box}",
@@ -1019,7 +1013,7 @@ window.__ModuleLoader__.load({
 			"unit.minutes": "{n} 分钟",
 			"unit.seconds": "{n} 秒",
 			/* Settings translations */
-			"settings.nav": "额度",
+			"settings.nav": "额度与消耗",
 			"settings.title": "额度与消耗",
 			"settings.desc": "底部额度、累计消耗与模型单价。",
 			"settings.unsaved": "未保存",
@@ -1037,8 +1031,6 @@ window.__ModuleLoader__.load({
 			"settings.card.pricingDesc": "各模型每 1M Token 的命中 / 未命中 / 输出价。添加时填写高峰价；峰谷倍率默认为 1（无峰谷），0.5 表示低谷 = 高峰 × 0.5。",
 			"settings.card.export": "YAML 导出",
 			"settings.card.exportDesc": "复制到 cordis.patch.yml 做持久覆盖。",
-			"settings.enabled": "启用额度功能",
-			"settings.enabledHint": "关闭后隐藏额度、TPS、峰谷徽章、悬停详情与累计消耗，并锁定展示、额度查询、阈值与刷新；模型单价和 YAML 导出仍可用。",
 			"settings.showDock": "底部统计条",
 			"settings.showDockHint": "输入框下方的额度与本会话消耗。",
 			"settings.dockLayout": "底部条布局",
@@ -1349,7 +1341,7 @@ window.__ModuleLoader__.load({
 			"unit.minutes": "{n} min",
 			"unit.seconds": "{n} s",
 			/* Settings translations */
-			"settings.nav": "Credits",
+			"settings.nav": "Credits & spend",
 			"settings.title": "Credits & spend",
 			"settings.desc": "Bottom quota bar, spend capsule, and model pricing.",
 			"settings.unsaved": "Unsaved",
@@ -1367,8 +1359,6 @@ window.__ModuleLoader__.load({
 			"settings.card.pricingDesc": "Cache hit / miss / output price per 1M tokens. The three add-model fields are peak rates. Multiplier 1 means no peak/off-peak split; 0.5 means off-peak = peak × 0.5.",
 			"settings.card.export": "YAML export",
 			"settings.card.exportDesc": "Copy into cordis.patch.yml for a durable override.",
-			"settings.enabled": "Enable quota features",
-			"settings.enabledHint": "When off, hide quota, TPS, tariff badges, hover details, and spend tracking, and lock display, quota, thresholds, and refresh. Pricing and YAML export remain available.",
 			"settings.showDock": "Bottom status bar",
 			"settings.showDockHint": "Quota and session cost below the input.",
 			"settings.dockLayout": "Status bar layout",
@@ -1626,7 +1616,6 @@ window.__ModuleLoader__.load({
 		}
 
 		const DEFAULT_SETTINGS = {
-			enabled: true,
 			quotaMode: "follow",
 			showDock: true,
 			dockLayout: "own",
@@ -1675,7 +1664,6 @@ window.__ModuleLoader__.load({
 			const lines = [
 				"- id: dsh-credits",
 				"  config:",
-				`    enabled: ${config.enabled !== false}`,
 				`    showDock: ${config.showDock !== false}`,
 				`    dockLayout: ${normalizeDockLayout(config.dockLayout)}`,
 				`    showCapsule: ${config.showCapsule !== false}`,
@@ -1827,7 +1815,6 @@ window.__ModuleLoader__.load({
 			const selectedCurrency = normalizePricingCurrency(c.currency);
 			const loadedPrices = { ...officialPricesFor(selectedCurrency), ...(c.prices ?? {}) };
 			return {
-				enabled: c.enabled !== false,
 				quotaMode: c.quotaMode === "custom" ? "custom" : "follow",
 				showDock: c.showDock !== false,
 				dockLayout: normalizeDockLayout(c.dockLayout),
@@ -2115,9 +2102,9 @@ window.__ModuleLoader__.load({
 			return react.createElement("div", { className: "dshqb_field_grid" }, children);
 		}
 
-		function SwitchControl({ checked, disabled, onChange, label, large }) {
+		function SwitchControl({ checked, disabled, onChange, label }) {
 			return react.createElement("label", {
-				className: "dshqb_switch" + (large ? " dshqb_switch_large" : ""),
+				className: "dshqb_switch",
 				title: label
 			}, [
 				react.createElement("input", {
@@ -2204,8 +2191,6 @@ window.__ModuleLoader__.load({
 			const [failedCard, setFailedCard] = react.useState(null);
 			const [toast, setToast] = react.useState(null);
 			const [copied, setCopied] = react.useState(false);
-			const [savingEnabled, setSavingEnabled] = react.useState(false);
-			const [enabledOverride, setEnabledOverride] = react.useState(null);
 			const [newModelName, setNewModelName] = react.useState("");
 			const [newModelHit, setNewModelHit] = react.useState(0.1);
 			const [newModelMiss, setNewModelMiss] = react.useState(1.0);
@@ -2218,9 +2203,7 @@ window.__ModuleLoader__.load({
 			const [customSourceError, setCustomSourceError] = react.useState("");
 			const [sourceTest, setSourceTest] = react.useState({ state: "idle", fields: [], message: "" });
 
-			const baseView = mergeView(baseline, drafts);
-			const view = enabledOverride === null ? baseView : { ...baseView, enabled: enabledOverride };
-			const quotaEnabled = view.enabled !== false;
+			const view = mergeView(baseline, drafts);
 			const dirtyOf = (cardId) => isCardDirty(cardId, drafts[cardId], baseline);
 
 			/**
@@ -2362,37 +2345,8 @@ window.__ModuleLoader__.load({
 				setFailedCard((id) => id === cardId ? null : id);
 			};
 
-			const setGlobalEnabled = async (nextEnabled) => {
-				if (savingEnabled) return;
-				setEnabledOverride(nextEnabled);
-				setSavingEnabled(true);
-				try {
-					const res = await fetch("/query-credits/config", {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({ enabled: nextEnabled })
-					});
-					const data = await res.json();
-					if (!data.ok) throw new Error("save failed");
-					const nextBase = { ...baseline, enabled: nextEnabled };
-					settingsDraftMem.baseline = nextBase;
-					settingsDraftMem.hydrated = true;
-					persistSessionDraft();
-					setBaseline(nextBase);
-					setEnabledOverride(null);
-					showToast(t("settings.savedToast"));
-					void balanceStore.forceRefresh();
-					void spendStore.refresh();
-				} catch (_err) {
-					setEnabledOverride(null);
-					showToast(t("settings.saveFailed"), "error");
-				} finally {
-					setSavingEnabled(false);
-				}
-			};
-
 			const saveCard = async (cardId) => {
-				if ((!quotaEnabled && cardId !== "pricing") || !dirtyOf(cardId) || savingCard) return;
+				if (!dirtyOf(cardId) || savingCard) return;
 				setSavingCard(cardId);
 				setFailedCard(null);
 				const merged = mergeView(baseline, { ...drafts, [cardId]: drafts[cardId] });
@@ -2781,10 +2735,10 @@ window.__ModuleLoader__.load({
 				hint: t(hintKey),
 				overridden: isSchemaOverridden(field, view[field], currency),
 				onReset: () => resetField("display", field),
-				disabled: !quotaEnabled || savingCard === "display",
+				disabled: savingCard === "display",
 				trailing: react.createElement(SwitchControl, {
 					checked: view[field] !== false,
-					disabled: !quotaEnabled || savingCard === "display",
+					disabled: savingCard === "display",
 					onChange: (e) => patchCard("display", { [field]: e.target.checked }),
 					label: t(labelKey),
 					key: "switch"
@@ -2830,7 +2784,7 @@ window.__ModuleLoader__.load({
 							className: "dshqb_layout_choice" + (selected ? " dshqb_layout_choice_selected" : ""),
 							role: "radio",
 							"aria-checked": selected,
-							disabled: !quotaEnabled || view.showDock === false || savingCard === "display",
+							disabled: view.showDock === false || savingCard === "display",
 							onClick: () => patchCard("display", { dockLayout: layout }),
 							key: layout
 						}, [
@@ -3593,43 +3547,16 @@ window.__ModuleLoader__.load({
 				])
 			]);
 
-			const enabledOverridden = isSchemaOverridden("enabled", view.enabled, currency);
 			return react.createElement("div", { className: "dshqb_settings_page" }, [
 				react.createElement("div", { className: "dshqb_settings_intro", key: "intro" }, [
 					react.createElement("span", { className: "dshqb_settings_intro_copy", key: "copy" }, [
 						react.createElement("span", { className: "dshqb_settings_intro_title", key: "title" }, t("settings.title")),
 						react.createElement("span", { className: "dshqb_settings_desc", key: "desc" }, t("settings.desc"))
-					]),
-					react.createElement("span", {
-						className: "dshqb_settings_title_control",
-						title: t("settings.enabledHint"),
-						key: "global"
-					}, [
-						react.createElement("span", { className: "dshqb_settings_title_control_label", key: "label" }, t("settings.enabled")),
-						enabledOverridden ? react.createElement("span", { className: "dshqb_field_badges", key: "badges" }, [
-							react.createElement("span", { className: "dshqb_field_badge", key: "ov" }, t("settings.overridden")),
-							react.createElement("button", {
-								type: "button",
-								className: "dshqb_field_reset",
-								disabled: savingEnabled,
-								onClick: () => { void setGlobalEnabled(schemaDefault("enabled", currency)); },
-								key: "reset"
-							}, t("settings.resetField"))
-						]) : null,
-						react.createElement(SwitchControl, {
-							checked: quotaEnabled,
-							disabled: savingEnabled,
-							onChange: (e) => { void setGlobalEnabled(e.target.checked); },
-							label: t("settings.enabled"),
-							large: true,
-							key: "switch"
-						})
 					])
 				]),
 				react.createElement("div", { className: "dshqb_settings_cards", key: "cards" }, [
 					react.createElement("fieldset", {
-						className: "dshqb_settings_fieldset" + (quotaEnabled ? "" : " dshqb_settings_locked"),
-						disabled: !quotaEnabled,
+						className: "dshqb_settings_fieldset",
 						key: "quota_settings"
 					}, react.createElement("ul", { className: "dshqb_pcard_list" }, [
 						displayCard,
@@ -3952,7 +3879,6 @@ window.__ModuleLoader__.load({
 				? (balance.payload?.defaultProvider ?? balance.payload?.provider)
 				: null;
 			const payload = balance.status === "ok" ? balance.payload : null;
-			const featureEnabled = payload?.enabled !== false;
 			const providerQuotaMap = payload?.providerQuotaMap && typeof payload.providerQuotaMap === "object" ? payload.providerQuotaMap : null;
 			const providerQuotaMapEntry = providerQuotaMap && modelProvider
 				? Object.entries(providerQuotaMap).find(([providerId]) => normalizeProvider(providerId) === normalizeProvider(modelProvider))
@@ -3979,7 +3905,6 @@ window.__ModuleLoader__.load({
 				const timer = setInterval(() => setTariffNow(Date.now()), 30000);
 				return () => clearInterval(timer);
 			}, []);
-			if (!featureEnabled) return null;
 			const isRefreshing = balance.isRefreshing === true;
 			const tariffPeriod = currentTariffPeriod(tariffNow);
 			const tariffLabelKey = tariffPeriod === "peak" ? "tariff.peak" : "tariff.offPeak";
@@ -4521,7 +4446,7 @@ window.__ModuleLoader__.load({
 
 		function settingsNavKind(label) {
 			const text = String(label ?? "").replace(/\s+/g, " ").trim();
-			if (text === "额度" || text === "Credits") return "credits";
+			if (text === "额度与消耗" || text === "Credits & spend") return "credits";
 			if (text === "Web UI 插件" || text === "Web UI Plugins") return "webui";
 			if (text === "皮肤中心" || text === "Skin Center") return "skin";
 			if (text === "宠物" || text === "Pet") return "pet";

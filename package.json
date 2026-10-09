@@ -1,6 +1,7 @@
 {
   "name": "dsh-credits",
   "version": "0.4.0",
+  "icon": "./assets/icon.svg",
   "description": "DeepSeek Harness 额度插件：按供应商展示内置套餐、余额或自定义 HTTP 额度，并提供模型计价、本会话估算与累计消耗",
   "keywords": [
     "dsh",
@@ -27,7 +28,8 @@
   "exports": {
     ".": "./src/index.js",
     "./client": "./client/client.js",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "scripts": {
     "test": "node test/smoke-projection.mjs && node test/smoke-config-api.mjs && node test/smoke-spend.mjs && node test/smoke-pricing-source.mjs && node test/smoke-client.mjs"
@@ -38,7 +40,8 @@
     "cordis.patch.yml",
     "README.md",
     "LICENSE",
-    "assets"
+    "assets",
+    "locale"
   ],
   "publishConfig": {
     "access": "public"
@@ -62,7 +65,7 @@
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
-    "@deepseek-ai/dsh-credentials": "^0.1.3-alpha.2"
+    "@deepseek-ai/dsh-credentials": "^0.1.3-alpha.2 || >=0.2.0-rc.2 <0.2.1-0 || >=0.2.1-alpha.1 <0.2.2-0"
   },
   "peerDependenciesMeta": {
     "@deepseek-ai/cordis": {

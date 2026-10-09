@@ -8,6 +8,12 @@ import assert from 'node:assert/strict'
 import { HOLIDAY_CALENDAR, isPeakBeijing } from '../src/pricing.js'
 
 const bundlePath = new URL('../client/client.js', import.meta.url)
+for (const language of ['zh', 'en']) {
+  const resource = import.meta.resolve(`dsh-credits/locale/${language}.json`)
+  const { meta } = JSON.parse(readFileSync(new URL(resource), 'utf8'))
+  assert.equal(meta.title, language === 'zh' ? '额度与消耗' : 'Credits & spend')
+  assert.ok(meta.description.trim(), 'plugin list description must be translated')
+}
 
 let captured = null
 globalThis.window = {
@@ -421,16 +427,15 @@ if (!htmlSettings.includes('额度与消耗')) throw new Error('settings page ti
 if (!htmlSettings.includes('底部额度、累计消耗与模型单价。')) throw new Error('settings page description missing')
 if (!htmlSettings.includes('dshqb_pcard')) throw new Error('settings cards missing')
 if (!htmlSettings.includes('展示')) throw new Error('display card title missing')
-if (!htmlSettings.includes('启用额度功能')) throw new Error('global quota enable switch missing from settings')
-if (!htmlSettings.includes('dshqb_settings_title_control')) throw new Error('global quota enable switch should live in the title bar')
+if (htmlSettings.includes('dshqb_settings_title_control')) throw new Error('global quota enable switch must be removed from the title bar')
 if (htmlSettings.includes('dshqb_settings_global')) throw new Error('global quota enable switch should not render as a separate card')
 if (!code.includes('displayCheck("showTps", "settings.showTps", "settings.showTpsHint")')) throw new Error('TPS display toggle wiring missing')
 if (!code.includes('dshqb_switch')) throw new Error('settings switches should use slider controls')
 if (!code.includes('dshqb_toggle_list')) throw new Error('display switches should be grouped together')
 if (!code.includes('dshqb_layout_choices') || !code.includes('dshqb_layout_choice_selected')) throw new Error('dock layout should use two selectable cards')
 if (!code.includes('dshqb_code_copy') || !code.includes('dshqb_copy_icon')) throw new Error('YAML copy should be a compact icon inside the code block')
-if (!code.includes('isSchemaOverridden("enabled"')) throw new Error('global quota switch should expose override/reset state')
-if (!code.includes('settings.enabled')) throw new Error('global quota enable switch missing')
+if (code.includes('setGlobalEnabled') || code.includes('settings.enabled')) throw new Error('global quota switch must be removed')
+if (htmlSettings.includes('启用额度功能')) throw new Error('global quota switch must not appear in settings')
 if (!htmlSettings.includes('额度查询')) throw new Error('quota card title missing')
 if (htmlSettings.includes('阈值与刷新')) throw new Error('global thresholds card should be removed')
 if (!htmlSettings.includes('模型单价')) throw new Error('pricing card title missing')
@@ -1101,8 +1106,8 @@ const DisabledComp = slotOf(disabledRegs, 'conversation.composer.dock').comp
 renderToStaticMarkup(ReactMock.createElement(DisabledComp, followProps))
 await new Promise((r) => setTimeout(r, 400))
 const htmlDisabled = renderToStaticMarkup(ReactMock.createElement(DisabledComp, followProps))
-if (htmlDisabled !== '') throw new Error('enabled=false should hide all quota UI')
-console.log('GLOBAL ENABLE FLAG CLIENT SMOKE TEST PASSED')
+if (!htmlDisabled.includes('dshqb_root') || !htmlDisabled.includes('dshqb_cap')) throw new Error('legacy enabled=false must not hide quota UI')
+console.log('LEGACY ENABLE FLAG IGNORED CLIENT SMOKE TEST PASSED')
 
 // ---------- 回退定价 / 无定价标注 ----------
 installFetch(() => ({

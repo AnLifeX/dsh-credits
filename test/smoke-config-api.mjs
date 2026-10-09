@@ -205,6 +205,7 @@ globalThis.fetch = async (url, options = {}) => {
 }
 
 const initialConfig = {
+  enabled: false, // 旧配置不应阻止已由宿主启用的插件运行。
   provider: 'deepseek',
   apiKey: '',
   apiKeyRef: 'DEEPSEEK_API_KEY',
@@ -276,7 +277,7 @@ async function runTests() {
   assert.equal(resGetConfig.data.config.dangerThreshold, 5)
   assert.equal(resGetConfig.data.config.currency, 'CNY')
   assert.equal(resGetConfig.data.config.provider, 'deepseek')
-  assert.equal(resGetConfig.data.config.enabled, true)
+  assert.equal(resGetConfig.data.config.enabled, undefined)
   assert.equal(resGetConfig.data.config.quotaMode, 'follow')
   assert.equal(resGetConfig.data.config.showDock, true)
   assert.equal(resGetConfig.data.config.dockLayout, 'own')
@@ -671,22 +672,22 @@ assert.equal(resGetConfig.data.config.showPopover, true)
     },
     defaultPrices: { cacheHit: 0.04, cacheMiss: 0.5, output: 0.9 },
   })
-  assert.equal(resQuotaMode.data.config.quotaMode, 'follow', 'disabled global switch should ignore other config updates')
-  assert.equal(resQuotaMode.data.config.enabled, false)
-  assert.equal(resQuotaMode.data.config.showDock, true)
-  assert.equal(resQuotaMode.data.config.dockLayout, 'own')
+  assert.equal(resQuotaMode.data.config.quotaMode, 'custom', 'legacy enabled=false must not block config updates')
+  assert.equal(resQuotaMode.data.config.enabled, undefined)
+  assert.equal(resQuotaMode.data.config.showDock, false)
+  assert.equal(resQuotaMode.data.config.dockLayout, 'shared')
   assert.equal(resQuotaMode.data.config.showCapsule, true)
-  assert.equal(resQuotaMode.data.config.showPopover, true)
-  assert.equal(resQuotaMode.data.config.showTps, true)
-  assert.deepEqual(resQuotaMode.data.config.prices['disabled-price-test'], { cacheHit: 0.03, cacheMiss: 0.4, output: 0.8 }, 'disabled global switch should still allow model price updates')
-  assert.deepEqual(resQuotaMode.data.config.defaultPrices, { cacheHit: 0.04, cacheMiss: 0.5, output: 0.9 }, 'disabled global switch should still allow default price updates')
+  assert.equal(resQuotaMode.data.config.showPopover, false)
+  assert.equal(resQuotaMode.data.config.showTps, false)
+  assert.deepEqual(resQuotaMode.data.config.prices['disabled-price-test'], { cacheHit: 0.03, cacheMiss: 0.4, output: 0.8 }, 'legacy enabled=false should still allow model price updates')
+  assert.deepEqual(resQuotaMode.data.config.defaultPrices, { cacheHit: 0.04, cacheMiss: 0.5, output: 0.9 }, 'legacy enabled=false should still allow default price updates')
   const resQuotaPayload = await invokeRoute('/query-credits', 'GET')
-  assert.equal(resQuotaPayload.data.quotaMode, 'follow')
-  assert.equal(resQuotaPayload.data.enabled, false)
-  assert.equal(resQuotaPayload.data.showDock, true)
-  assert.equal(resQuotaPayload.data.dockLayout, 'own')
-  assert.equal(resQuotaPayload.data.showPopover, true)
-  assert.equal(resQuotaPayload.data.showTps, true)
+  assert.equal(resQuotaPayload.data.quotaMode, 'custom')
+  assert.equal(resQuotaPayload.data.enabled, undefined)
+  assert.equal(resQuotaPayload.data.showDock, false)
+  assert.equal(resQuotaPayload.data.dockLayout, 'shared')
+  assert.equal(resQuotaPayload.data.showPopover, false)
+  assert.equal(resQuotaPayload.data.showTps, false)
   console.log('quotaMode / display flags config passed')
 
   const resOpenCodeConn = await invokeRoute('/query-credits/test-connection', 'POST', {
