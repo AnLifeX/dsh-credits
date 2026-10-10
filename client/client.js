@@ -286,25 +286,11 @@ window.__ModuleLoader__.load({
 				".dshqb_settings_fieldset{display:block;min-width:0;margin:0;padding:0;border:0}",
 				".dshqb_settings_cards{display:flex;flex-direction:column;gap:12px}",
 				".dshqb_source_section{display:flex;flex-direction:column;gap:12px;padding:14px 0;border-top:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,.12))}",
-				".dshqb_source_head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px}",
-				".dshqb_source_head_copy{display:flex;flex-direction:column;gap:3px;min-width:0}",
 				".dshqb_source_title{font-size:13px;font-weight:600;color:var(--dsw-alias-label-primary)}",
 				".dshqb_source_builtin{display:flex;align-items:center;gap:6px;flex-wrap:wrap;padding:9px 10px;border:1px solid var(--dsw-alias-border-l3,rgba(128,128,128,.12));border-radius:8px;background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.04));font-size:11.5px;color:var(--dsw-alias-label-tertiary)}",
 				".dshqb_source_chip{display:inline-flex;align-items:center;padding:2px 8px;border-radius:999px;background:color-mix(in srgb,var(--dsw-alias-brand-primary,#3b82f6) 10%,transparent);color:var(--dsw-alias-label-secondary);font-weight:500}",
 				".dshqb_template_group{display:flex;flex-direction:column;gap:7px}",
 				".dshqb_template_group_title{font-size:11px;font-weight:600;color:var(--dsw-alias-label-tertiary);letter-spacing:.03em}",
-				".dshqb_template_grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}",
-				".dshqb_template_card{display:flex;align-items:flex-start;gap:10px;min-width:0;padding:10px;border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,.16));border-radius:9px;background:var(--dsw-alias-bg-layer-3,var(--dsw-alias-bg-layer-1,#fff))}",
-				".dshqb_template_copy{display:flex;flex-direction:column;gap:2px;min-width:0;flex:1}",
-				".dshqb_template_name{font-size:12.5px;font-weight:600;color:var(--dsw-alias-label-primary)}",
-				".dshqb_template_desc{font-size:11px;line-height:1.4;color:var(--dsw-alias-label-tertiary)}",
-				".dshqb_source_list{display:flex;flex-direction:column;gap:7px}",
-				".dshqb_custom_source_row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;align-items:center;gap:8px;padding:9px 10px;border:1px solid var(--dsw-alias-border-l3,rgba(128,128,128,.12));border-radius:8px;background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.035))}",
-				".dshqb_custom_source_copy{display:flex;flex-direction:column;gap:2px;min-width:0}",
-				".dshqb_custom_source_name{font-size:12.5px;font-weight:600;color:var(--dsw-alias-label-primary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
-				".dshqb_custom_source_meta{font-size:11px;color:var(--dsw-alias-label-tertiary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}",
-				".dshqb_custom_source_form{display:flex;flex-direction:column;gap:10px;padding:12px;border:1px solid color-mix(in srgb,var(--dsw-alias-brand-primary,#3b82f6) 32%,transparent);border-radius:10px;background:color-mix(in srgb,var(--dsw-alias-brand-primary,#3b82f6) 4%,transparent)}",
-				".dshqb_source_form_head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}",
 				".dshqb_source_test{display:flex;flex-direction:column;align-items:stretch;gap:8px;padding:9px 10px;border-radius:8px;font-size:11.5px;line-height:1.45;min-width:0}",
 				".dshqb_source_test_ok{background:rgba(16,185,129,.1);color:var(--dsw-alias-state-success-primary,#10b981)}",
 				".dshqb_source_test_warn{background:rgba(245,158,11,.1);color:var(--dsw-alias-state-warning-primary,#d97706)}",
@@ -339,7 +325,7 @@ window.__ModuleLoader__.load({
 				".dshqb_metric_editor{display:flex;flex-direction:column;gap:4px;padding:8px 10px;border:1px solid var(--dsw-alias-border-l3,rgba(128,128,128,.12));border-radius:8px;background:var(--dsw-alias-bg-layer-2,rgba(128,128,128,.035))}",
 				".dshqb_metric_editor_head{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:11.5px;font-weight:600;color:var(--dsw-alias-label-secondary)}",
 				".dshqb_secret_input{display:flex;flex-direction:column;gap:5px}.dshqb_secret_status{font-size:11px;line-height:1.35;color:var(--dsw-alias-success,#16a34a)}",
-				"@media (max-width:620px){.dshqb_template_grid{grid-template-columns:1fr}.dshqb_custom_source_row{grid-template-columns:minmax(0,1fr) auto}.dshqb_custom_source_row>.dshqb_btn:last-child{grid-column:2}.dshqb_source_head{flex-direction:column;align-items:stretch}.dshqb_settings_intro{gap:12px}}",
+				"@media (max-width:620px){.dshqb_settings_intro{gap:12px}}",
 				"@media (max-width:620px){.dshqb_header_row{grid-template-columns:1fr auto}.dshqb_header_row>.dshqb_input:nth-child(2){grid-column:1}}",
 				".dshqb_confirm_mask{position:absolute;inset:0;z-index:20;display:flex;align-items:center;justify-content:center;padding:20px;box-sizing:border-box;background:var(--dsw-alias-bg-mask-1,rgba(0,0,0,0.45));backdrop-filter:blur(6px)}",
 				".dshqb_confirm{width:min(380px,100%);background:var(--dsw-alias-bg-layer-1,var(--dsw-alias-bg-base,#fff));border:1px solid var(--dsw-alias-border-l2,rgba(128,128,128,0.18));border-radius:12px;box-shadow:var(--dsw-shadow-lv3,0 16px 40px rgba(0,0,0,0.22));padding:18px 18px 16px;display:flex;flex-direction:column;gap:8px;box-sizing:border-box}",
@@ -2331,10 +2317,7 @@ window.__ModuleLoader__.load({
 			const [newModelOut, setNewModelOut] = react.useState(2.0);
 			const [newModelMultiplier, setNewModelMultiplier] = react.useState(1);
 			const [officialCheck, setOfficialCheck] = react.useState({ state: "idle", candidates: [], error: "", selected: {} });
-			const [customSourceDraft, setCustomSourceDraft] = react.useState(null);
-			const [editingSourceId, setEditingSourceId] = react.useState(null);
 			const [editingProviderId, setEditingProviderId] = react.useState(null);
-			const [customSourceError, setCustomSourceError] = react.useState("");
 			const [sourceTest, setSourceTest] = react.useState({ state: "idle", fields: [], message: "" });
 
 			const view = mergeView(baseline, drafts);
@@ -2680,189 +2663,6 @@ window.__ModuleLoader__.load({
 					const message = error instanceof Error ? error.message : String(error);
 					setSourceTest({ state: "error", fields: [], message, diagnostics: null, providerId: provider.id });
 					showToast(t("settings.providerQuota.testFailedToast", { error: message }), "error", 5000);
-				}
-			};
-
-			const emptyCustomSourceDraft = () => ({
-				id: "",
-				name: "",
-				kind: "metric",
-				template: "",
-				providerIds: "",
-				providerPatterns: [],
-				enabled: true,
-				request: { method: "GET", url: "", dshProvider: "", credentialMode: "direct", authRef: "", authValue: "", credentialConfigured: false, authStyle: "bearer", authHeader: "Authorization", authParam: "api_key", headers: {}, bodyType: "none", body: "" },
-				response: {
-					metrics: [{ key: "remaining", label: t("settings.defaultRemaining"), calculation: "direct", valuePath: "", usedPath: "", totalPath: "", unit: "", resetsAtPath: "", aggregate: "value", scale: 1, offset: 0 }],
-				},
-			});
-			const sourceToDraft = (source) => ({
-				...cloneSettings(source),
-				providerIds: (source.providerIds ?? []).join(", "),
-				providerPatterns: source.providerPatterns ?? [],
-			});
-			const draftToSource = (draft) => ({
-				...cloneSettings(draft),
-				id: String(draft.id ?? "").trim().toLowerCase(),
-				name: String(draft.name ?? draft.id).trim() || String(draft.id ?? "").trim(),
-				providerIds: String(draft.providerIds ?? "").split(",").map((s) => s.trim()).filter(Boolean),
-				providerPatterns: Array.isArray(draft.providerPatterns) ? draft.providerPatterns : [],
-				request: { ...(draft.request ?? {}), authStyle: draft.request?.authStyle || "bearer" },
-				response: { ...(draft.response ?? {}) },
-			});
-			const patchCustomDraft = (field, value) => {
-				setCustomSourceDraft((prev) => ({ ...(prev ?? emptyCustomSourceDraft()), [field]: value }));
-				setSourceTest({ state: "idle", fields: [], message: "" });
-			};
-			const patchCustomNested = (section, field, value) => {
-				setCustomSourceDraft((prev) => {
-					const base = prev ?? emptyCustomSourceDraft();
-					return { ...base, [section]: { ...(base[section] ?? {}), [field]: value } };
-				});
-				if (section === "request") setSourceTest({ state: "idle", fields: [], message: "" });
-			};
-			const beginAddSource = () => {
-				setEditingSourceId(null);
-				setCustomSourceError("");
-				setSourceTest({ state: "idle", fields: [], message: "" });
-				setCustomSourceDraft(emptyCustomSourceDraft());
-			};
-			const beginAddTemplate = (template, dshProvider = null) => {
-				if (!template?.source) return;
-				const source = cloneSettings(template.source);
-				if (dshProvider) {
-					const routeId = String(dshProvider.id).toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
-					source.id = routeId || source.id;
-					source.name = t("settings.defaultQuotaName", { name: dshProvider.name });
-					source.providerIds = [...new Set([dshProvider.id, ...(source.providerIds ?? [])])];
-					source.request = { ...(source.request ?? {}), dshProvider: dshProvider.id };
-				}
-				setEditingSourceId(null);
-				setCustomSourceError("");
-				setSourceTest({ state: "idle", fields: [], message: "" });
-				setCustomSourceDraft(sourceToDraft(source));
-			};
-			const beginEditSource = (source) => {
-				setEditingSourceId(source.id);
-				setCustomSourceError("");
-				setSourceTest({ state: "idle", fields: [], message: "" });
-				setCustomSourceDraft(sourceToDraft(source));
-			};
-			const persistQuotaSources = async (updated, nextProvider = null) => {
-				if (savingCard) return false;
-				setSavingCard("quota");
-				setFailedCard(null);
-				try {
-					const payload = { quotaSources: updated.map((source) => cloneSettings(source)) };
-					if (nextProvider) payload.provider = nextProvider;
-					const res = await fetch("/query-credits/config", {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify(payload)
-					});
-					const data = await res.json();
-					if (!data.ok || !data.config) throw new Error(data.error || "save failed");
-					const nextBase = configToForm(data.config);
-					const quotaDraft = { ...(drafts.quota ?? {}) };
-					delete quotaDraft.quotaSources;
-					if (nextProvider) delete quotaDraft.provider;
-					for (const [key, value] of Object.entries({ ...quotaDraft })) {
-						if (valuesEqual(key, value, nextBase[key])) delete quotaDraft[key];
-					}
-					const nextDrafts = { ...drafts, quota: Object.keys(quotaDraft).length ? quotaDraft : null };
-					settingsDraftMem.baseline = nextBase;
-					settingsDraftMem.drafts = nextDrafts;
-					settingsDraftMem.hydrated = true;
-					persistSessionDraft();
-					setBaseline(nextBase);
-					setDrafts(nextDrafts);
-					showToast(t("settings.sourceSaved"));
-					void balanceStore.forceRefresh();
-					return true;
-				} catch (error) {
-					setCustomSourceError(error instanceof Error ? error.message : String(error));
-					setFailedCard("quota");
-					return false;
-				} finally {
-					setSavingCard(null);
-				}
-			};
-			const testCustomSource = async () => {
-				const draft = customSourceDraft;
-				if (!draft || !String(draft.id ?? "").trim()) {
-					setCustomSourceError(t("settings.quotaSourceIdRequired"));
-					return;
-				}
-				setCustomSourceError("");
-				setSourceTest({ state: "testing", fields: [], message: "", diagnostics: null });
-				try {
-					const res = await fetch("/query-credits/test-connection", {
-						method: "POST",
-						headers: { "Content-Type": "application/json" },
-						body: JSON.stringify({ source: draftToSource(draft) })
-					});
-					const data = await res.json();
-					if (!data.ok) {
-						const message = localizeQuotaError(data.error, t);
-						setSourceTest({ state: "error", fields: [], message, diagnostics: data.diagnostics ?? null });
-						showToast(t("settings.providerQuota.testFailedToast", { error: message }), "error", 5000);
-						return;
-					}
-					const fields = Array.isArray(data.availableFields) ? data.availableFields : [];
-					const parsedCount = Object.keys(data.usage ?? {}).length + (data.metrics?.length ?? 0) + (data.balances?.length ?? 0);
-					const parsedDetails = [
-						...Object.entries(data.usage ?? {}).map(([key, window]) =>
-							opencodeWindowName(key, t) + " " + formatPercent(window?.percent)),
-						...(data.metrics ?? []).map((metric) =>
-							(metric?.label || metric?.key || "Quota") + " " + formatMetricSummary(metric)),
-						...(data.balances ?? []).map((balance) =>
-							(balance?.currency || "") + " " + String(Number(balance?.total) || 0)),
-					].filter(Boolean).join(" · ");
-					setSourceTest({
-						state: "ok",
-						fields,
-						diagnostics: null,
-						message: t(draft.template ? "settings.testSuccessTemplate" : "settings.testSuccess", {
-							count: draft.template ? parsedCount : fields.length,
-							details: parsedDetails || "—",
-						})
-					});
-				} catch (error) {
-					const message = error instanceof Error ? error.message : String(error);
-					setSourceTest({ state: "error", fields: [], message, diagnostics: null });
-					showToast(t("settings.providerQuota.testFailedToast", { error: message }), "error", 5000);
-				}
-			};
-			const saveCustomSource = async () => {
-				const draft = customSourceDraft;
-				if (!draft || !String(draft.id ?? "").trim()) {
-					setCustomSourceError(t("settings.quotaSourceIdRequired"));
-					return;
-				}
-				const nextSource = draftToSource(draft);
-				const current = Array.isArray(view.quotaSources) ? view.quotaSources : [];
-				const collision = current.some((source) => source.id === nextSource.id && source.id !== editingSourceId);
-				if (collision) {
-					setCustomSourceError("ID already exists: " + nextSource.id);
-					return;
-				}
-				const updated = editingSourceId
-					? current.map((s) => s.id === editingSourceId ? nextSource : s)
-					: [...current, nextSource];
-				if (await persistQuotaSources(updated)) {
-					setCustomSourceDraft(null);
-					setEditingSourceId(null);
-					setCustomSourceError("");
-					setSourceTest({ state: "idle", fields: [], message: "" });
-				}
-			};
-			const removeCustomSource = async (id) => {
-				const current = Array.isArray(view.quotaSources) ? view.quotaSources : [];
-				const updated = current.filter((s) => s.id !== id);
-				const nextProvider = view.provider === id ? "deepseek" : null;
-				if (await persistQuotaSources(updated, nextProvider) && editingSourceId === id) {
-					setCustomSourceDraft(null);
-					setEditingSourceId(null);
 				}
 			};
 
