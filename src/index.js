@@ -783,7 +783,7 @@ export const buildCustomHttpRequest = (request = {}, credential = '') => {
 const HTTP_DIAGNOSTIC_BODY_LIMIT = 32768
 const redactKnownSecrets = (value, secrets = []) => secrets
   .map((secret) => String(secret ?? ''))
-  .filter((secret) => secret.length >= 4)
+  .filter((secret) => secret.length > 0)
   .sort((a, b) => b.length - a.length)
   .reduce((text, secret) => text.replaceAll(secret, '***'), String(value ?? ''))
 

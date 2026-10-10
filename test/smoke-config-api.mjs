@@ -515,6 +515,18 @@ assert.equal(resGetConfig.data.config.showPopover, true)
   console.log('disabled provider draft / redacted HTTP diagnostics passed')
 
   const beforeInvalidJsonFetch = globalThis.fetch
+  try {
+    for (const secret of ['z', 'zz', 'zzz']) {
+      globalThis.fetch = async () => ({ ok: false, status: 400, headers: new Headers({ 'content-type': 'text/plain' }), text: async () => `invalid credential: ${secret}; try again` })
+      const rejected = await invokeRoute('/query-credits/test-connection', 'POST', { binding: {
+        ...customBinding, source: { ...customBinding.source, request: { url: 'https://example.com/quota', authStyle: 'bearer', credentialMode: 'direct', authValue: secret } },
+      } })
+      assert.doesNotMatch(rejected.data.error, new RegExp(secret))
+      assert.equal(rejected.data.diagnostics.response.body, 'invalid credential: ***; try again')
+    }
+  } finally {
+    globalThis.fetch = beforeInvalidJsonFetch
+  }
   globalThis.fetch = async () => ({ ok: true, status: 200, headers: new Headers(), text: async () => 'not-json' })
   try {
     const invalidJson = await invokeRoute('/query-credits/test-connection', 'POST', { binding: customBinding })
