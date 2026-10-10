@@ -198,25 +198,26 @@ export const getQuotaSourceTemplate = (id) =>
 /** DSH 供应商路由 / Base URL → 本插件额度模板。 */
 export const matchQuotaTemplateForProvider = (provider, baseURL = '') => {
   const id = normalizeProvider(provider)
-  const url = String(baseURL ?? '').trim().toLowerCase()
   if (id === 'deepseek-account') return { builtin: false, id: 'deepseek-account' }
-  if (id === 'deepseek' || id === 'deepseek-official' || url.includes('api.deepseek.com')) return { builtin: true, id: 'deepseek' }
-  if (id === 'opencode-go' || url.includes('opencode.ai/zen/go')) return { builtin: true, id: 'opencode-go' }
-  const direct = QUOTA_SOURCE_TEMPLATES.find((template) =>
-    (template.source.providerIds ?? []).some((candidate) => normalizeProvider(candidate) === id))
-  if (direct) return { builtin: false, id: direct.id }
+  let url
+  try { url = new URL(baseURL) } catch { /* No recognized endpoint: fall back to provider ID. */ }
+  const host = url?.hostname.toLowerCase()
   const byUrl = [
-    ['api.stepfun.', 'stepfun-balance'],
+    ['api.deepseek.com', 'deepseek'],
+    ['opencode.ai', 'opencode-go', '/zen/go'],
+    ['api.stepfun.com', 'stepfun-balance'],
     ['openrouter.ai', 'openrouter-balance'],
     ['api.novita.ai', 'novita-balance'],
-    ['api.kimi.com/coding', 'kimi-coding'],
+    ['api.kimi.com', 'kimi-coding', '/coding'],
     ['open.bigmodel.cn', 'zhipu-cn-coding'],
-    ['bigmodel.cn', 'zhipu-cn-coding'],
     ['api.z.ai', 'zhipu-en-coding'],
     ['api.minimaxi.com', 'minimax-cn-coding'],
     ['api.minimax.io', 'minimax-en-coding'],
-  ].find(([needle]) => url.includes(needle))
-  return byUrl ? { builtin: false, id: byUrl[1] } : null
+  ].find(([domain, , prefix]) => host === domain && (!prefix || url.pathname === prefix || url.pathname.startsWith(prefix + '/')))
+  if (byUrl) return { builtin: ['deepseek', 'opencode-go'].includes(byUrl[1]), id: byUrl[1] }
+  const direct = QUOTA_SOURCE_TEMPLATES.find((template) =>
+    (template.source.providerIds ?? []).some((candidate) => normalizeProvider(candidate) === id))
+  return direct ? { builtin: direct.builtin === true, id: direct.id } : null
 }
 
 const mergeQuotaSourceTemplate = (source = {}) => {

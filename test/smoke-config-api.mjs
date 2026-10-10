@@ -267,6 +267,12 @@ function invokeRoute(path, method, body = null, query = '') {
 }
 
 async function runTests() {
+  assert.equal(matchQuotaTemplateForProvider('minimax', 'https://api.minimax.io/v1').id, 'minimax-en-coding')
+  assert.equal(matchQuotaTemplateForProvider('zhipu', 'https://api.z.ai/api').id, 'zhipu-en-coding')
+  assert.equal(matchQuotaTemplateForProvider('minimax-en', 'https://api.minimaxi.com/v1').id, 'minimax-cn-coding')
+  assert.equal(matchQuotaTemplateForProvider('minimax', 'https://proxy.example/v1').id, 'minimax-cn-coding')
+  assert.equal(matchQuotaTemplateForProvider('unknown', 'https://api.minimax.io.evil.example/v1'), null)
+  assert.equal(matchQuotaTemplateForProvider('unknown', 'https://evil.example/api.minimax.io'), null)
   console.log('Testing /query-credits routes...')
 
   // 1. GET /query-credits/config
