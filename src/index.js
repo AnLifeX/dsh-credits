@@ -1706,6 +1706,18 @@ export function apply(ctx, config) {
   }
 
   const getConfig = () => runtimeConfig
+  const legacyKeyRef = (field, entryId = ctx.fiber?.entry?.options?.id ?? name) =>
+    quotaCredentialRef(`legacy:${ctx.get('profileContext')?.name ?? 'default'}:${entryId}:${field}`)
+  let configWriteQueue = Promise.resolve()
+
+  ctx.on('internal/update', function (nextConfig) {
+    PricesInput.parse(nextConfig.prices ?? {})
+    z.record(z.string(), PricesInput).parse(nextConfig.providerPrices ?? {})
+    this.config = nextConfig
+    runtimeConfig = { ...nextConfig, pricingEpoch: Number(runtimeConfig.pricingEpoch ?? 0) + 1 }
+    resetLoop()
+    void refresh()
+  })
 
   const spendFolds = new Map()
   const spendFile = join(process.env.DSH_HOME || join(homedir(), '.dsh'), 'storages', 'dsh-credits-spend.json')
@@ -1976,19 +1988,20 @@ export function apply(ctx, config) {
    * 设置页允许直接输入 Token/Cookie，但持久配置中只保留引用名。
    * 旧版本曾把 authValue 留在运行时配置；用户下一次保存时一并迁移。
    */
-  const persistDirectQuotaCredential = async (previousRequest, incomingRequest, scope) => {
+  const persistDirectQuotaCredential = async (previousRequest, incomingRequest, scope, writes) => {
     const merged = mergeMaskedQuotaRequest(previousRequest ?? {}, incomingRequest ?? {})
     const credentials = ctx.get('credentials')
 
-    const persistSecret = async (ref, value) => {
+    const profileScope = ctx.get('profileContext')?.name ? `${scope}:profile:${ctx.get('profileContext').name}` : scope
+    const persistSecret = (ref, value) => {
       if (!credentials?.set) throw new Error('quota-credential-store-unavailable')
-      await credentials.set(ref, value)
+      writes.set(ref, value)
     }
 
     // 1. 直接填写的额度凭证 → DSH credentials，运行时只保留引用。
-    if (merged.credentialMode === 'direct') {
+    if (merged.credentialMode === 'direct' && typeof merged.authValue !== 'object' && typeof merged.authRef !== 'object') {
       const previousRef = previousRequest?.credentialMode === 'direct' ? String(previousRequest.authRef ?? '').trim() : ''
-      const ref = String(merged.authRef ?? '').trim() || previousRef || quotaCredentialRef(scope)
+      const ref = String(merged.authRef ?? '').trim() || previousRef || quotaCredentialRef(profileScope)
       const entered = String(incomingRequest?.authValue ?? '')
       const legacy = previousRequest?.credentialMode === 'direct' ? String(previousRequest.authValue ?? '') : ''
       const valueToStore = entered && entered !== '***'
@@ -2005,12 +2018,71 @@ export function apply(ctx, config) {
     for (const [name, value] of Object.entries(headers)) {
       if (!isSensitiveHeader(name) || typeof value !== 'string' || value === '' || value === '***') continue
       if (value.startsWith(HEADER_CREDENTIAL_MARKER)) continue
-      const ref = quotaCredentialRef(`${scope}:header:${name}`)
+      const ref = quotaCredentialRef(`${profileScope}:header:${name}`)
       await persistSecret(ref, value)
       headers[name] = `${HEADER_CREDENTIAL_MARKER}${ref}`
     }
     merged.headers = headers
     return merged
+  }
+
+  const persistConfigPatch = async (patch) => {
+    const editor = ctx.get('configEditor')
+    const entry = editor?.entries?.().find((row) => ctx.fiber ? row.fiber === ctx.fiber : row.options.id === name)
+    if (!entry || !editor.edit) throw new Error('config-persistence-unavailable')
+    const before = structuredClone(entry.options.config ?? {})
+    const saved = { ...before, ...patch }
+    const writes = new Map()
+    for (const [field, refField] of [['apiKey', 'apiKeyRef'], ['opencodeApiKey', 'opencodeApiKeyRef']]) {
+      if (typeof saved[field] !== 'string' || !saved[field]) continue
+      const credentials = ctx.get('credentials')
+      if (!credentials?.set) throw new Error('quota-credential-store-unavailable')
+      const ref = legacyKeyRef(field, entry.options.id)
+      writes.set(ref, saved[field])
+      saved[refField] = ref
+      saved[field] = ''
+    }
+    const secureSource = async (source, scope) => {
+      if (!source?.request) return source
+      const rawRequest = { ...source.request, credentialMode: source.request.credentialMode || (source.request.dshProvider ? 'provider' : source.request.authValue ? 'direct' : source.request.authStyle === 'none' ? 'none' : 'reference') }
+      const request = await persistDirectQuotaCredential(rawRequest, rawRequest, scope, writes)
+      // Credentials embedded in legacy URLs cannot safely be copied into a profile patch.
+      if (typeof request.url === 'string' && request.url) {
+        try {
+          const url = new URL(request.url)
+          if (url.username || url.password) throw new Error('quota-url-credentials-forbidden')
+        } catch { throw new Error('quota-url-invalid-or-credentials-forbidden') }
+      }
+      if (typeof request.authValue !== 'object') delete request.authValue
+      delete request.credentialConfigured
+      return { ...source, request }
+    }
+    if (Array.isArray(saved.quotaSources)) saved.quotaSources = await Promise.all(saved.quotaSources.map((source) => secureSource(source, `source:${source.id}`)))
+    if (Array.isArray(saved.providerQuotas)) saved.providerQuotas = await Promise.all(saved.providerQuotas.map(async (binding) => ({
+      ...binding,
+      ...(binding.source ? { source: await secureSource(binding.source, `provider:${binding.providerId}`) } : {}),
+    })))
+    const credentials = ctx.get('credentials')
+    const previousSecrets = new Map()
+    try {
+      for (const [ref, value] of writes) {
+        previousSecrets.set(ref, await credentials.resolve(ref))
+        await credentials.set(ref, value)
+      }
+      await editor.edit(entry, (current) => {
+        if (JSON.stringify(current) !== JSON.stringify(before)) throw new Error('config-changed-during-save')
+        return saved
+      })
+    } catch (error) {
+      for (const [ref, previous] of previousSecrets) {
+        try {
+          if (previous?.value) await credentials.set(ref, previous.value)
+          else await credentials.unset?.(ref)
+        } catch { ctx.logger.warn('dsh-credits: credential rollback failed') }
+      }
+      throw error
+    }
+    return saved
   }
 
   /** 复用 DSH 供应商已保存的 credential-ref 或 llm-pi-ai API-key record。 */
@@ -2041,6 +2113,7 @@ export function apply(ctx, config) {
   const resolveKey = async (overrideKey = null) => {
     if (typeof overrideKey === 'string' && overrideKey !== '') return overrideKey
     if (runtimeConfig.apiKey !== '') return runtimeConfig.apiKey
+    if (runtimeConfig.apiKeyRef === legacyKeyRef('apiKey')) return resolveCredential(runtimeConfig.apiKeyRef)
     const fromDsh = await resolveDshProviderCredential('deepseek-official') || await resolveDshProviderCredential('deepseek')
     return fromDsh || resolveCredential(runtimeConfig.apiKeyRef)
   }
@@ -2049,6 +2122,7 @@ export function apply(ctx, config) {
   const resolveOpencodeKey = async (overrideKey = null) => {
     if (typeof overrideKey === 'string' && overrideKey !== '') return overrideKey
     if (runtimeConfig.opencodeApiKey !== '') return runtimeConfig.opencodeApiKey
+    if (runtimeConfig.opencodeApiKeyRef === legacyKeyRef('opencodeApiKey')) return resolveCredential(runtimeConfig.opencodeApiKeyRef)
     const fromDsh = await resolveDshProviderCredential('opencode-go')
     if (fromDsh !== '') return fromDsh
     const fromCredential = await resolveCredential(runtimeConfig.opencodeApiKeyRef)
@@ -2513,11 +2587,11 @@ export function apply(ctx, config) {
       showPopover: runtimeConfig.showPopover !== false,
       showTps: runtimeConfig.showTps !== false,
       provider: runtimeConfig.provider,
-      hasCustomKey: Boolean(runtimeConfig.apiKey),
+      hasCustomKey: Boolean(runtimeConfig.apiKey) || runtimeConfig.apiKeyRef === legacyKeyRef('apiKey'),
       apiKeyMasked: maskKey(runtimeConfig.apiKey),
       apiKeyRef: runtimeConfig.apiKeyRef,
       baseUrl: runtimeConfig.baseUrl,
-      hasOpencodeCustomKey: Boolean(runtimeConfig.opencodeApiKey),
+      hasOpencodeCustomKey: Boolean(runtimeConfig.opencodeApiKey) || runtimeConfig.opencodeApiKeyRef === legacyKeyRef('opencodeApiKey'),
       opencodeApiKeyMasked: maskKey(runtimeConfig.opencodeApiKey),
       opencodeApiKeyRef: runtimeConfig.opencodeApiKeyRef,
       opencodeBaseUrl: runtimeConfig.opencodeBaseUrl,
@@ -2707,79 +2781,90 @@ export function apply(ctx, config) {
         if (req.method === 'POST') {
           try {
             const body = await readJsonBody(req)
-            const nextConfig = { ...runtimeConfig }
-            // 局部合并与类型校验
-            if (typeof body.quotaMode === 'string' && QUOTA_MODES.includes(body.quotaMode)) nextConfig.quotaMode = body.quotaMode
-            if (typeof body.showDock === 'boolean') nextConfig.showDock = body.showDock
-            if (typeof body.dockLayout === 'string' && DOCK_LAYOUTS.includes(body.dockLayout)) nextConfig.dockLayout = body.dockLayout
-            if (typeof body.showCapsule === 'boolean') nextConfig.showCapsule = body.showCapsule
-            if (typeof body.showPopover === 'boolean') nextConfig.showPopover = body.showPopover
-            if (typeof body.showTps === 'boolean') nextConfig.showTps = body.showTps
-            if (typeof body.provider === 'string' && body.provider.trim()) nextConfig.provider = body.provider.trim()
-            if (typeof body.apiKey === 'string') nextConfig.apiKey = body.apiKey.trim()
-            if (typeof body.apiKeyRef === 'string' && body.apiKeyRef.trim()) nextConfig.apiKeyRef = body.apiKeyRef.trim()
-            if (typeof body.baseUrl === 'string' && body.baseUrl.trim()) nextConfig.baseUrl = body.baseUrl.trim()
-            if (typeof body.opencodeApiKey === 'string') nextConfig.opencodeApiKey = body.opencodeApiKey.trim()
-            if (typeof body.opencodeApiKeyRef === 'string' && body.opencodeApiKeyRef.trim()) nextConfig.opencodeApiKeyRef = body.opencodeApiKeyRef.trim()
-            if (typeof body.opencodeBaseUrl === 'string' && body.opencodeBaseUrl.trim()) nextConfig.opencodeBaseUrl = body.opencodeBaseUrl.trim()
-            if (Array.isArray(body.quotaSources)) {
-              const prevSources = nextConfig.quotaSources ?? []
-              const nextSources = []
-              for (const s of body.quotaSources) {
-                const prev = prevSources.find((p) => p.id === s.id)
-                const request = await persistDirectQuotaCredential(prev?.request, s.request, `source:${s.id}`)
-                nextSources.push(normalizeQuotaSourceConfig({
-                  ...s,
-                  request,
-                }))
+            await (configWriteQueue = configWriteQueue.catch(() => {}).then(async () => {
+              const nextConfig = { ...runtimeConfig }
+              // 局部合并与类型校验
+              if (typeof body.quotaMode === 'string' && QUOTA_MODES.includes(body.quotaMode)) nextConfig.quotaMode = body.quotaMode
+              if (typeof body.showDock === 'boolean') nextConfig.showDock = body.showDock
+              if (typeof body.dockLayout === 'string' && DOCK_LAYOUTS.includes(body.dockLayout)) nextConfig.dockLayout = body.dockLayout
+              if (typeof body.showCapsule === 'boolean') nextConfig.showCapsule = body.showCapsule
+              if (typeof body.showPopover === 'boolean') nextConfig.showPopover = body.showPopover
+              if (typeof body.showTps === 'boolean') nextConfig.showTps = body.showTps
+              if (typeof body.provider === 'string' && body.provider.trim()) nextConfig.provider = body.provider.trim()
+              if (typeof body.apiKey === 'string') {
+                nextConfig.apiKey = body.apiKey.trim()
+                if (!nextConfig.apiKey && !body.apiKeyRef && nextConfig.apiKeyRef === legacyKeyRef('apiKey')) nextConfig.apiKeyRef = 'DEEPSEEK_API_KEY'
               }
-              if (new Set(nextSources.map((source) => source.id)).size !== nextSources.length) {
-                throw new Error('quota-source-id-duplicate')
+              if (typeof body.apiKeyRef === 'string' && body.apiKeyRef.trim()) nextConfig.apiKeyRef = body.apiKeyRef.trim()
+              if (typeof body.baseUrl === 'string' && body.baseUrl.trim()) nextConfig.baseUrl = body.baseUrl.trim()
+              if (typeof body.opencodeApiKey === 'string') {
+                nextConfig.opencodeApiKey = body.opencodeApiKey.trim()
+                if (!nextConfig.opencodeApiKey && !body.opencodeApiKeyRef && nextConfig.opencodeApiKeyRef === legacyKeyRef('opencodeApiKey')) nextConfig.opencodeApiKeyRef = 'OPENCODE_GO_API_KEY'
               }
-              nextConfig.quotaSources = nextSources
-            }
-            if (Array.isArray(body.providerQuotas)) {
-              const prevBindings = nextConfig.providerQuotas ?? []
-              const nextBindings = []
-              for (const rawBinding of body.providerQuotas) {
-                const prev = prevBindings.find((binding) => normalizeProvider(binding.providerId) === normalizeProvider(rawBinding?.providerId))
-                if (rawBinding?.sourceType !== 'custom' || !rawBinding.source) {
-                  nextBindings.push(normalizeProviderQuotaConfig(rawBinding))
-                  continue
-                }
-                const request = await persistDirectQuotaCredential(
-                  prev?.source?.request,
-                  rawBinding.source.request,
-                  `provider:${rawBinding.providerId}`,
-                )
-                nextBindings.push(normalizeProviderQuotaConfig({
-                  ...rawBinding,
-                  source: {
-                    ...rawBinding.source,
+              if (typeof body.opencodeApiKeyRef === 'string' && body.opencodeApiKeyRef.trim()) nextConfig.opencodeApiKeyRef = body.opencodeApiKeyRef.trim()
+              if (typeof body.opencodeBaseUrl === 'string' && body.opencodeBaseUrl.trim()) nextConfig.opencodeBaseUrl = body.opencodeBaseUrl.trim()
+              if (Array.isArray(body.quotaSources)) {
+                const prevSources = nextConfig.quotaSources ?? []
+                const nextSources = []
+                for (const s of body.quotaSources) {
+                  const prev = prevSources.find((p) => p.id === s.id)
+                  const request = mergeMaskedQuotaRequest(prev?.request, s.request)
+                  nextSources.push(normalizeQuotaSourceConfig({
+                    ...s,
                     request,
-                  },
-                }))
+                  }))
+                }
+                if (new Set(nextSources.map((source) => source.id)).size !== nextSources.length) {
+                  throw new Error('quota-source-id-duplicate')
+                }
+                nextConfig.quotaSources = nextSources
               }
-              const normalizedProviderIds = nextBindings.map((binding) => normalizeProvider(binding.providerId))
-              if (new Set(normalizedProviderIds).size !== normalizedProviderIds.length) {
-                throw new Error('provider-quota-provider-duplicate')
+              if (Array.isArray(body.providerQuotas)) {
+                const prevBindings = nextConfig.providerQuotas ?? []
+                const nextBindings = []
+                for (const rawBinding of body.providerQuotas) {
+                  const prev = prevBindings.find((binding) => normalizeProvider(binding.providerId) === normalizeProvider(rawBinding?.providerId))
+                  if (rawBinding?.sourceType !== 'custom' || !rawBinding.source) {
+                    nextBindings.push(normalizeProviderQuotaConfig(rawBinding))
+                    continue
+                  }
+                  const request = mergeMaskedQuotaRequest(
+                    prev?.source?.request,
+                    rawBinding.source.request,
+                  )
+                  nextBindings.push(normalizeProviderQuotaConfig({
+                    ...rawBinding,
+                    source: {
+                      ...rawBinding.source,
+                      request,
+                    },
+                  }))
+                }
+                const normalizedProviderIds = nextBindings.map((binding) => normalizeProvider(binding.providerId))
+                if (new Set(normalizedProviderIds).size !== normalizedProviderIds.length) {
+                  throw new Error('provider-quota-provider-duplicate')
+                }
+                nextConfig.providerQuotas = nextBindings
               }
-              nextConfig.providerQuotas = nextBindings
-            }
-            if (typeof body.warningThreshold === 'number' && body.warningThreshold >= 0) nextConfig.warningThreshold = body.warningThreshold
-            if (typeof body.dangerThreshold === 'number' && body.dangerThreshold >= 0) nextConfig.dangerThreshold = body.dangerThreshold
-            if (typeof body.refreshIntervalMs === 'number' && body.refreshIntervalMs >= 1000) nextConfig.refreshIntervalMs = body.refreshIntervalMs
-            if (typeof body.clientPollIntervalMs === 'number' && body.clientPollIntervalMs >= 1000) nextConfig.clientPollIntervalMs = body.clientPollIntervalMs
-            if (typeof body.timeoutMs === 'number' && body.timeoutMs >= 1000) nextConfig.timeoutMs = body.timeoutMs
-            if (typeof body.currency === 'string' && body.currency.trim()) nextConfig.currency = normalizePricingCurrency(body.currency)
-            if (body.prices !== undefined) nextConfig.prices = PricesInput.parse(body.prices)
-            if (body.providerPrices !== undefined) nextConfig.providerPrices = z.record(z.string(), PricesInput).parse(body.providerPrices)
-            if (body.defaultPrices !== undefined) {
-              if (!body.defaultPrices || typeof body.defaultPrices !== 'object' || Array.isArray(body.defaultPrices)) throw new Error('default-prices-invalid')
-              nextConfig.defaultPrices = PriceInput.parse({ ...nextConfig.defaultPrices, ...body.defaultPrices })
-            }
-            nextConfig.pricingEpoch = Number(nextConfig.pricingEpoch ?? 0) + 1
-            runtimeConfig = nextConfig
+              if (typeof body.warningThreshold === 'number' && body.warningThreshold >= 0) nextConfig.warningThreshold = body.warningThreshold
+              if (typeof body.dangerThreshold === 'number' && body.dangerThreshold >= 0) nextConfig.dangerThreshold = body.dangerThreshold
+              if (typeof body.refreshIntervalMs === 'number' && body.refreshIntervalMs >= 1000) nextConfig.refreshIntervalMs = body.refreshIntervalMs
+              if (typeof body.clientPollIntervalMs === 'number' && body.clientPollIntervalMs >= 1000) nextConfig.clientPollIntervalMs = body.clientPollIntervalMs
+              if (typeof body.timeoutMs === 'number' && body.timeoutMs >= 1000) nextConfig.timeoutMs = body.timeoutMs
+              if (typeof body.currency === 'string' && body.currency.trim()) nextConfig.currency = normalizePricingCurrency(body.currency)
+              if (body.prices !== undefined) nextConfig.prices = PricesInput.parse(body.prices)
+              if (body.providerPrices !== undefined) nextConfig.providerPrices = z.record(z.string(), PricesInput).parse(body.providerPrices)
+              if (body.defaultPrices !== undefined) {
+                if (!body.defaultPrices || typeof body.defaultPrices !== 'object' || Array.isArray(body.defaultPrices)) throw new Error('default-prices-invalid')
+                nextConfig.defaultPrices = PriceInput.parse({ ...nextConfig.defaultPrices, ...body.defaultPrices })
+              }
+              const patch = Object.fromEntries(Object.keys(body).filter((key) => Object.hasOwn(nextConfig, key) && key !== 'pricingEpoch').map((key) => [key, nextConfig[key]]))
+              for (const field of ['apiKeyRef', 'opencodeApiKeyRef']) {
+                if (nextConfig[field] !== runtimeConfig[field]) patch[field] = nextConfig[field]
+              }
+              const saved = await persistConfigPatch(patch)
+              runtimeConfig = { ...nextConfig, ...(ctx.fiber?.config ?? saved), pricingEpoch: Number(nextConfig.pricingEpoch ?? 0) + 1 }
+            }))
             // 单价在 view() 时动态读取 getConfig()，改价无需重挂投影；重挂反而会清空
             // 本会话的 TPS，并在宿主拒绝同 key 重注册时留下空注册。
 

@@ -5,6 +5,9 @@
  */
 import assert from 'node:assert/strict'
 import { EventEmitter, on } from 'node:events'
+import { mkdtemp, mkdir, writeFile, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import {
   apply,
   buildCustomHttpRequest,
@@ -21,8 +24,26 @@ import {
 } from '../src/index.js'
 
 // 模拟 webServer 上下文与注册表
+const testHome = await mkdtemp(join(tmpdir(), 'dsh-credits-test-'))
+process.env.DSH_HOME = testHome
+await mkdir(join(testHome, 'storages'))
+await writeFile(join(testHome, 'storages', 'dsh-credits-spend.json'), JSON.stringify({ version: 1, sessions: {
+  'old-fork': { currentModel: 'custom', currentProvider: 'work', last: { turn: 0, step: 0, key: '1' }, samples: {
+    1: { t: 1, model: 'custom', provider: 'work', buckets: { uncachedInputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0 } },
+  } },
+} }))
 const routes = new Map()
+const listeners = new Map()
 const credentialSecrets = new Map()
+const configEntry = { options: { id: 'dsh-credits', config: {} } }
+let persistenceFailure = false
+const editor = {
+  entries: () => [configEntry],
+  async edit(entry, change) {
+    if (persistenceFailure) throw new Error('mock-config-write-failed')
+    entry.options.config = structuredClone(change(entry.options.config))
+  },
+}
 const accountChanges = new EventEmitter()
 let accountEnabled = false
 let accountBalance = async () => ({
@@ -40,6 +61,7 @@ const accountService = {
 
 const mockCtx = {
   get(key) {
+    if (key === 'configEditor') return editor
     if (key === 'deepseekAccount') return accountService
     if (key === 'credentials') {
       return {
@@ -54,6 +76,7 @@ const mockCtx = {
         async set(ref, value) {
           credentialSecrets.set(ref, value)
         },
+        async unset(ref) { credentialSecrets.delete(ref) },
         async readRecord(key) {
           if (key === 'llm-pi-ai/opencode-go') return { kind: 'api-key', key: 'sk-mock-opencode-record' }
           if (key === 'llm-pi-ai/go-work') return { kind: 'api-key', key: 'sk-go-work' }
@@ -102,7 +125,8 @@ const mockCtx = {
     info() {},
     error() {},
   },
-  on() {
+  on(event, listener) {
+    listeners.set(event, listener)
     return () => {}
   },
   effect(fn) {
@@ -231,6 +255,7 @@ const initialConfig = {
 }
 
 apply(mockCtx, initialConfig)
+listeners.get('session/event')({ id: 'old-fork' }, { type: 'session/end-seed', seq: 10, time: 1, data: { inherited: true } })
 
 // Helper: 模拟 HTTP 请求触发 handler
 function invokeRoute(path, method, body = null, query = '') {
@@ -273,6 +298,10 @@ function invokeRoute(path, method, body = null, query = '') {
 }
 
 async function runTests() {
+  await new Promise((resolve) => setTimeout(resolve, 50))
+  assert.equal((await invokeRoute('/query-credits/spend', 'GET', null, 'range=all')).data.calls, 0, 'hydrating an old cache must not restore inherited spend')
+  listeners.get('session/event')({ id: 'old-fork' }, { type: 'assistant/message', seq: 11, time: 1, data: { turn: 0, step: 0, usage: { inputTokens: 1, outputTokens: 0 } } })
+  assert.equal((await invokeRoute('/query-credits/spend', 'GET', null, 'range=all')).data.calls, 1)
   assert.equal(await readFetchResponseBody(new Response('余额')), '余额')
   assert.equal((await readFetchResponseBody(new Response('a'.repeat(MAX_QUOTA_RESPONSE_BYTES)))).length, MAX_QUOTA_RESPONSE_BYTES)
   let oversizedCancelled = false
@@ -899,7 +928,64 @@ assert.equal(resGetConfig.data.config.showPopover, true)
   assert.equal((await accountQuery()).data.balances, undefined)
   Date.now = originalNow
   console.log('DeepSeek account balances / sign-out / account change passed')
+
+  const price = { cacheHit: 0, cacheMiss: 0.2, output: 0 }
+  const period = { ...price, from: '2026-08-01T00:00:00Z', to: '2026-09-01T00:00:00Z' }
+  const savedPrices = { work: { custom: { ...price, schedules: [period] } } }
+  const saved = await invokeRoute('/query-credits/config', 'POST', { providerPrices: savedPrices, showTps: false })
+  assert.equal(saved.data.ok, true)
+  assert.deepEqual(configEntry.options.config.providerPrices, savedPrices)
+  const beforeRejectedSave = (await invokeRoute('/query-credits/config', 'GET')).data.config
+  const durableBeforeFailure = structuredClone(configEntry.options.config)
+  for (const invalid of [
+    { ...period, from: 'not-a-date' },
+    { ...period, from: '2026-09-01T00:00:00Z' },
+    { ...period, cacheMiss: -1 },
+    { ...period, from: '2026-08-01T00:00:00' },
+  ]) {
+    const rejected = await invokeRoute('/query-credits/config', 'POST', { showTps: true, providerPrices: { work: { custom: { ...price, schedules: [invalid] } } } })
+    assert.equal(rejected.data.ok, false)
+    assert.equal((await invokeRoute('/query-credits/config', 'GET')).data.config.showTps, false)
+  }
+  const overlapping = await invokeRoute('/query-credits/config', 'POST', { prices: { custom: { ...price, schedules: [period, period] } } })
+  assert.equal(overlapping.data.ok, false)
+  persistenceFailure = true
+  const secretsBeforeFailure = new Map(credentialSecrets)
+  const failed = await invokeRoute('/query-credits/config', 'POST', { showTps: true, opencodeApiKey: 'failed-save-secret' })
+  persistenceFailure = false
+  assert.equal(failed.data.ok, false)
+  assert.deepEqual(configEntry.options.config, durableBeforeFailure, 'failed writes must retain durable settings')
+  assert.deepEqual(credentialSecrets, secretsBeforeFailure, 'failed writes must restore existing credentials')
+  assert.deepEqual((await invokeRoute('/query-credits/config', 'GET')).data.config, beforeRejectedSave, 'failed writes must retain live settings')
+  assert.equal((await invokeRoute('/query-credits/spend', 'GET', null, 'range=all')).data.range, 'all')
+  assert.doesNotMatch(JSON.stringify(configEntry.options.config), /sk-opencode-mock|replaced-secret|__SF_auth/)
+  await Promise.all([
+    invokeRoute('/query-credits/config', 'POST', { showDock: false }),
+    invokeRoute('/query-credits/config', 'POST', { showCapsule: false }),
+  ])
+  assert.equal(configEntry.options.config.showDock, false)
+  assert.equal(configEntry.options.config.showCapsule, false, 'concurrent saves must not lose other cards')
+  configEntry.options.config.quotaSources = [{ id: 'legacy-secret', kind: 'metric', enabled: false, request: {
+    url: 'https://example.invalid/quota', credentialMode: 'direct', authValue: 'nested-legacy-secret', authStyle: 'cookie', headers: { Cookie: 'header-legacy-secret' },
+  } }]
+  configEntry.options.config.apiKey = 'top-legacy-secret'
+  const migrated = await invokeRoute('/query-credits/config', 'POST', { showTps: false })
+  assert.equal(migrated.data.ok, true)
+  assert.doesNotMatch(JSON.stringify(configEntry.options.config), /nested-legacy-secret|header-legacy-secret|top-legacy-secret/)
+  assert.ok([...credentialSecrets.values()].includes('nested-legacy-secret'))
+  assert.ok([...credentialSecrets.values()].includes('top-legacy-secret'))
+  const clearedKey = await invokeRoute('/query-credits/config', 'POST', { apiKey: '' })
+  assert.equal(clearedKey.data.config.hasCustomKey, false, 'clearing a migrated legacy key must restore provider credential lookup')
+  assert.equal(configEntry.options.config.apiKeyRef, 'DEEPSEEK_API_KEY')
+  apply(mockCtx, structuredClone(configEntry.options.config))
+  const restarted = (await invokeRoute('/query-credits/config', 'GET')).data.config
+  assert.equal(restarted.showTps, false)
+  assert.equal(restarted.showDock, false)
+  assert.deepEqual(restarted.providerPrices, savedPrices)
+  console.log('durable save / restart / failed write / price validation passed')
   console.log('ALL CONFIG API TESTS PASSED')
+  assert.ok(testHome.startsWith(join(tmpdir(), 'dsh-credits-test-')))
+  await rm(testHome, { recursive: true, force: true })
   process.exit(0)
 }
 
