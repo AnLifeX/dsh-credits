@@ -147,6 +147,8 @@ OpenCode Go 模式下，卡片改成三个窗口的用量百分比与重置时�
 
 除 DeepSeek 和 OpenCode Go 外，设置页内置了以下模板：
 
+自动匹配时，明确的官方域名优先于供应商 ID，可区分国内与国际接口；代理域名按供应商 ID 推断，也可手动选择模板。只有 DeepSeek 和 OpenCode Go 自动模板使用 DSH 的 Base URL；其余模板使用固定的官方额度接口。模型接口与额度接口路径不同，代理余额查询请使用自定义 HTTP，填写代理实际提供的额度地址。DeepSeek 自动模板会移除末尾 `/v1` 后拼接 `/user/balance`，已填写完整余额端点则保留。
+
 - 订阅套餐：Kimi For Coding、智谱 GLM Coding / Z.AI、MiniMax Coding Plan（国内 / 国际）
 - 账户余额：StepFun、OpenRouter、Novita AI
 
