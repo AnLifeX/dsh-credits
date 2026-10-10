@@ -141,7 +141,7 @@ OpenCode Go 模式下，卡片改成三个窗口的用量百分比与重置时�
 | :--- | :--- | :--- | :--- |
 | `deepseek` | DeepSeek 官方余额 | `GET /user/balance` | `DEEPSEEK_API_KEY` |
 | `deepseek-account` | DSH 登录账号充值与赠送余额 | 宿主 `deepseekAccount.getBalance` | 复用 DSH 登录，无需 API Key |
-| `opencode-go` | OpenCode Go 订阅用量 | `GET https://opencode.ai/zen/go/v1/usage` | `OPENCODE_GO_API_KEY` 或 OpenCode `auth.json` |
+| `opencode-go` | OpenCode Go 订阅用量 | `GET https://opencode.ai/zen/go/v1/usage` | DSH 供应商凭证或 `OPENCODE_GO_API_KEY` |
 
 `deepseek-account` 与 API Key 的 `deepseek-official` 是不同供应商，各自绑定余额来源。插件不读取或转发账号登录 Token；由宿主服务查询，将同币种充值与赠送余额合计展示。退出登录或账号状态变化时清空旧缓存，旧请求不能覆盖新账号读数；账号余额查询失败时不沿用旧余额。未登录时提示先登录 DeepSeek 账号。
 
@@ -169,7 +169,9 @@ OpenCode Go 模式下，卡片改成三个窗口的用量百分比与重置时�
 | 绑定为余额/套餐模板或自定义 HTTP 的供应商 | 该供应商自己的解析结果 |
 | 未配置或单独关闭的供应商 | 不显示额度；本会话消耗与 TPS 仍可正常显示 |
 
-OpenCode Go 密钥解析顺序：`opencodeApiKey` → `OPENCODE_GO_API_KEY`（credentials / 环境变量）→ `~/.local/share/opencode/auth.json`。
+OpenCode Go 供应商绑定的密钥解析顺序：DSH 供应商配置的凭证引用 / 已保存凭证 → 模板的 `OPENCODE_GO_API_KEY`（credentials / 环境变量）。此路径不读取 OpenCode `auth.json`。
+
+仅旧的独立查询路径仍保留：`opencodeApiKey` → DSH 供应商凭证 → `OPENCODE_GO_API_KEY`（credentials / 环境变量）→ `~/.local/share/opencode/auth.json`。新配置请使用供应商绑定。
 
 ## 配置
 
