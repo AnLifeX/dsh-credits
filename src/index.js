@@ -250,6 +250,7 @@ const normalizeQuotaSourceConfig = (source) => {
   let parsed
   try { parsed = new URL(rawUrl) } catch { throw new Error('quota-url-invalid') }
   if (!['http:', 'https:'].includes(parsed.protocol)) throw new Error('quota-url-invalid')
+  if (parsed.username || parsed.password) throw new Error('quota-url-credentials-forbidden')
   const authStyle = String(merged.request?.authStyle ?? 'none').trim().toLowerCase()
   if (!['bearer', 'token', 'basic', 'header', 'cookie', 'query', 'json', 'form', 'none'].includes(authStyle)) {
     throw new Error('quota-auth-style-invalid')
@@ -724,6 +725,8 @@ const setHeader = (headers, name, value) => {
 export const buildCustomHttpRequest = (request = {}, credential = '') => {
   let url = String(request.url ?? '').trim()
   if (!url) throw new Error('quota-url-missing')
+  const parsedUrl = new URL(url)
+  if (parsedUrl.username || parsedUrl.password) throw new Error('quota-url-credentials-forbidden')
   const method = String(request.method || 'GET').trim().toUpperCase()
   const style = normalizeProvider(request.authStyle ?? 'none')
   const authHeader = String(request.authHeader || 'Authorization').trim() || 'Authorization'
@@ -848,6 +851,8 @@ const diagnosticBody = (body, contentType = '', extraSensitiveKeys = [], secrets
 const diagnosticUrl = (rawUrl, request, secrets = []) => {
   try {
     const parsed = new URL(rawUrl)
+    if (parsed.username) parsed.username = '***'
+    if (parsed.password) parsed.password = '***'
     const authParam = String(request?.authParam || 'api_key').toLowerCase()
     for (const key of [...parsed.searchParams.keys()]) {
       if (isSensitiveHeader(key) || key.toLowerCase() === authParam) parsed.searchParams.set(key, '***')
@@ -2383,6 +2388,13 @@ export function apply(ctx, config) {
       ...source,
       request: {
         ...(source.request ?? {}),
+        url: (() => {
+          if (!source.request?.url) return source.request?.url
+          const url = new URL(source.request.url)
+          if (url.username) url.username = '***'
+          if (url.password) url.password = '***'
+          return url.toString()
+        })(),
         authValue: '',
         credentialConfigured: await describeQuotaCredential(source.request),
         headers: Object.fromEntries(

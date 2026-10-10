@@ -952,6 +952,7 @@ window.__ModuleLoader__.load({
 			"settings.defaultRemaining": "剩余额度",
 			"settings.metricUnitPlaceholder": "CNY / USD / 次",
 			"quota.invalidJson": "额度接口返回的不是有效 JSON。",
+			"quota.urlCredentialsForbidden": "接口地址不能包含用户名或密码，请使用凭证输入框与 Basic 鉴权。",
 			"template.deepseek.name": "DeepSeek 官方余额",
 			"template.deepseek.description": "查询 DeepSeek 官方账户余额（CNY / USD）",
 			"template.deepseek.sourceName": "DeepSeek 官方余额",
@@ -1327,6 +1328,7 @@ window.__ModuleLoader__.load({
 			"settings.defaultRemaining": "Remaining quota",
 			"settings.metricUnitPlaceholder": "CNY / USD / requests",
 			"quota.invalidJson": "The quota API returned invalid JSON.",
+			"quota.urlCredentialsForbidden": "URLs cannot contain a username or password. Use the credential field with Basic authentication.",
 			"template.deepseek.name": "DeepSeek balance",
 			"template.deepseek.description": "Query official DeepSeek account balances (CNY / USD)",
 			"template.deepseek.sourceName": "DeepSeek balance",
@@ -1711,6 +1713,7 @@ window.__ModuleLoader__.load({
 			};
 		}
 		function localizeQuotaError(error, t) {
+			if (error === "quota-url-credentials-forbidden") return t("quota.urlCredentialsForbidden");
 			if (error === "quota-invalid-json") return t("quota.invalidJson");
 			let message = error || t("quota.requestFailed");
 			for (const key of Object.keys(zh).filter((key) => key.startsWith("template.") && key.endsWith(".sourceName"))) {

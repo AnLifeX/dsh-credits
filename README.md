@@ -284,6 +284,8 @@ OpenCode Go 密钥解析顺序：`opencodeApiKey` → `OPENCODE_GO_API_KEY`（cr
 
 ### 自定义 HTTP（高级 YAML）
 
+接口地址不允许包含 `user:password@host`。已有此类配置需移除 URL 中的凭证，改用凭证输入框与 Basic 鉴权；旧配置返回时遮罩 URL 凭证，不覆盖磁盘文件。
+
 设置页已经覆盖常用配置。只有批量维护、版本控制或特殊解析时才建议手写 `providerQuotas`：
 
 ```yaml

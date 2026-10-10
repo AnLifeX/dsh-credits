@@ -652,6 +652,14 @@ assert.equal(resGetConfig.data.config.showPopover, true)
   })
   assert.equal(transformedMetrics[0].value, 14.1216)
   const bearerRequest = buildCustomHttpRequest({ url: 'https://example.com/quota', authStyle: 'token' }, 'abc')
+  for (const url of ['https://user:password@example.com/quota', 'https://user@example.com/quota']) {
+    assert.throws(() => buildCustomHttpRequest({ url }), /quota-url-credentials-forbidden/)
+    const rejected = await invokeRoute('/query-credits/test-connection', 'POST', { binding: {
+      ...customBinding, source: { ...customBinding.source, request: { url, authStyle: 'none' } },
+    } })
+    assert.equal(rejected.data.error, 'quota-url-credentials-forbidden')
+    assert.doesNotMatch(JSON.stringify(rejected.data), /password@example/)
+  }
   assert.equal(bearerRequest.init.headers.Authorization, 'Token abc')
   const basicRequest = buildCustomHttpRequest({ url: 'https://example.com/quota', authStyle: 'basic' }, 'user:pass')
   assert.equal(basicRequest.init.headers.Authorization, `Basic ${Buffer.from('user:pass').toString('base64')}`)
