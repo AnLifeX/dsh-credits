@@ -104,6 +104,10 @@ export const resolveSpendRange = (range, fromValue, toValue, now = Date.now()) =
 export const initSpendFold = () => ({ currentModel: null, currentProvider: null, last: null, samples: {} })
 
 export const applySpendEvent = (state, event) => {
+  // Fork seeds copy the parent's history; only calls after the inherited cut are new spend.
+  if (event.type === 'session/end-seed' && event.data?.inherited === true) {
+    return { ...state, inheritedThrough: event.seq, last: null, samples: {} }
+  }
   let nextModel = state.currentModel
   let nextProvider = state.currentProvider
   if (event.type === 'request/header') {
@@ -141,6 +145,7 @@ export const applySpendEvent = (state, event) => {
   }
 
   return {
+    ...state,
     currentModel: nextModel,
     currentProvider: nextProvider,
     last: { turn, step, key, model, provider },

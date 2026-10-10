@@ -1696,10 +1696,14 @@ export function apply(ctx, config) {
       spendFolds.set(key, incoming)
       return
     }
+    const inheritedThrough = cur.inheritedThrough ?? incoming.inheritedThrough ?? -1
     spendFolds.set(key, {
       currentModel: cur.currentModel ?? incoming.currentModel,
-      last: cur.last ?? incoming.last,
-      samples: { ...(incoming.samples ?? {}), ...(cur.samples ?? {}) },
+      currentProvider: cur.currentProvider ?? incoming.currentProvider,
+      inheritedThrough,
+      last: [cur.last, incoming.last].find((last) => last && Number(last.key) > inheritedThrough) ?? null,
+      samples: Object.fromEntries(Object.entries({ ...(incoming.samples ?? {}), ...(cur.samples ?? {}) })
+        .filter(([seq]) => Number(seq) > inheritedThrough)),
     })
   }
   const ingestSessionEvents = (sessionId, events) => {

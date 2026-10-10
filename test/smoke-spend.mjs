@@ -102,4 +102,24 @@ const v4Cny = aggregateSpend(v4Samples, { currency: 'CNY', prices: {}, defaultPr
 const v4Usd = aggregateSpend(v4Samples, { currency: 'USD', prices: {}, defaultPrices: { cacheHit: 0, cacheMiss: 0, output: 0 } }, peak - 1000, peak + 1000)
 assert.equal(v4Cny.cost, 3)
 assert.equal(v4Usd.cost, 0.44)
+const parentEvents = [
+  { type: 'request/context', seq: 0, time: monday, data: { model: 'custom', provider: 'work' } },
+  { ...settlement({ time: monday, usage: { inputTokens: 1, outputTokens: 0 } }), seq: 1 },
+]
+const childEvents = [...parentEvents,
+  { type: 'session/end-seed', seq: 2, time: monday, data: { inherited: true } },
+  { ...settlement({ time: monday, usage: { inputTokens: 1, outputTokens: 0 } }), seq: 3 },
+]
+const grandchildEvents = [...childEvents,
+  { type: 'session/end-seed', seq: 4, time: monday, data: { inherited: true } },
+  { ...settlement({ time: monday, usage: { inputTokens: 1, outputTokens: 0 } }), seq: 5 },
+]
+assert.equal(foldSpendEvents(childEvents).length, 1, 'a fork must only count its new calls')
+assert.equal(foldSpendEvents(grandchildEvents).length, 1, 'nested forks must not inherit spend')
+assert.equal(foldSpendEvents([...parentEvents, { type: 'session/end-seed', seq: 2, data: { inherited: false } }]).length, 1, 'ordinary seeds must retain spend')
+assert.equal(foldSpendEvents([...parentEvents, childEvents[2]]).length, 0, 'a fork with no new calls has no spend')
+assert.equal(foldSpendEvents(childEvents)[0].provider, 'work', 'the inherited model/provider still apply after the cut')
+const independentSamples = ['a', 'b'].flatMap((sessionId) => foldSpendEvents(parentEvents).map((sample) => ({ ...sample, sessionId })))
+assert.equal(aggregateSpend(independentSamples, cfg, 0, monday).calls, 2, 'identical independent calls must not be deduplicated')
+
 console.log('SPEND TEST PASSED')
