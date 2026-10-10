@@ -15,13 +15,13 @@ DeepSeek Harness（Web / 官方桌面版）额度插件：在输入框下方显�
 - **底部条布局**  
   默认独立换行，额度单独占底下一行；也可改成跟底部已有统计共用一行、排在最后。底部条、累计胶囊、悬停卡片都可以关掉。
 - **本会话估算消耗**  
-  按模型单价估算（单价可在设置里改）。DeepSeek 按北京时间自动套用峰谷价：V4 自 2026-08-17 00:00 起；`deepseek-flash` / `deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` 自 2026-09-10 12:00 起切换为 V4.1 Flash 新价。
+  按模型单价估算，可为不同 DSH 供应商设置独立单价和价格生效时间段。DeepSeek 按北京时间自动套用峰谷价：V4 自 2026-08-17 00:00 起；`deepseek-flash` / `deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` 自 2026-09-10 12:00 起切换为 V4.1 Flash 新价。
 - **生成吞吐 TPS**
   从 DSH Session v2 settlement 的压缩流和 provider usage 计算精确 `TPS n tok/s`。可在「设置 → 额度与消耗 → 展示 → 生成 TPS」关闭。
 - **累计消耗胶囊**  
-  右下角可拖动气泡，查看今天 / 昨天 / 本周 / 本月 / 自定义时间范围内的跨会话估算总额（按当前计价货币与单价现算）。
+  右下角可拖动气泡，查看全部 / 今天 / 昨天 / 本周 / 本月 / 自定义时间范围内的跨会话估算总额（按当前计价货币与单价现算）。复刻会话继承的历史不会重复计入累计消耗。
 - **设置卡片**  
-  展示、额度查询、模型单价、YAML 导出各一张卡；阈值与查询频率已收进每个供应商的额度配置。每张卡独立「放弃修改 / 保存」，改过的字段可「恢复默认」。关掉再打开，未保存的草稿还在。
+  展示、额度查询、模型单价、YAML 导出各一张卡；阈值与查询频率已收进每个供应商的额度配置。每张卡独立「放弃修改 / 保存」，保存后写入当前 profile，重启后保留；改过的字段可「恢复默认」。关掉再打开，未保存的草稿还在。
   整个插件的启停统一使用 DSH 插件列表中的开关；设置页保留底部额度、气泡、TPS 和供应商额度的独立开关。旧版配置中的总开关 `enabled` 不再生效。
 
 ## 快速使用
@@ -130,7 +130,7 @@ OpenCode Go 模式下，卡片改成三个窗口的用量百分比与重置时�
 
 直接填写的 Token 或 Cookie 保存到 DSH credentials，不写入导出的普通配置；页面只显示「已设置」，可输入新值覆盖。附加请求头中的 Cookie、Authorization、Token、API Key 等敏感字段也会脱敏。
 
-设置页保存后会立即更新当前 Web 或桌面应用进程。若要让额度绑定在服务重启后仍然保留，请从「YAML 导出」卡片复制配置到当前 profile 的 `cordis.patch.yml`；直接填写的敏感凭证无需写入 YAML。
+设置页「保存」会通过 DSH 原生配置编辑器写入当前 profile 的 `cordis.patch.yml`，立即生效，重启后保留。Web 与桌面 profile 各自保存；「YAML 导出」用于备份或迁移。直接凭证与敏感请求头只保存到 DSH credentials，配置中保留引用。写入失败会显示保存失败并保留原配置；不提供原生配置编辑器的旧宿主需要升级后才能使用设置页保存。
 
 ### 内置与官方模板
 
@@ -178,7 +178,7 @@ OpenCode Go 供应商绑定的密钥解析顺序：DSH 供应商配置的凭证�
 
 新配置以 `providerQuotas` 为准，不再需要全局的额度查询模式、默认展示源或未匹配回退项。`providerId` 必须与 DSH 供应商列表中的实际 ID 一致。
 
-旧配置兼容范围：`quotaSources` 中带 `providerIds` 的有效 HTTP 数据源会迁移为供应商绑定；旧 `manual` 类型不支持，需改成 HTTP 查询。`quotaMode: custom`、旧 `provider` 和全局 `baseUrl` / `opencodeApiKey` / `opencodeBaseUrl` 仅服务于旧查询路径，不覆盖已有供应商绑定。升级后请在设置页按供应商核对模板、地址和凭证，再导出新的 `providerQuotas`；插件不会自动改写原有配置文件。
+旧配置兼容范围：`quotaSources` 中带 `providerIds` 的有效 HTTP 数据源会迁移为供应商绑定；旧 `manual` 类型不支持，需改成 HTTP 查询。`quotaMode: custom`、旧 `provider` 和全局 `baseUrl` / `opencodeApiKey` / `opencodeBaseUrl` 仅服务于旧查询路径，不覆盖已有供应商绑定。升级后请在设置页按供应商核对模板、地址和凭证，再保存新的 `providerQuotas`；安装升级本身不会改写原有配置文件。保存时会迁移旧的明文凭证；含账号密码的旧 URL 需要先改成凭证配置。
 
 常用展示项：
 
@@ -286,6 +286,32 @@ OpenCode Go 供应商绑定的密钥解析顺序：DSH 供应商配置的凭证�
 
 `prices` 是「当前 `currency` 下每 1M token」的单价。V4 / V4.1 可写 `peak` / `offPeak`（高峰 / 低谷）。内置 `deepseek-flash` / `deepseek-v4-flash` / `deepseek-v4-pro` / `deepseek-v4-flash-vision-exp` 如果只有三个刊例字段，插件仍按内置时间表计价（兼容旧配置）；配置值恰好等于某段历史官方价时也会继续按时间表重算，只有用户手改过的峰谷 / 单价才作为自定义覆盖。自行添加的模型只写三字段则全天按该价计，等效峰谷倍率 1。高峰为北京时间周一至周五（不含中国法定节假日）09:00–12:00、14:00–18:00，其余时段（含节假日、周末及调休补班周末全天）为低谷。DeepSeek 账户的 CNY / USD 是两套独立钱包：底部会列出选定货币，以及其它仍有余额的钱包；悬停卡片列出全部钱包。计价货币只影响本会话/累计估算和状态灯，不会把其它钱包藏掉。计价仅支持官方提供的 CNY / USD 两套价格，不做汇率换算；旧版 EUR 实际复用了 USD 数值，升级后会按 USD 显示。CNY / USD 各自照官方价目列出：V4.1 Flash 低谷 `$0.003 / $0.15 / $0.60`、高峰 `$0.006 / $0.30 / $1.20`；V4 Flash（含 vision-exp）低谷 `$0.007 / $0.22 / $0.66`、高峰 `$0.014 / $0.44 / $1.32`，V4 Pro 低谷 `$0.022 / $0.66 / $1.98`、高峰 `$0.044 / $1.32 / $3.96`。时间线：V4 峰谷自 2026-08-17 00:00 起；V4.1 Flash 自 2026-09-10 12:00 起。历史用量始终按该笔发生的时间点计价。没有精确价表的 DeepSeek 新模型会按名字回退：含 `flash` → 默认 Flash，含 `pro` → 默认 Pro，其它 `deepseek*` → 默认 Flash；本会话消耗卡片会在模型名后显示黄色感叹号并提示回退到了哪个默认价。完全没有可回退定价的模型（例如 `glm`）也会列出，金额显示“无法计算”。
 
+### 渠道单价与生效时间段
+
+设置页「模型单价」可选择通用价表或某个 DSH 供应商。`providerPrices` 使用实际供应商 ID；该渠道未单独配置的模型继续使用 `prices` / 内置价表。渠道单价会覆盖同名模型的官方价格。
+
+每个模型可添加 `schedules`，按调用发生时间选择单价：起点包含、终点不包含，空起点或终点表示不限。时间段不能重叠，YAML 时间必须包含时区；设置页使用本地时间并自动转换。没有命中时间段时使用该模型原有单价。所有自定义单价均以当前 `currency` 每 1M token 填写，切换货币后需自行调整自定义价格。
+
+```yaml
+- id: dsh-credits
+  config:
+    currency: CNY
+    providerPrices:
+      my-provider:
+        my-model:
+          cacheHit: 0.1
+          cacheMiss: 1
+          output: 2
+          schedules:
+            - from: '2026-10-01T00:00:00+08:00'
+              to: '2026-11-01T00:00:00+08:00'
+              cacheHit: 0.05
+              cacheMiss: 0.5
+              output: 1
+```
+
+累计消耗的「全部」统计已记录历史至今的调用。复刻会话继承的历史不重复计入累计消耗；复刻后新产生的调用正常计入。本会话仍显示完整会话历史的估算，独立会话里用量相同的调用不会被误删。
+
 ### 自定义 HTTP（高级 YAML）
 
 接口地址不允许包含 `user:password@host`。已有此类配置需移除 URL 中的凭证，改用凭证输入框与 Basic 鉴权；旧配置返回时遮罩 URL 凭证，不覆盖磁盘文件。
@@ -380,7 +406,7 @@ OpenCode Go 供应商绑定的密钥解析顺序：DSH 供应商配置的凭证�
 | 路径 | 作用 |
 | :--- | :--- |
 | `GET /query-credits` | 账户额度缓存。响应里同时带所有已启用额度源的 `views`；`?source=` 只决定顶层摊平哪一套，`?force=1` 强刷 |
-| `GET /query-credits/spend?range=today` | 跨会话累计消耗。`range` 可为 `today` / `yesterday` / `week` / `month` / `custom`；自定义时再带 `from`、`to`（`YYYY-MM-DD` 或 ISO） |
+| `GET /query-credits/spend?range=today` | 跨会话累计消耗。`range` 可为 `all` / `today` / `yesterday` / `week` / `month` / `custom`；自定义时再带 `from`、`to`（`YYYY-MM-DD` 或 ISO） |
 | `GET /query-credits/config` | 读当前配置 |
 | `POST /query-credits/config` | 保存配置并立即生效 |
 | `POST /query-credits/test-connection` | 使用当前供应商草稿测试模板或自定义 HTTP，并返回可选字段或脱敏后的错误诊断 |
@@ -392,6 +418,16 @@ OpenCode Go 供应商绑定的密钥解析顺序：DSH 供应商配置的凭证�
 密钥走 Harness `credentials`，默认不写进配置文件。
 
 ## 更新记录
+
+### 0.4.3
+
+- 修复设置页仅更新内存的问题：保存通过 DSH 原生配置编辑器写入当前 profile，重启后保留；保存失败保留原配置，并恢复本次修改的凭证
+- 保存时将旧明文 Key、Token、Cookie 和敏感请求头迁移到 DSH credentials，配置只保留引用；Web / 桌面配置档分别保存
+- 复刻会话按继承历史边界去重，累计消耗只新增复刻后的调用；嵌套复刻、旧缓存恢复与独立的相同调用均正确处理
+- 累计消耗新增「全部」统计范围
+- 新增渠道独立单价 `providerPrices` 与价格生效时间段 `schedules`；设置页、YAML 导出、本会话和累计统计统一使用这些价格
+- 修复逐笔舍入导致小额费用在模型分组中丢失的问题；价格区间校验时区、起止顺序和重叠，拒绝非法单价
+- 保存配置原地更新，保留会话投影和 TPS；未新增特殊渠道或非官方接口模板
 
 ### 0.4.2
 
@@ -500,13 +536,13 @@ OpenCode Go 供应商绑定的密钥解析顺序：DSH 供应商配置的凭证�
 
 此仓库通过 GitHub Actions 发布。工作流需要配置具有发布权限的 `NPM_TOKEN` 仓库 secret；普通分支推送不会发包，推送 `v*` 标签才会触发。
 
-发布前同步 `package.json` 与 `package-lock.json` 的版本，运行测试和打包检查，提交并推送，再创建同版本标签。以 `0.4.2` 为例：
+发布前同步 `package.json` 与 `package-lock.json` 的版本，运行测试和打包检查，提交并推送，再创建同版本标签。以 `0.4.3` 为例：
 
 ```sh
 npm test
 npm pack --dry-run
-git tag -a v0.4.2 -m "Release 0.4.2"
-git push origin v0.4.2
+git tag -a v0.4.3 -m "Release 0.4.3"
+git push origin v0.4.3
 ```
 
 工作流执行 `npm publish --provenance --access public`。确认 Actions 成功及 npm 版本可查询后，再使用该版本的安装指令；同一版本不能重复发布。
