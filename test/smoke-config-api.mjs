@@ -267,6 +267,11 @@ function invokeRoute(path, method, body = null, query = '') {
 }
 
 async function runTests() {
+  for (const baseURL of ['https://api.deepseek.com', 'https://api.deepseek.com/v1/', 'https://api.deepseek.com/user/balance']) {
+    const adapter = buildProviderQuotaAdapter({ id: 'deepseek', templateId: 'deepseek', baseURL }, { providerId: 'deepseek', sourceType: 'auto' })
+    assert.equal(adapter.request.url, 'https://api.deepseek.com/user/balance')
+  }
+  assert.equal(buildProviderQuotaAdapter({ id: 'proxy', templateId: 'deepseek', baseURL: 'https://proxy.example/deepseek/v1?route=one' }, { providerId: 'proxy', sourceType: 'auto' }).request.url, 'https://proxy.example/deepseek/user/balance?route=one')
   assert.equal(matchQuotaTemplateForProvider('minimax', 'https://api.minimax.io/v1').id, 'minimax-en-coding')
   assert.equal(matchQuotaTemplateForProvider('zhipu', 'https://api.z.ai/api').id, 'zhipu-en-coding')
   assert.equal(matchQuotaTemplateForProvider('minimax-en', 'https://api.minimaxi.com/v1').id, 'minimax-cn-coding')

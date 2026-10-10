@@ -383,7 +383,11 @@ const providerTemplateUrl = (provider, sourceType, templateId, defaultUrl) => {
   if (sourceType !== 'auto') return defaultUrl
   const baseURL = String(provider?.baseURL ?? '').trim().replace(/\/+$/, '')
   if (!baseURL) return defaultUrl
-  if (templateId === 'deepseek') return /\/user\/balance$/i.test(baseURL) ? baseURL : `${baseURL}/user/balance`
+  if (templateId === 'deepseek') {
+    const url = new URL(baseURL)
+    if (!/\/user\/balance$/i.test(url.pathname)) url.pathname = `${url.pathname.replace(/\/v1$/i, '').replace(/\/+$/, '')}/user/balance`
+    return url.toString()
+  }
   if (templateId === 'opencode-go') return /\/usage$/i.test(baseURL) ? baseURL : `${baseURL}/usage`
   return defaultUrl
 }
