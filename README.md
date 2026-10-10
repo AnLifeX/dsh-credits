@@ -173,7 +173,9 @@ OpenCode Go 密钥解析顺序：`opencodeApiKey` → `OPENCODE_GO_API_KEY`（cr
 
 覆盖文件：Web 为 `$DSH_HOME/profiles/web/cordis.patch.yml`，官方桌面版为 `$DSH_HOME/profiles/desktop/cordis.patch.yml`。也可在设置 → 额度与消耗 改完后按卡片点「保存」。
 
-新配置以 `providerQuotas` 为准，不再需要全局的额度查询模式、默认展示源或未匹配回退项。`providerId` 必须与 DSH 供应商列表中的实际 ID 一致。旧版 `quotaMode`、`provider`、`quotaSources` 等字段仍会兼容读取，但新配置不建议继续使用。
+新配置以 `providerQuotas` 为准，不再需要全局的额度查询模式、默认展示源或未匹配回退项。`providerId` 必须与 DSH 供应商列表中的实际 ID 一致。
+
+旧配置兼容范围：`quotaSources` 中带 `providerIds` 的有效 HTTP 数据源会迁移为供应商绑定；旧 `manual` 类型不支持，需改成 HTTP 查询。`quotaMode: custom`、旧 `provider` 和全局 `baseUrl` / `opencodeApiKey` / `opencodeBaseUrl` 仅服务于旧查询路径，不覆盖已有供应商绑定。升级后请在设置页按供应商核对模板、地址和凭证，再导出新的 `providerQuotas`；插件不会自动改写原有配置文件。
 
 常用展示项：
 
