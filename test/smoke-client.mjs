@@ -579,7 +579,7 @@ function loadClientFactory() {
     opencodeApiKeyRef: 'OPENCODE_GO_API_KEY',
     opencodeApiKey: '',
     opencodeBaseUrl: 'https://opencode.ai/zen/go/v1/usage',
-    providerQuotas: [{ providerId: 'go-work', enabled: true, sourceType: 'auto', templateId: 'opencode-go', sourceProviderId: '' }],
+    providerQuotas: [{ providerId: 'go-work', enabled: true, sourceType: 'auto', templateId: 'opencode-go', sourceProviderId: '' }, { providerId: 'removed-provider', enabled: false, sourceType: 'template', templateId: 'opencode-go' }],
     quotaTemplates: [{ id: 'opencode-go', category: 'subscription', name: 'OpenCode Go 订阅用量', description: 'test' }],
     dshProviders: [{ id: 'go-work', name: 'Go 工作套餐', configured: true, quotaSupported: true, templateId: 'opencode-go' }],
     prices: { 'deepseek-v4-flash': { cacheHit: 0.02, cacheMiss: 1, output: 2 } },
@@ -598,6 +598,9 @@ function loadClientFactory() {
   const htmlEnglishDraft = renderToStaticMarkup(ReactMock.createElement(draftSettings.comp, { t: translator('en') }))
   assert.ok(htmlEnglishDraft.includes('CNY (Chinese yuan ¥)'), 'currency options must follow the page language')
   assert.ok(htmlEnglishDraft.includes('USD (US dollar $)'))
+  assert.ok(htmlEnglishDraft.includes('removed-provider'))
+  assert.ok(htmlEnglishDraft.includes('Provider not configured'))
+  assert.ok(htmlEnglishDraft.includes('Edit'), 'missing providers must remain editable')
   assert.doesNotMatch(htmlEnglishDraft, /人民币|美元|告急线|预警线|充足区间/)
   if (!htmlDraft.includes('未保存')) throw new Error('dirty draft should show unsaved badge')
 if (!htmlDraft.includes('放弃修改')) throw new Error('dirty draft should show discard')

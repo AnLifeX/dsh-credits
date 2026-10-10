@@ -953,6 +953,7 @@ window.__ModuleLoader__.load({
 			"settings.metricUnitPlaceholder": "CNY / USD / 次",
 			"quota.invalidJson": "额度接口返回的不是有效 JSON。",
 			"quota.urlCredentialsForbidden": "接口地址不能包含用户名或密码，请使用凭证输入框与 Basic 鉴权。",
+			"settings.providerQuota.missing": "供应商未配置",
 			"template.deepseek.name": "DeepSeek 官方余额",
 			"template.deepseek.description": "查询 DeepSeek 官方账户余额（CNY / USD）",
 			"template.deepseek.sourceName": "DeepSeek 官方余额",
@@ -1329,6 +1330,7 @@ window.__ModuleLoader__.load({
 			"settings.metricUnitPlaceholder": "CNY / USD / requests",
 			"quota.invalidJson": "The quota API returned invalid JSON.",
 			"quota.urlCredentialsForbidden": "URLs cannot contain a username or password. Use the credential field with Basic authentication.",
+			"settings.providerQuota.missing": "Provider not configured",
 			"template.deepseek.name": "DeepSeek balance",
 			"template.deepseek.description": "Query official DeepSeek account balances (CNY / USD)",
 			"template.deepseek.sourceName": "DeepSeek balance",
@@ -2546,7 +2548,11 @@ window.__ModuleLoader__.load({
 			};
 
 			const quotaTemplates = (Array.isArray(view.quotaTemplates) ? view.quotaTemplates : []).map((template) => localizeQuotaTemplate(template, t));
-			const dshProviderDirectory = Array.isArray(view.dshProviders) ? view.dshProviders : [];
+			const dshProviderDirectory = [...(Array.isArray(view.dshProviders) ? view.dshProviders : [])];
+			for (const binding of view.providerQuotas ?? []) {
+				if (binding.implicit === true || dshProviderDirectory.some((provider) => provider.id === binding.providerId)) continue;
+				dshProviderDirectory.push({ id: binding.providerId, name: binding.providerId, configured: false, missing: true, templateId: binding.templateId || "", quotaSupported: Boolean(binding.templateId) });
+			}
 			const currency = view.currency ?? "CNY";
 			const providerQuotaBindings = Array.isArray(view.providerQuotas) ? view.providerQuotas : [];
 			const providerBindingFor = (providerId) => providerQuotaBindings.find((binding) => binding.providerId === providerId) ?? null;
@@ -3317,7 +3323,7 @@ window.__ModuleLoader__.load({
 								]),
 								react.createElement("span", { className: "dshqb_provider_quota_badges", key: "badges" }, [
 									providerDirty ? react.createElement("span", { className: "dshqb_unsaved dshqb_unsaved_compact", key: "unsaved" }, t("settings.unsaved")) : null,
-									provider.configured === true ? react.createElement("span", { className: "dshqb_source_chip", key: "configured" }, t("settings.providerQuota.configured")) : null,
+								provider.configured === true ? react.createElement("span", { className: "dshqb_source_chip", key: "configured" }, t("settings.providerQuota.configured")) : provider.missing ? react.createElement("span", { className: "dshqb_source_chip", key: "missing" }, t("settings.providerQuota.missing")) : null,
 								react.createElement(SwitchControl, {
 									checked: enabled,
 									disabled: savingCard === "quota",
