@@ -27,6 +27,23 @@ assert.deepEqual(Object.keys(officialV4ConfigPrices('CNY')), [
   'deepseek-v4-flash-vision-exp',
 ], 'new installations must include V4.1 Flash and its aliases in built-in prices')
 assert.deepEqual(PRICING_CURRENCIES, ['CNY', 'USD'], 'pricing must only offer currencies with official price tables')
+
+const scheduledPrice = { cacheHit: 0, cacheMiss: 2, output: 0, schedules: [
+  { from: '2026-08-01T00:00:00Z', to: '2026-09-01T00:00:00Z', cacheHit: 0, cacheMiss: 0.5, output: 0 },
+] }
+const channelConfig = { currency: 'CNY', prices: { 'deepseek-v4-pro': scheduledPrice }, providerPrices: {
+  work: { 'deepseek-v4-pro': { ...scheduledPrice, cacheMiss: 0.2, schedules: [] } },
+} }
+const scheduleStart = Date.parse(scheduledPrice.schedules[0].from)
+const scheduleEnd = Date.parse(scheduledPrice.schedules[0].to)
+assert.equal(resolveModelPrice(channelConfig, 'deepseek-v4-pro', scheduleStart, 'work').cacheMiss, 0.2, 'explicit channel prices override official and shared prices')
+assert.equal(resolveModelPrice(channelConfig, 'deepseek-v4-pro', scheduleStart, 'personal').cacheMiss, 0.5, 'schedule start is inclusive')
+assert.notEqual(resolveModelPrice(channelConfig, 'deepseek-v4-pro', scheduleEnd, 'personal').cacheMiss, 0.5, 'schedule end is exclusive')
+assert.equal(resolveModelPrice({ ...channelConfig, providerPrices: {} }, 'deepseek-v4-pro', scheduleStart).cacheMiss, 0.5, 'explicit schedules override pinned official pricing')
+const tinyProjection = makeCostProjection({ currency: 'CNY', providerPrices: { work: { custom: { cacheHit: 0, cacheMiss: 0.2, output: 0 } } } })
+const tinyState = tinyProjection.init()
+for (let i = 0; i < 100; i++) tinyState.samples[i] = { t: scheduleStart, model: 'custom', provider: 'work', buckets: { uncachedInputTokens: 1, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0 } }
+assert.equal(tinyProjection.wire.view(tinyState).costByModel['work/custom'], 0.00002)
 assert.equal(normalizePricingCurrency('EUR'), 'USD', 'legacy EUR reused USD numbers and must migrate to the truthful USD label')
 
 // V4.1 Flash 时间表：9/10 12:00 前走旧 V4 Flash，之后走新表。

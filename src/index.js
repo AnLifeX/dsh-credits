@@ -523,6 +523,32 @@ const TokenRate = Schema.object({
   output: Schema.number().min(0),
 })
 
+const PriceSchedule = Schema.object({
+  from: Schema.string().default(''),
+  to: Schema.string().default(''),
+  cacheHit: Schema.number().min(0),
+  cacheMiss: Schema.number().min(0),
+  output: Schema.number().min(0),
+})
+
+const RateInput = z.object({ cacheHit: z.number().finite().nonnegative(), cacheMiss: z.number().finite().nonnegative(), output: z.number().finite().nonnegative() })
+const ScheduleInput = RateInput.extend({
+  from: z.iso.datetime({ offset: true }).or(z.literal('')).optional(),
+  to: z.iso.datetime({ offset: true }).or(z.literal('')).optional(),
+}).refine((entry) => !entry.from || !entry.to || Date.parse(entry.from) < Date.parse(entry.to), 'invalid-price-schedule-range')
+const PriceInput = RateInput.extend({
+  peak: RateInput.optional(), offPeak: RateInput.optional(), schedules: z.array(ScheduleInput).optional(),
+}).superRefine((price, ctx) => {
+  if (Boolean(price.peak) !== Boolean(price.offPeak)) ctx.addIssue({ code: 'custom', message: 'price-tiers-require-both' })
+  const entries = [...(price.schedules ?? [])].sort((a, b) => (a.from ? Date.parse(a.from) : -Infinity) - (b.from ? Date.parse(b.from) : -Infinity))
+  for (let i = 1; i < entries.length; i++) {
+    if ((entries[i].from ? Date.parse(entries[i].from) : -Infinity) < (entries[i - 1].to ? Date.parse(entries[i - 1].to) : Infinity)) {
+      ctx.addIssue({ code: 'custom', message: 'price-schedules-overlap' })
+    }
+  }
+})
+const PricesInput = z.record(z.string(), PriceInput)
+
 /** 每个模型每 100 万 token 的价格(以 `currency` 计价)。V4 另可配 peak / offPeak。 */
 const ModelPrice = Schema.object({
   /** 缓存命中输入价(无峰谷时使用; 有峰谷时与高峰价对齐) */
@@ -535,6 +561,8 @@ const ModelPrice = Schema.object({
   peak: TokenRate,
   /** 低谷时段单价; 缺省则 V4 走内置官方表 */
   offPeak: TokenRate,
+  /** ISO 时间，含时区；起点包含，终点不包含，留空表示无限界。 */
+  schedules: Schema.array(PriceSchedule).default([]),
 })
 
 /** 自定义额度源请求配置。 */
@@ -660,6 +688,7 @@ export const Config = Schema.object({
   /** 花费估算的计价货币(与 prices 一致) */
   currency: Schema.string().default('CNY'),
   prices: Schema.dict(ModelPrice).default(officialV4ConfigPrices('CNY')),
+  providerPrices: Schema.dict(Schema.dict(ModelPrice)).default({}),
   /** 余额预警阈值(DeepSeek: 余额低于此值; OpenCode Go: 剩余额度低于此百分比) */
   warningThreshold: Schema.number().min(0).default(10),
   /** 余额告急阈值(DeepSeek: 余额低于此值; OpenCode Go: 剩余额度低于此百分比) */
@@ -1269,8 +1298,8 @@ export const makeCostProjection = (configOrGetter) => {
           cacheWrite: prevTok.cacheWrite + b.cacheWriteTokens,
           output: prevTok.output + b.outputTokens,
         }
-        const c = priceBuckets(cfg, model, b, sample.t)
-        if (c > 0) costByModel[modelKey] = round6((costByModel[modelKey] ?? 0) + c)
+        const c = priceBuckets(cfg, model, b, sample.t, provider)
+        if (c > 0) costByModel[modelKey] = (costByModel[modelKey] ?? 0) + c
         cost += c
         legs.push({
           t: sample.t,
@@ -1285,7 +1314,7 @@ export const makeCostProjection = (configOrGetter) => {
       return {
         models: state.modelOrder ?? [],
         cost: round6(cost),
-        costByModel,
+        costByModel: Object.fromEntries(Object.entries(costByModel).map(([key, value]) => [key, round6(value)])),
         tokens,
         tokensByModel,
         legs,
@@ -1645,6 +1674,8 @@ const readJsonBody = (req) => new Promise((resolve, reject) => {
 })
 
 export function apply(ctx, config) {
+  PricesInput.parse(config.prices ?? {})
+  z.record(z.string(), PricesInput).parse(config.providerPrices ?? {})
   // 运行时可变配置（优先使用用户在设置面板中动态修改的值）
   let runtimeConfig = {
     quotaMode: config.quotaMode === 'custom' ? 'custom' : 'follow',
@@ -1668,6 +1699,7 @@ export function apply(ctx, config) {
     warningThreshold: config.warningThreshold ?? 10,
     dangerThreshold: config.dangerThreshold ?? 5,
     prices: { ...(config.prices ?? {}) },
+    providerPrices: { ...(config.providerPrices ?? {}) },
     defaultPrices: { ...(config.defaultPrices ?? { cacheHit: 0.1, cacheMiss: 1, output: 2 }) },
     quotaSources: Array.isArray(config.quotaSources) ? config.quotaSources.map((s) => ({ ...s })) : [],
     providerQuotas: Array.isArray(config.providerQuotas) ? config.providerQuotas.map((binding) => ({ ...binding })) : [],
@@ -2496,6 +2528,7 @@ export function apply(ctx, config) {
       warningThreshold: runtimeConfig.warningThreshold,
       dangerThreshold: runtimeConfig.dangerThreshold,
       prices: { ...runtimeConfig.prices },
+      providerPrices: { ...runtimeConfig.providerPrices },
       defaultPrices: { ...runtimeConfig.defaultPrices },
       quotaSources: await sanitizeCustomQuotaSources(),
       providerQuotas: await sanitizeProviderQuotas(),
@@ -2594,6 +2627,7 @@ export function apply(ctx, config) {
         // 直接透出配置价；内置官方模型的实际单价由客户端按每笔事件时间解析，
         // 不再在这里替换成“此刻”的单值（会丢掉 peak/offPeak 与历史时间表）。
         prices: { ...runtimeConfig.prices },
+        providerPrices: { ...runtimeConfig.providerPrices },
         defaultPrices: runtimeConfig.defaultPrices,
         quotaSources: adapters.map((adapter) => ({
           id: adapter.id,
@@ -2673,22 +2707,23 @@ export function apply(ctx, config) {
         if (req.method === 'POST') {
           try {
             const body = await readJsonBody(req)
+            const nextConfig = { ...runtimeConfig }
             // 局部合并与类型校验
-            if (typeof body.quotaMode === 'string' && QUOTA_MODES.includes(body.quotaMode)) runtimeConfig.quotaMode = body.quotaMode
-            if (typeof body.showDock === 'boolean') runtimeConfig.showDock = body.showDock
-            if (typeof body.dockLayout === 'string' && DOCK_LAYOUTS.includes(body.dockLayout)) runtimeConfig.dockLayout = body.dockLayout
-            if (typeof body.showCapsule === 'boolean') runtimeConfig.showCapsule = body.showCapsule
-            if (typeof body.showPopover === 'boolean') runtimeConfig.showPopover = body.showPopover
-            if (typeof body.showTps === 'boolean') runtimeConfig.showTps = body.showTps
-            if (typeof body.provider === 'string' && body.provider.trim()) runtimeConfig.provider = body.provider.trim()
-            if (typeof body.apiKey === 'string') runtimeConfig.apiKey = body.apiKey.trim()
-            if (typeof body.apiKeyRef === 'string' && body.apiKeyRef.trim()) runtimeConfig.apiKeyRef = body.apiKeyRef.trim()
-            if (typeof body.baseUrl === 'string' && body.baseUrl.trim()) runtimeConfig.baseUrl = body.baseUrl.trim()
-            if (typeof body.opencodeApiKey === 'string') runtimeConfig.opencodeApiKey = body.opencodeApiKey.trim()
-            if (typeof body.opencodeApiKeyRef === 'string' && body.opencodeApiKeyRef.trim()) runtimeConfig.opencodeApiKeyRef = body.opencodeApiKeyRef.trim()
-            if (typeof body.opencodeBaseUrl === 'string' && body.opencodeBaseUrl.trim()) runtimeConfig.opencodeBaseUrl = body.opencodeBaseUrl.trim()
+            if (typeof body.quotaMode === 'string' && QUOTA_MODES.includes(body.quotaMode)) nextConfig.quotaMode = body.quotaMode
+            if (typeof body.showDock === 'boolean') nextConfig.showDock = body.showDock
+            if (typeof body.dockLayout === 'string' && DOCK_LAYOUTS.includes(body.dockLayout)) nextConfig.dockLayout = body.dockLayout
+            if (typeof body.showCapsule === 'boolean') nextConfig.showCapsule = body.showCapsule
+            if (typeof body.showPopover === 'boolean') nextConfig.showPopover = body.showPopover
+            if (typeof body.showTps === 'boolean') nextConfig.showTps = body.showTps
+            if (typeof body.provider === 'string' && body.provider.trim()) nextConfig.provider = body.provider.trim()
+            if (typeof body.apiKey === 'string') nextConfig.apiKey = body.apiKey.trim()
+            if (typeof body.apiKeyRef === 'string' && body.apiKeyRef.trim()) nextConfig.apiKeyRef = body.apiKeyRef.trim()
+            if (typeof body.baseUrl === 'string' && body.baseUrl.trim()) nextConfig.baseUrl = body.baseUrl.trim()
+            if (typeof body.opencodeApiKey === 'string') nextConfig.opencodeApiKey = body.opencodeApiKey.trim()
+            if (typeof body.opencodeApiKeyRef === 'string' && body.opencodeApiKeyRef.trim()) nextConfig.opencodeApiKeyRef = body.opencodeApiKeyRef.trim()
+            if (typeof body.opencodeBaseUrl === 'string' && body.opencodeBaseUrl.trim()) nextConfig.opencodeBaseUrl = body.opencodeBaseUrl.trim()
             if (Array.isArray(body.quotaSources)) {
-              const prevSources = runtimeConfig.quotaSources ?? []
+              const prevSources = nextConfig.quotaSources ?? []
               const nextSources = []
               for (const s of body.quotaSources) {
                 const prev = prevSources.find((p) => p.id === s.id)
@@ -2701,10 +2736,10 @@ export function apply(ctx, config) {
               if (new Set(nextSources.map((source) => source.id)).size !== nextSources.length) {
                 throw new Error('quota-source-id-duplicate')
               }
-              runtimeConfig.quotaSources = nextSources
+              nextConfig.quotaSources = nextSources
             }
             if (Array.isArray(body.providerQuotas)) {
-              const prevBindings = runtimeConfig.providerQuotas ?? []
+              const prevBindings = nextConfig.providerQuotas ?? []
               const nextBindings = []
               for (const rawBinding of body.providerQuotas) {
                 const prev = prevBindings.find((binding) => normalizeProvider(binding.providerId) === normalizeProvider(rawBinding?.providerId))
@@ -2729,21 +2764,22 @@ export function apply(ctx, config) {
               if (new Set(normalizedProviderIds).size !== normalizedProviderIds.length) {
                 throw new Error('provider-quota-provider-duplicate')
               }
-              runtimeConfig.providerQuotas = nextBindings
+              nextConfig.providerQuotas = nextBindings
             }
-            if (typeof body.warningThreshold === 'number' && body.warningThreshold >= 0) runtimeConfig.warningThreshold = body.warningThreshold
-            if (typeof body.dangerThreshold === 'number' && body.dangerThreshold >= 0) runtimeConfig.dangerThreshold = body.dangerThreshold
-            if (typeof body.refreshIntervalMs === 'number' && body.refreshIntervalMs >= 1000) runtimeConfig.refreshIntervalMs = body.refreshIntervalMs
-            if (typeof body.clientPollIntervalMs === 'number' && body.clientPollIntervalMs >= 1000) runtimeConfig.clientPollIntervalMs = body.clientPollIntervalMs
-            if (typeof body.timeoutMs === 'number' && body.timeoutMs >= 1000) runtimeConfig.timeoutMs = body.timeoutMs
-            if (typeof body.currency === 'string' && body.currency.trim()) runtimeConfig.currency = normalizePricingCurrency(body.currency)
-            if (body.prices && typeof body.prices === 'object') {
-              runtimeConfig.prices = { ...body.prices }
+            if (typeof body.warningThreshold === 'number' && body.warningThreshold >= 0) nextConfig.warningThreshold = body.warningThreshold
+            if (typeof body.dangerThreshold === 'number' && body.dangerThreshold >= 0) nextConfig.dangerThreshold = body.dangerThreshold
+            if (typeof body.refreshIntervalMs === 'number' && body.refreshIntervalMs >= 1000) nextConfig.refreshIntervalMs = body.refreshIntervalMs
+            if (typeof body.clientPollIntervalMs === 'number' && body.clientPollIntervalMs >= 1000) nextConfig.clientPollIntervalMs = body.clientPollIntervalMs
+            if (typeof body.timeoutMs === 'number' && body.timeoutMs >= 1000) nextConfig.timeoutMs = body.timeoutMs
+            if (typeof body.currency === 'string' && body.currency.trim()) nextConfig.currency = normalizePricingCurrency(body.currency)
+            if (body.prices !== undefined) nextConfig.prices = PricesInput.parse(body.prices)
+            if (body.providerPrices !== undefined) nextConfig.providerPrices = z.record(z.string(), PricesInput).parse(body.providerPrices)
+            if (body.defaultPrices !== undefined) {
+              if (!body.defaultPrices || typeof body.defaultPrices !== 'object' || Array.isArray(body.defaultPrices)) throw new Error('default-prices-invalid')
+              nextConfig.defaultPrices = PriceInput.parse({ ...nextConfig.defaultPrices, ...body.defaultPrices })
             }
-            if (body.defaultPrices && typeof body.defaultPrices === 'object') {
-              runtimeConfig.defaultPrices = { ...runtimeConfig.defaultPrices, ...body.defaultPrices }
-            }
-            runtimeConfig.pricingEpoch = Number(runtimeConfig.pricingEpoch ?? 0) + 1
+            nextConfig.pricingEpoch = Number(nextConfig.pricingEpoch ?? 0) + 1
+            runtimeConfig = nextConfig
             // 单价在 view() 时动态读取 getConfig()，改价无需重挂投影；重挂反而会清空
             // 本会话的 TPS，并在宿主拒绝同 key 重注册时留下空注册。
 

@@ -45,6 +45,7 @@ assert.equal(week.from, todayStart) // 周一即本周起始
 
 const month = resolveSpendRange('month', null, null, monday)
 assert.equal(new Date(month.from).getDate(), 1)
+assert.deepEqual(resolveSpendRange('all', null, null, monday), { ok: true, range: 'all', from: 0, to: monday })
 
 const custom = resolveSpendRange('custom', '2026-08-01', '2026-08-02', monday)
 assert.equal(custom.ok, true)
@@ -102,6 +103,7 @@ const v4Cny = aggregateSpend(v4Samples, { currency: 'CNY', prices: {}, defaultPr
 const v4Usd = aggregateSpend(v4Samples, { currency: 'USD', prices: {}, defaultPrices: { cacheHit: 0, cacheMiss: 0, output: 0 } }, peak - 1000, peak + 1000)
 assert.equal(v4Cny.cost, 3)
 assert.equal(v4Usd.cost, 0.44)
+
 const parentEvents = [
   { type: 'request/context', seq: 0, time: monday, data: { model: 'custom', provider: 'work' } },
   { ...settlement({ time: monday, usage: { inputTokens: 1, outputTokens: 0 } }), seq: 1 },
@@ -122,4 +124,13 @@ assert.equal(foldSpendEvents(childEvents)[0].provider, 'work', 'the inherited mo
 const independentSamples = ['a', 'b'].flatMap((sessionId) => foldSpendEvents(parentEvents).map((sample) => ({ ...sample, sessionId })))
 assert.equal(aggregateSpend(independentSamples, cfg, 0, monday).calls, 2, 'identical independent calls must not be deduplicated')
 
+const priced = {
+  currency: 'CNY', prices: { custom: { cacheHit: 0, cacheMiss: 2, output: 0 } },
+  providerPrices: { work: { custom: { cacheHit: 0, cacheMiss: 0.2, output: 0 } } },
+}
+const tiny = Array.from({ length: 100 }, () => ({ ...independentSamples[0], provider: 'work' }))
+const tinySpend = aggregateSpend(tiny, priced, 0, monday)
+assert.equal(tinySpend.cost, 0.00002)
+assert.equal(tinySpend.costByModel['work/custom'], tinySpend.cost, 'round only after summing tiny costs')
+assert.equal(aggregateSpend([{ ...tiny[0], buckets: { ...tiny[0].buckets, uncachedInputTokens: 1e6 } }], priced, 0, monday).cost, 0.2)
 console.log('SPEND TEST PASSED')

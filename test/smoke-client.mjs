@@ -1267,13 +1267,28 @@ if (!htmlExact.includes('本步平均输出速度')) throw new Error('exact TPS 
 console.log('TPS PENDING / ESTIMATE / EXACT CLIENT SMOKE TEST PASSED')
 
 new Function('window', code.replace('exports.apply = apply;',
-  'exports.refresh = refresh; exports.isPeakBeijing = isPeakBeijing; exports.officialRateFor = officialRateFor; exports.mergeQuotaView = mergeQuotaView; exports.quotaErrorMessage = quotaErrorMessage; exports.quotaErrorShort = quotaErrorShort; exports.apply = apply;'))(globalThis.window)
+  'exports.refresh = refresh; exports.isPeakBeijing = isPeakBeijing; exports.officialRateFor = officialRateFor; exports.priceSession = priceSession; exports.resolveClientPriceInfo = resolveClientPriceInfo; exports.snapshotModelPrice = snapshotModelPrice; exports.configToForm = configToForm; exports.generateYaml = generateYaml; exports.mergeQuotaView = mergeQuotaView; exports.quotaErrorMessage = quotaErrorMessage; exports.quotaErrorShort = quotaErrorShort; exports.apply = apply;'))(globalThis.window)
 const accountHelpers = captured.factory((id) => {
   if (id === 'react') return ReactMock
   if (id === '@deepseek-ai/dsh-client-ui-primitives') return stubPrimitives(ReactMock)
   throw new Error('unexpected require: ' + id)
 })
 const signedOut = { kind: 'balance', ok: false, error: 'deepseek-account-signed-out' }
+const customRate = { cacheHit: 0, cacheMiss: 2, output: 0, schedules: [{ from: '2026-08-01T00:00:00Z', to: '2026-09-01T00:00:00Z', cacheHit: 0, cacheMiss: 0.5, output: 0 }] }
+const customConfig = { currency: 'CNY', prices: { custom: customRate }, providerPrices: { work: { custom: { cacheHit: 0, cacheMiss: 0.2, output: 0 } } } }
+const customTime = Date.parse(customRate.schedules[0].from)
+assert.equal(accountHelpers.resolveClientPriceInfo(customConfig, 'custom', customTime, 'personal').rate.cacheMiss, 0.5)
+assert.equal(accountHelpers.resolveClientPriceInfo(customConfig, 'custom', Date.parse(customRate.schedules[0].to), 'personal').rate.cacheMiss, 2)
+assert.equal(accountHelpers.resolveClientPriceInfo(customConfig, 'custom', customTime, 'work').rate.cacheMiss, 0.2)
+const tinyLegs = Array.from({ length: 100 }, () => ({ t: customTime, provider: 'work', model: 'custom', uncachedInput: 1, cacheRead: 0, cacheWrite: 0, output: 0 }))
+assert.equal(accountHelpers.priceSession({ legs: tinyLegs }, customConfig).costByModel['work/custom'], 0.00002)
+assert.deepEqual(accountHelpers.snapshotModelPrice(customRate).schedules, customRate.schedules, 'dirty comparison must retain price periods')
+assert.deepEqual(accountHelpers.configToForm(customConfig).prices.custom.schedules, customRate.schedules, 'loading settings must retain price periods')
+assert.deepEqual(accountHelpers.configToForm(customConfig).providerPrices, customConfig.providerPrices)
+const customYaml = accountHelpers.generateYaml(accountHelpers.configToForm(customConfig))
+assert.ok(customYaml.includes('providerPrices: ' + JSON.stringify(customConfig.providerPrices)))
+assert.ok(customYaml.includes(JSON.stringify(customRate.schedules)), 'YAML export must retain price periods')
+console.log('PROVIDER / SCHEDULE / TINY COST CLIENT TEST PASSED')
 await accountHelpers.refresh()
 for (let day = Date.parse('2026-01-01T00:00:00Z'); day < Date.parse('2027-01-01T00:00:00Z'); day += 86400000) {
   for (const hour of [0, 1, 3, 4, 6, 9, 10, 16]) {

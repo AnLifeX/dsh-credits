@@ -580,19 +580,20 @@ window.__ModuleLoader__.load({
 			return { ...cloneRate(tiers.peak), peak: cloneRate(tiers.peak), offPeak: cloneRate(tiers.offPeak) };
 		}
 		function snapshotModelPrice(p) {
-			const base = { cacheHit: Number(p?.cacheHit), cacheMiss: Number(p?.cacheMiss), output: Number(p?.output) };
+			const base = { cacheHit: Number(p?.cacheHit), cacheMiss: Number(p?.cacheMiss), output: Number(p?.output), ...(p?.schedules?.length ? { schedules: p.schedules } : {}) };
 			if (hasTariffTiers(p)) return { ...base, peak: cloneRate(p.peak), offPeak: cloneRate(p.offPeak) };
 			return base;
 		}
-		function hydrateModelPrice(model, rates, currency) {
+		function hydrateModelPrice(model, rates, currency, provider = "") {
+			const schedules = rates?.schedules?.length ? { schedules: rates.schedules } : {};
 			if (hasTariffTiers(rates)) {
-				return { ...cloneRate(rates.peak), peak: cloneRate(rates.peak), offPeak: cloneRate(rates.offPeak) };
+				return { ...cloneRate(rates.peak), peak: cloneRate(rates.peak), offPeak: cloneRate(rates.offPeak), ...schedules };
 			}
-			if (PINNED_V4_MODELS.includes(model)) {
+			if (!provider && PINNED_V4_MODELS.includes(model)) {
 				const tiers = officialTiersFor(model, currency);
-				if (tiers) return v4SettingsFromTable(tiers);
+				if (tiers) return { ...v4SettingsFromTable(tiers), ...schedules };
 			}
-			return { cacheHit: Number(rates?.cacheHit ?? 0), cacheMiss: Number(rates?.cacheMiss ?? 0), output: Number(rates?.output ?? 0) };
+			return { cacheHit: Number(rates?.cacheHit ?? 0), cacheMiss: Number(rates?.cacheMiss ?? 0), output: Number(rates?.output ?? 0), ...schedules };
 		}
 		function hydratePrices(prices, currency) {
 			const next = {};
@@ -660,9 +661,16 @@ window.__ModuleLoader__.load({
 			return null;
 		}
 		/** 解析单价并附带来源: official | configured | family | none。 */
-		function resolveClientPriceInfo(cfg, model, timestamp) {
+		function resolveClientPriceInfo(cfg, model, timestamp, provider = "") {
 			const currency = normalizePricingCurrency(cfg.currency);
-			const configured = cfg.prices?.[model];
+			const providerPrice = cfg.providerPrices?.[provider]?.[model];
+			const configured = providerPrice ?? cfg.prices?.[model];
+			const scheduled = configured?.schedules?.find((entry) => timestamp >= (entry.from ? Date.parse(entry.from) : -Infinity) && timestamp < (entry.to ? Date.parse(entry.to) : Infinity));
+			if (isFiniteRate(scheduled)) return { rate: cloneRate(scheduled), source: "configured" };
+			if (providerPrice !== undefined) {
+				if (hasTariffTiers(providerPrice)) return { rate: cloneRate(isPeakBeijing(timestamp) ? providerPrice.peak : providerPrice.offPeak), source: "configured" };
+				if (isFiniteRate(providerPrice)) return { rate: cloneRate(providerPrice), source: "configured" };
+			}
 			const official = officialRateFor(model, currency, timestamp);
 			const pinned = PINNED_V4_MODELS.includes(model);
 			if (official !== undefined && (
@@ -691,6 +699,7 @@ window.__ModuleLoader__.load({
 			const cfg = {
 				currency,
 				prices: payload?.prices,
+				providerPrices: payload?.providerPrices,
 				defaultPrices: payload?.defaultPrices
 			};
 			const legs = Array.isArray(cost?.legs) ? cost.legs : [];
@@ -716,7 +725,7 @@ window.__ModuleLoader__.load({
 			let unpriced = false;
 			for (const leg of legs) {
 				const modelKey = leg.provider ? `${leg.provider}/${leg.model}` : leg.model;
-				const info = resolveClientPriceInfo(cfg, leg.model, Number(leg.t) || 0);
+				const info = resolveClientPriceInfo(cfg, leg.model, Number(leg.t) || 0, leg.provider);
 				const prev = modelStatus[modelKey];
 				if (!prev || statusRank(info.source) > statusRank(prev.source)) {
 					modelStatus[modelKey] = { source: info.source, fallbackModel: info.fallbackModel };
@@ -730,12 +739,12 @@ window.__ModuleLoader__.load({
 				const c = ((Number(leg.uncachedInput) + Number(leg.cacheWrite)) * Number(p.cacheMiss ?? 0)
 					+ Number(leg.cacheRead) * Number(p.cacheHit ?? 0)
 					+ Number(leg.output) * Number(p.output ?? 0)) / 1e6;
-				if (c > 0) costByModel[modelKey] = Math.round((costByModel[modelKey] + c) * 1e6) / 1e6;
+				if (c > 0) costByModel[modelKey] += c;
 				total += c;
 			}
 			return {
 				cost: Math.round(total * 1e6) / 1e6,
-				costByModel,
+				costByModel: Object.fromEntries(Object.entries(costByModel).map(([key, value]) => [key, roundPrice(value)])),
 				modelStatus,
 				unpriced,
 				models: cost.models ?? [],
@@ -1262,6 +1271,14 @@ window.__ModuleLoader__.load({
 			"settings.pricingMiss": "未命中",
 			"settings.pricingOut": "输出",
 			"settings.pricingPeriod": "时段",
+			"settings.pricingProvider": "计价渠道",
+			"settings.pricingProviderHint": "未单独配置的模型使用通用单价；自定义单价均以当前计价货币填写。",
+			"settings.pricingShared": "通用单价",
+			"settings.priceSchedules": "价格生效时间段",
+			"settings.priceSchedulesHint": "按调用时间计价；使用本地时间，起点包含、终点不包含。留空表示不限，不允许重叠。",
+			"settings.priceSchedule.from": "开始时间",
+			"settings.priceSchedule.to": "结束时间",
+			"settings.priceScheduleAdd": "添加生效时间段",
 			"settings.pricingPeak": "高峰",
 			"settings.pricingOffPeak": "低谷",
 			"settings.pricingFlat": "固定",
@@ -1298,6 +1315,7 @@ window.__ModuleLoader__.load({
 			"spend.yesterday": "昨天",
 			"spend.week": "本周",
 			"spend.month": "本月",
+			"spend.all": "全部",
 			"spend.custom": "自定义",
 			"spend.from": "开始时间",
 			"spend.to": "结束时间",
@@ -1640,6 +1658,14 @@ window.__ModuleLoader__.load({
 			"settings.pricingMiss": "Cache Miss",
 			"settings.pricingOut": "Output",
 			"settings.pricingPeriod": "Period",
+			"settings.pricingProvider": "Pricing provider",
+			"settings.pricingProviderHint": "Models without an override use shared prices. Enter custom prices in the selected currency.",
+			"settings.pricingShared": "Shared prices",
+			"settings.priceSchedules": "Effective price periods",
+			"settings.priceSchedulesHint": "Priced at call time. Local time; start inclusive, end exclusive. Blank means unbounded. Periods cannot overlap.",
+			"settings.priceSchedule.from": "Start time",
+			"settings.priceSchedule.to": "End time",
+			"settings.priceScheduleAdd": "Add effective period",
 			"settings.pricingPeak": "Peak",
 			"settings.pricingOffPeak": "Off-peak",
 			"settings.pricingFlat": "Flat",
@@ -1676,6 +1702,7 @@ window.__ModuleLoader__.load({
 			"spend.yesterday": "Yesterday",
 			"spend.week": "This week",
 			"spend.month": "This month",
+			"spend.all": "All",
 			"spend.custom": "Custom",
 			"spend.from": "From",
 			"spend.to": "To",
@@ -1755,6 +1782,7 @@ window.__ModuleLoader__.load({
 			opencodeApiKey: "",
 			opencodeBaseUrl: "https://opencode.ai/zen/go/v1/usage",
 			prices: { ...DEFAULT_PRICES },
+			providerPrices: {},
 			defaultPrices: officialDefaultPrices("CNY"),
 			quotaSources: [],
 			providerQuotas: [],
@@ -1795,14 +1823,9 @@ window.__ModuleLoader__.load({
 				`    clientPollIntervalMs: ${config.clientPollIntervalMs}`,
 				`    currency: ${config.currency}`
 			];
-			lines.push("    prices:");
-			for (const [m, p] of Object.entries(config.prices || {})) {
-				if (hasTariffTiers(p)) {
-					lines.push(`      ${m}: { cacheHit: ${p.cacheHit}, cacheMiss: ${p.cacheMiss}, output: ${p.output}, peak: { cacheHit: ${p.peak.cacheHit}, cacheMiss: ${p.peak.cacheMiss}, output: ${p.peak.output} }, offPeak: { cacheHit: ${p.offPeak.cacheHit}, cacheMiss: ${p.offPeak.cacheMiss}, output: ${p.offPeak.output} } }`);
-				} else {
-					lines.push(`      ${m}: { cacheHit: ${p.cacheHit}, cacheMiss: ${p.cacheMiss}, output: ${p.output} }`);
-				}
-			}
+			lines.push(`    prices: ${JSON.stringify(config.prices || {})}`);
+			if (Object.keys(config.providerPrices || {}).length) lines.push(`    providerPrices: ${JSON.stringify(config.providerPrices)}`);
+			lines.push(`    defaultPrices: ${JSON.stringify(config.defaultPrices || officialDefaultPrices(config.currency))}`);
 			return lines.join("\n");
 		}
 
@@ -1954,6 +1977,7 @@ window.__ModuleLoader__.load({
 				opencodeApiKey: "",
 				opencodeBaseUrl: c.opencodeBaseUrl || "https://opencode.ai/zen/go/v1/usage",
 				prices: hydratePrices(loadedPrices, selectedCurrency),
+				providerPrices: cloneSettings(c.providerPrices || {}),
 				defaultPrices: c.defaultPrices ?? officialDefaultPrices(selectedCurrency),
 				quotaSources: Array.isArray(c.quotaSources) ? c.quotaSources.map((s) => cloneSettings(s)) : [],
 				providerQuotas: Array.isArray(c.providerQuotas) ? c.providerQuotas.map((binding) => cloneSettings(binding)) : [],
@@ -1966,7 +1990,7 @@ window.__ModuleLoader__.load({
 		const CARD_KEYS = {
 			display: ["showDock", "dockLayout", "showCapsule", "showPopover", "showTps"],
 			quota: ["providerQuotas"],
-			pricing: ["currency", "prices", "defaultPrices"]
+			pricing: ["currency", "prices", "providerPrices", "defaultPrices"]
 		};
 		const SECRET_FIELDS = ["apiKey", "opencodeApiKey"];
 		const SETTINGS_DRAFT_PREFIX = "dsh-credits.settingsDraft.";
@@ -2312,6 +2336,8 @@ window.__ModuleLoader__.load({
 			const [toast, setToast] = react.useState(null);
 			const [copied, setCopied] = react.useState(false);
 			const [newModelName, setNewModelName] = react.useState("");
+			const [pricingProvider, setPricingProvider] = react.useState("");
+			const [scheduleModel, setScheduleModel] = react.useState("");
 			const [newModelHit, setNewModelHit] = react.useState(0.1);
 			const [newModelMiss, setNewModelMiss] = react.useState(1.0);
 			const [newModelOut, setNewModelOut] = react.useState(2.0);
@@ -2489,6 +2515,7 @@ window.__ModuleLoader__.load({
 					} else if (cardId === "pricing") {
 						payload.currency = String(merged.currency ?? "CNY").trim().toUpperCase();
 						payload.prices = { ...(merged.prices || {}) };
+						payload.providerPrices = cloneSettings(merged.providerPrices || {});
 						payload.defaultPrices = { ...(merged.defaultPrices || officialDefaultPrices(merged.currency)) };
 					}
 					const res = await fetch("/query-credits/config", {
@@ -3154,9 +3181,23 @@ window.__ModuleLoader__.load({
 			]);
 
 
-			const official = officialPricesFor(currency);
+			const official = pricingProvider ? {} : officialPricesFor(currency);
+			const pricingTable = pricingProvider ? (view.providerPrices?.[pricingProvider] || {}) : (view.prices || {});
+			const patchPricingTable = (prices) => patchCard("pricing", pricingProvider
+				? { providerPrices: { ...view.providerPrices, [pricingProvider]: prices } }
+				: { prices });
 			const patchModelRates = (model, nextRates) => {
-				patchCard("pricing", { prices: { ...view.prices, [model]: nextRates } });
+				patchPricingTable({ ...pricingTable, [model]: nextRates });
+			};
+			const scheduleTarget = Object.hasOwn(pricingTable, scheduleModel) ? scheduleModel : Object.keys(pricingTable)[0];
+			const scheduleRates = pricingTable[scheduleTarget];
+			const patchSchedule = (index, patch) => patchModelRates(scheduleTarget, {
+				...scheduleRates, schedules: (scheduleRates.schedules || []).map((entry, i) => i === index ? { ...entry, ...patch } : entry)
+			});
+			const localDatetime = (value) => {
+				if (!value) return "";
+				const date = new Date(value);
+				return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 19);
 			};
 			const rateInput = (model, rates, field, step, tierKey) => {
 				const slice = tierKey ? (rates[tierKey] || { cacheHit: 0, cacheMiss: 0, output: 0 }) : rates;
@@ -3188,15 +3229,13 @@ window.__ModuleLoader__.load({
 			const addNewModel = () => {
 				const name = newModelName.trim();
 				if (!name) return;
-				patchCard("pricing", {
-					prices: {
-						...view.prices,
+				patchPricingTable({
+						...pricingTable,
 						[name]: buildAddedModelPrice(newModelMultiplier, {
 							cacheHit: newModelHit,
 							cacheMiss: newModelMiss,
 							output: newModelOut
 						})
-					}
 				});
 				setNewModelName("");
 			};
@@ -3214,6 +3253,11 @@ window.__ModuleLoader__.load({
 				key: "pricing"
 			}, [
 				react.createElement(FieldGrid, { key: "currency_grid" }, [
+					react.createElement(FieldRow, { t, key: "pricing_provider", wide: true, label: t("settings.pricingProvider"), hint: t("settings.pricingProviderHint") },
+						react.createElement("select", { className: "dshqb_select", value: pricingProvider, onChange: (e) => { setPricingProvider(e.target.value); setScheduleModel(""); } }, [
+							react.createElement("option", { value: "", key: "shared" }, t("settings.pricingShared")),
+							...[...new Set([...(view.dshProviders || []).map((provider) => provider.id), ...Object.keys(view.providerPrices || {})])].map((id) => react.createElement("option", { value: id, key: id }, id))
+						])),
 					react.createElement(FieldRow, {
 						t,
 						key: "currency",
@@ -3229,7 +3273,7 @@ window.__ModuleLoader__.load({
 						onChange: (e) => {
 							const nextCurrency = e.target.value;
 							const nextPrices = { ...(view.prices || {}) };
-							for (const [model, p] of Object.entries(officialPricesFor(nextCurrency))) nextPrices[model] = p;
+							for (const [model, p] of Object.entries(officialPricesFor(nextCurrency))) nextPrices[model] = { ...p, schedules: nextPrices[model]?.schedules || [] };
 							patchCard("pricing", { currency: nextCurrency, prices: nextPrices, defaultPrices: officialDefaultPrices(nextCurrency) });
 						}
 					}, [
@@ -3249,18 +3293,18 @@ window.__ModuleLoader__.load({
 						])
 					]),
 					react.createElement("tbody", { key: "tb" },
-						Object.entries(view.prices || {}).flatMap(([model, stored]) => {
-							const rates = hydrateModelPrice(model, stored, currency);
+						Object.entries(pricingTable).flatMap(([model, stored]) => {
+							const rates = hydrateModelPrice(model, stored, currency, pricingProvider);
 							const officialRates = official[model];
 							const overridden = !officialRates || !pricesEqualModel(rates, officialRates);
-							const canDelete = !PINNED_V4_MODELS.includes(model);
+							const canDelete = Boolean(pricingProvider) || !PINNED_V4_MODELS.includes(model);
 							const resetBtn = officialRates && overridden ? react.createElement("button", {
 								type: "button",
 								className: "dshqb_model_reset",
 								onClick: () => {
-									const next = { ...(view.prices || {}) };
+									const next = { ...pricingTable };
 									next[model] = JSON.parse(JSON.stringify(officialRates));
-									patchCard("pricing", { prices: next });
+									patchPricingTable(next);
 								},
 								key: "rst"
 							}, t("settings.resetField")) : null;
@@ -3268,9 +3312,9 @@ window.__ModuleLoader__.load({
 								type: "button",
 								className: "dshqb_btn_del",
 								onClick: () => {
-									const next = { ...view.prices };
+									const next = { ...pricingTable };
 									delete next[model];
-									patchCard("pricing", { prices: next });
+									patchPricingTable(next);
 								},
 								title: t("settings.removeModel"),
 								"aria-label": t("settings.removeModel"),
@@ -3279,13 +3323,13 @@ window.__ModuleLoader__.load({
 							const enableTiersBtn = react.createElement("button", {
 								type: "button",
 								className: "dshqb_model_reset",
-								onClick: () => patchModelRates(model, withTiers(rates, scaleRate(rates, 0.5))),
+								onClick: () => patchModelRates(model, { ...withTiers(rates, scaleRate(rates, 0.5)), schedules: rates.schedules || [] }),
 								key: "enable_tiers"
 							}, t("settings.enableTiers"));
 							const disableTiersBtn = canDelete ? react.createElement("button", {
 								type: "button",
 								className: "dshqb_model_reset",
-								onClick: () => patchModelRates(model, cloneRate(rates.peak || rates)),
+								onClick: () => patchModelRates(model, { ...cloneRate(rates.peak || rates), schedules: rates.schedules || [] }),
 								key: "disable_tiers"
 							}, t("settings.disableTiers")) : null;
 							if (!hasTariffTiers(rates)) {
@@ -3325,17 +3369,30 @@ window.__ModuleLoader__.load({
 						})
 					)
 				]),
-				react.createElement("div", { className: "dshqb_pricing_reset_bar", key: "reset_bar" },
+				react.createElement("div", { key: "schedules" }, [
+					react.createElement(FieldRow, { t, label: t("settings.priceSchedules"), hint: t("settings.priceSchedulesHint"), wide: true, key: "model" },
+						react.createElement("select", { className: "dshqb_select", value: scheduleTarget || "", onChange: (e) => setScheduleModel(e.target.value), disabled: !scheduleTarget },
+							Object.keys(pricingTable).map((model) => react.createElement("option", { value: model, key: model }, model)))),
+					...(scheduleRates?.schedules || []).map((entry, index) => react.createElement(FieldGrid, { key: index }, [
+						...["from", "to"].map((field) => react.createElement(FieldRow, { t, key: field, label: t("settings.priceSchedule." + field) },
+							react.createElement("input", { className: "dshqb_input", type: "datetime-local", step: "1", value: localDatetime(entry[field]), onChange: (e) => patchSchedule(index, { [field]: e.target.value ? new Date(e.target.value).toISOString() : "" }) }))),
+						...["cacheHit", "cacheMiss", "output"].map((field) => react.createElement(FieldRow, { t, key: field, label: t(field === "cacheHit" ? "settings.pricingHit" : field === "cacheMiss" ? "settings.pricingMiss" : "settings.pricingOut") + " (" + currency + ")" },
+							react.createElement("input", { className: "dshqb_input", type: "number", min: "0", step: "any", value: entry[field], onChange: (e) => patchSchedule(index, { [field]: Number(e.target.value) }) }))),
+						react.createElement("button", { type: "button", className: "dshqb_btn_del", key: "remove", onClick: () => patchModelRates(scheduleTarget, { ...scheduleRates, schedules: scheduleRates.schedules.filter((_, i) => i !== index) }) }, t("settings.remove"))
+					])),
+					react.createElement("button", { type: "button", className: "dshqb_btn dshqb_btn_outline", key: "add", disabled: !scheduleRates, onClick: () => patchModelRates(scheduleTarget, { ...scheduleRates, schedules: [...(scheduleRates.schedules || []), { from: new Date().toISOString(), to: "", ...cloneRate(scheduleRates) }] }) }, t("settings.priceScheduleAdd"))
+				]),
+				react.createElement("div", { className: "dshqb_pricing_reset_bar", key: "reset_bar", hidden: Boolean(pricingProvider) },
 					react.createElement("button", {
 						type: "button",
 						className: "dshqb_model_reset",
 						onClick: () => {
-							const next = { ...(view.prices || {}) };
+							const next = { ...pricingTable };
 							for (const m of PINNED_V4_MODELS) {
 								const tiers = officialTiersFor(m, currency);
 								if (tiers) next[m] = v4SettingsFromTable(tiers);
 							}
-							patchCard("pricing", { prices: next });
+							patchPricingTable(next);
 						}
 					}, t("settings.pricingReset")),
 					react.createElement("button", {
@@ -3646,6 +3703,7 @@ window.__ModuleLoader__.load({
 			const payload = snap.status === "ok" ? snap.payload : null;
 			const amount = formatMoney(payload?.cost ?? 0, payload?.currency ?? "CNY");
 			const chips = [
+				["all", t("spend.all")],
 				["today", t("spend.today")],
 				["yesterday", t("spend.yesterday")],
 				["week", t("spend.week")],

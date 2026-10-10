@@ -236,10 +236,19 @@ export const familyModelFor = (model) => {
  * 解析单价并附带来源，供 UI 标注“回退”或“无价”：
  * source = official | configured | family | none
  */
-export const resolveModelPriceInfo = (configOrGetter, model, timestamp = Date.now()) => {
+export const resolveModelPriceInfo = (configOrGetter, model, timestamp = Date.now(), provider = '') => {
   const config = typeof configOrGetter === 'function' ? configOrGetter() : configOrGetter
   const currency = normalizePricingCurrency(config.currency)
-  const configured = config.prices?.[model]
+  const providerPrice = config.providerPrices?.[provider]?.[model]
+  const configured = providerPrice ?? config.prices?.[model]
+  const scheduled = configured?.schedules?.find((entry) =>
+    timestamp >= (entry.from ? Date.parse(entry.from) : -Infinity) &&
+    timestamp < (entry.to ? Date.parse(entry.to) : Infinity))
+  if (isFiniteRate(scheduled)) return { rate: asRate(scheduled), source: 'configured' }
+  if (providerPrice !== undefined) {
+    if (hasTariffTiers(providerPrice)) return { rate: asRate(isPeakBeijing(timestamp) ? providerPrice.peak : providerPrice.offPeak), source: 'configured' }
+    if (isFiniteRate(providerPrice)) return { rate: asRate(providerPrice), source: 'configured' }
+  }
   const official = officialRateFor(model, currency, timestamp)
   const pinned = PINNED_V4_MODELS.includes(model)
 
@@ -271,14 +280,14 @@ export const resolveModelPriceInfo = (configOrGetter, model, timestamp = Date.no
 }
 
 /** 实时计算指定模型在指定时间戳下的单价；无价时回退配置的 defaultPrices。 */
-export const resolveModelPrice = (configOrGetter, model, timestamp = Date.now()) => {
+export const resolveModelPrice = (configOrGetter, model, timestamp = Date.now(), provider = '') => {
   const config = typeof configOrGetter === 'function' ? configOrGetter() : configOrGetter
-  const info = resolveModelPriceInfo(config, model, timestamp)
+  const info = resolveModelPriceInfo(config, model, timestamp, provider)
   return info.rate ?? config.defaultPrices ?? { cacheHit: 0, cacheMiss: 0, output: 0 }
 }
 
-export const priceBuckets = (cfg, model, buckets, timestamp = Date.now()) => {
-  const price = resolveModelPrice(cfg, model, timestamp)
+export const priceBuckets = (cfg, model, buckets, timestamp = Date.now(), provider = '') => {
+  const price = resolveModelPrice(cfg, model, timestamp, provider)
   return ((buckets.uncachedInputTokens + buckets.cacheWriteTokens) * price.cacheMiss +
     buckets.cacheReadTokens * price.cacheHit +
     buckets.outputTokens * price.output) / 1e6

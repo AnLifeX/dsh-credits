@@ -38,7 +38,7 @@ export const usageOfSettlement = (event) => {
   return undefined
 }
 
-export const RANGE_PRESETS = ['today', 'yesterday', 'week', 'month']
+export const RANGE_PRESETS = ['all', 'today', 'yesterday', 'week', 'month']
 
 const startOfDay = (ms) => {
   const d = new Date(ms)
@@ -79,6 +79,7 @@ const parseBound = (value, endOfDay) => {
  */
 export const resolveSpendRange = (range, fromValue, toValue, now = Date.now()) => {
   const kind = typeof range === 'string' && range !== '' ? range : 'today'
+  if (kind === 'all') return { ok: true, range: kind, from: 0, to: now }
   if (kind === 'custom') {
     const from = parseBound(fromValue, false)
     const to = parseBound(toValue, true)
@@ -180,16 +181,16 @@ export const aggregateSpend = (samples, cfg, from, to) => {
     const model = sample.model ?? 'unknown'
     const provider = sample.provider ?? ''
     const modelKey = provider ? `${provider}/${model}` : model
-    const c = priceBuckets(cfg, model, b, t)
+    const c = priceBuckets(cfg, model, b, t, provider)
     cost += c
-    if (c > 0) costByModel[modelKey] = round6((costByModel[modelKey] ?? 0) + c)
+    if (c > 0) costByModel[modelKey] = (costByModel[modelKey] ?? 0) + c
     if (sample.sessionId) sessionIds.add(sample.sessionId)
     calls += 1
     inRange.push({ ...sample, cost: round6(c) })
   }
   return {
     cost: round6(cost),
-    costByModel,
+    costByModel: Object.fromEntries(Object.entries(costByModel).map(([key, value]) => [key, round6(value)])),
     tokens,
     calls,
     sessions: sessionIds.size,
