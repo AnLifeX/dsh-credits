@@ -4,11 +4,9 @@
 
 DeepSeek Harness（Web / 官方桌面版）额度插件：在输入框下方显示账户额度与本会话估算消耗；右下角另有可拖动的累计消耗胶囊。设置在侧栏「额度与消耗」（最后一项，圆形 ¥ 图标），分成多张可折叠卡片。
 
-> 兼容性：适配 DSH Session v2（`dsh 0.1.3-alpha.2` 起），已在 `dsh 0.1.5-rc.1` 上验证；不再兼容旧版会话事件。
+> 兼容性：使用 DSH Session v2，不兼容旧版会话事件。已验证 `0.2.0-rc.2`；依赖声明同时接受 `0.2.0-rc.2` 起的 `0.2.0` 系列和 `0.2.1-alpha.1` 起的 `0.2.1` 系列。
 
-当前开发版已放行 DSH `0.2.0-rc.2` 起的 `0.2.0` 系列与 `0.2.1-alpha.1` 起的 `0.2.1` 系列，并接入 `deepseek-account` 登录账号余额。版本检查与插件冒烟测试已通过；官方桌面版 `0.2.0-rc.2` 已验证 API Key / 账号余额切换、独立换行 / 共用一行及累计消耗气泡显示，其他版本与完整流程仍待实测。这些修改尚未发布到 npm。
-
-插件列表的名称、描述跟随 DSH 页面语言：中文为「额度与消耗」，英文为「Credits & spend」。设置导航和页面标题使用相同名称；插件列表与设置导航统一使用圆形 ¥ 图标，图标不随语言切换。图标不代表实际计价币种，金额仍按供应商钱包及所选 CNY / USD 单价展示。
+支持中文和英文，界面语言跟随 DSH 设置。DeepSeek 支持 API Key 余额与 DSH 登录账号的充值、赠送余额。
 
 - **账户额度 + 状态灯**  
   DeepSeek 模式如 `🟢 余额 ¥97.69`；OpenCode Go 模式如 `🟢 Go 额度 月 6% · 周 12% · 5h 9%`。点击圆点可立即强刷。
@@ -19,7 +17,7 @@ DeepSeek Harness（Web / 官方桌面版）额度插件：在输入框下方显�
 - **本会话估算消耗**  
   按模型单价估算（单价可在设置里改）。DeepSeek 按北京时间自动套用峰谷价：V4 自 2026-08-17 00:00 起；`deepseek-flash` / `deepseek-v4-flash` / `deepseek-v4-flash-vision-exp` 自 2026-09-10 12:00 起切换为 V4.1 Flash 新价。
 - **生成吞吐 TPS**
-  从 DSH Session v2 settlement 的压缩流和 provider usage 计算精确 `TPS n tok/s`。可在「设置 → 展示 → 生成 TPS」关闭。
+  从 DSH Session v2 settlement 的压缩流和 provider usage 计算精确 `TPS n tok/s`。可在「设置 → 额度与消耗 → 展示 → 生成 TPS」关闭。
 - **累计消耗胶囊**  
   右下角可拖动气泡，查看今天 / 昨天 / 本周 / 本月 / 自定义时间范围内的跨会话估算总额（按当前计价货币与单价现算）。
 - **设置卡片**  
@@ -38,21 +36,22 @@ dsh plugin --profile web add dsh-credits
 dsh plugin --profile web add <本目录绝对路径>
 ```
 
-Web 和官方桌面版共用同一份插件代码，但插件安装、启用与配置分别属于 `web` / `desktop` profile。桌面版先启动一次以初始化 profile，再从托盘或应用菜单完全退出；使用桌面版「Manage dsh Command…」安装的命令管理插件，不能用旧的 npm 版 dsh 修改桌面 profile。本地验证当前未发布修改：
+Web 和官方桌面版的安装与配置分别属于 `web` / `desktop` profile。桌面版先启动一次，再从托盘或应用菜单完全退出；使用桌面版「Manage dsh Command…」安装的命令：
 
 ```sh
-dsh plugin --profile desktop add "<本目录绝对路径>"
+dsh plugin --profile desktop add dsh-credits
 ```
 
-重新打开桌面版，在「设置 → 额度与消耗」确认插件加载，并检查 API Key 与登录账号两种模型供应商的余额、本会话消耗、TPS、设置保存和重启后的行为。桌面版的自带插件管理页也可用于安装。
+装完后重新打开桌面版，在「设置 → 额度与消耗」配置。桌面版自带的插件管理页也可用于安装。本地开发可将包名替换为项目目录的绝对路径。
 
 升级：
 
 ```sh
 dsh plugin --profile web remove dsh-credits
-pnpm store prune
 dsh plugin --profile web add dsh-credits@latest
 ```
+
+桌面版将升级命令中的 `--profile web` 替换为 `--profile desktop`，执行前完全退出应用，完成后重启。
 
 卸载：
 
@@ -104,7 +103,7 @@ OpenCode Go 模式下，卡片改成三个窗口的用量百分比与重置时�
 
 在「设置 → 额度与消耗 → 额度查询」中：
 
-1. 页面以 DSH 已启用的供应商为列表，每个供应商独立开启或关闭额度展示。
+1. 页面列出 DSH 已启用的供应商及已保存的额度绑定，每个供应商独立开启或关闭额度展示。已不在 DSH 目录中的绑定会标记「供应商未配置」，仍可编辑或关闭。
 2. 插件会在后台按供应商 ID 和 Base URL 匹配模板。匹配成功时，页面直接显示对应的「内置模板」，不会再出现单独的「自动识别」选项。
 3. 如需调整，可点「编辑」，在「额度信息来源」中选择：
    - **内置模板**：使用模板的查询地址和解析规则，并复用当前 DSH 供应商保存的 Key；模板仍可手动切换。
@@ -131,7 +130,7 @@ OpenCode Go 模式下，卡片改成三个窗口的用量百分比与重置时�
 
 直接填写的 Token 或 Cookie 保存到 DSH credentials，不写入导出的普通配置；页面只显示「已设置」，可输入新值覆盖。附加请求头中的 Cookie、Authorization、Token、API Key 等敏感字段也会脱敏。
 
-设置页保存后会立即更新当前 `dsh web` 进程。若要让额度绑定在服务重启后仍然保留，请从「YAML 导出」卡片复制配置到当前 profile 的 `cordis.patch.yml`；直接填写的敏感凭证无需写入 YAML。
+设置页保存后会立即更新当前 Web 或桌面应用进程。若要让额度绑定在服务重启后仍然保留，请从「YAML 导出」卡片复制配置到当前 profile 的 `cordis.patch.yml`；直接填写的敏感凭证无需写入 YAML。
 
 ### 内置与官方模板
 
@@ -145,9 +144,9 @@ OpenCode Go 模式下，卡片改成三个窗口的用量百分比与重置时�
 
 `deepseek-account` 与 API Key 的 `deepseek-official` 是不同供应商，各自绑定余额来源。插件不读取或转发账号登录 Token；由宿主服务查询，将同币种充值与赠送余额合计展示。退出登录或账号状态变化时清空旧缓存，旧请求不能覆盖新账号读数；账号余额查询失败时不沿用旧余额。未登录时提示先登录 DeepSeek 账号。
 
-除 DeepSeek 和 OpenCode Go 外，设置页内置了以下模板：
-
 自动匹配时，明确的官方域名优先于供应商 ID，可区分国内与国际接口；代理域名按供应商 ID 推断，也可手动选择模板。只有 DeepSeek 和 OpenCode Go 自动模板使用 DSH 的 Base URL；其余模板使用固定的官方额度接口。模型接口与额度接口路径不同，代理余额查询请使用自定义 HTTP，填写代理实际提供的额度地址。DeepSeek 自动模板会移除末尾 `/v1` 后拼接 `/user/balance`，已填写完整余额端点则保留。
+
+除 DeepSeek 和 OpenCode Go 外，还提供：
 
 - 订阅套餐：Kimi For Coding、智谱 GLM Coding / Z.AI、MiniMax Coding Plan（国内 / 国际）
 - 账户余额：StepFun、OpenRouter、Novita AI
@@ -191,7 +190,6 @@ OpenCode Go 供应商绑定的密钥解析顺序：DSH 供应商配置的凭证�
 | `showCapsule` | `true` | 右下角累计消耗胶囊 |
 | `showPopover` | `true` | 悬停底部读数时的双栏详情 |
 | `showTps` | `true` | 是否显示最近一次生成 TPS |
-| `enabled` | `true` | 额度功能总开关；关闭后隐藏相关 UI、停止轮询，并锁定展示和额度查询；不影响模型单价和 YAML 导出 |
 
 ### 多个 OpenCode Go 账号
 
@@ -395,7 +393,12 @@ OpenCode Go 供应商绑定的密钥解析顺序：DSH 供应商配置的凭证�
 
 ## 更新记录
 
-### 0.4.1（本地测试，未发布）
+### 0.4.2
+
+- 修复插件列表图标在深色主题下对比度不足：使用白色 ¥ 符号和灰色圆形描边，兼顾深浅背景
+- 更新兼容性、安装与升级说明，清理过时发布状态和已移除总开关的配置说明
+
+### 0.4.1
 
 - 禁止额度 URL 内嵌凭证，遮罩旧配置返回；限制自定义响应体为 1 MiB，补齐短密钥脱敏
 - 官方域名优先识别国内 / 国际额度模板，修复 DeepSeek Base URL 带 `/v1` 时的余额地址
@@ -474,7 +477,7 @@ OpenCode Go 供应商绑定的密钥解析顺序：DSH 供应商配置的凭证�
 
 ### 0.2.2
 
-设置页改成多张可折叠卡片，截图同步换成当前界面。
+该版本将设置页改成多张可折叠卡片，并更新了当时的界面截图。
 
 - 展示 / 额度查询 / 阈值与刷新 / 模型单价 / YAML 导出各一张卡，每张独立草稿和保存
 - 同一功能区两列排布，勾选框与标题同行
@@ -495,26 +498,18 @@ OpenCode Go 供应商绑定的密钥解析顺序：DSH 供应商配置的凭证�
 
 ## 发布到 npm
 
-**普通 `git push` 不会发包。** 只有推送符合 `v*` 的 tag（例如 `v0.4.0`）才会触发 `.github/workflows/publish.yml`。
+此仓库通过 GitHub Actions 发布。工作流需要配置具有发布权限的 `NPM_TOKEN` 仓库 secret；普通分支推送不会发包，推送 `v*` 标签才会触发。
 
-第一次发布前：
-
-1. 在 [npmjs.com](https://www.npmjs.com/signup) 注册账号（包名 `dsh-credits` 目前可用）。
-2. 生成 **Automation** 或 Granular Access Token，权限包含 publish。
-3. GitHub 仓库 → Settings → Secrets and variables → Actions → New repository secret，名称必须是 **`NPM_TOKEN`**，值贴刚才的 token。不要写进代码或 README。
-4. 仓库 Settings → Actions 允许 workflow 运行。
-5. `package.json` 的 `version` 与即将打的 tag 一致后：
+发布前同步 `package.json` 与 `package-lock.json` 的版本，运行测试和打包检查，提交并推送，再创建同版本标签。以 `0.4.2` 为例：
 
 ```sh
-git tag v0.4.0
-git push origin v0.4.0
+npm test
+npm pack --dry-run
+git tag -a v0.4.2 -m "Release 0.4.2"
+git push origin v0.4.2
 ```
 
-之后 Actions 会执行 `npm publish --provenance --access public`。发布成功即可：
-
-```sh
-dsh plugin --profile web add dsh-credits
-```
+工作流执行 `npm publish --provenance --access public`。确认 Actions 成功及 npm 版本可查询后，再使用该版本的安装指令；同一版本不能重复发布。
 
 ## 验证
 
@@ -534,7 +529,7 @@ curl http://127.0.0.1:3080/plugins/dsh-credits/client.js
 ## FAQ
 
 **Q: 插件怎么知道查的是谁的额度？**  
-A: 插件先根据当前模型的 DSH 供应商 ID 找到它自己的 `providerQuotas` 绑定。内置模板默认复用该供应商保存的 Base URL 与 Key；自定义 HTTP 则按页面选择使用直接凭证、DSH 供应商 Key、凭证引用或无鉴权。Key 不会发给浏览器。
+A: 插件先根据当前模型的 DSH 供应商 ID 找到它自己的 `providerQuotas` 绑定。内置模板默认复用该供应商保存的凭证；DeepSeek / OpenCode Go 自动模板还使用供应商的 Base URL，其他模板使用固定官方额度接口。自定义 HTTP 按页面选择使用直接凭证、DSH 供应商 Key、凭证引用或无鉴权。Key 不会发给浏览器。
 
 **Q: 状态灯规则？**  
 A: 每个供应商使用自己的 `warningThreshold` / `dangerThreshold`。DeepSeek 按余额金额对比，OpenCode Go 按剩余额度百分比对比；未填写时使用该模式的默认值。🟢 ≥ 预警线；🟡 告急线～预警线；🔴 < 告急线或接口不可用。
