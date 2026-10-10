@@ -207,6 +207,10 @@ globalThis.fetch = async (url, options = {}) => {
 }
 
 const initialConfig = {
+  quotaSources: [
+    { id: 'old-url-credentials', kind: 'metric', request: { url: 'https://old-user:old-password@example.com/quota', authStyle: 'none' } },
+    { id: 'old-invalid-url', kind: 'metric', request: { url: 'https://old-user:old-password@', authStyle: 'none' } },
+  ],
   enabled: false, // 旧配置不应阻止已由宿主启用的插件运行。
   provider: 'deepseek',
   apiKey: '',
@@ -296,6 +300,9 @@ async function runTests() {
   const resGetConfig = await invokeRoute('/query-credits/config', 'GET')
   assert.equal(resGetConfig.status, 200)
   assert.equal(resGetConfig.data.ok, true)
+  assert.doesNotMatch(JSON.stringify(resGetConfig.data), /old-user|old-password/)
+  assert.equal(resGetConfig.data.config.quotaSources.find((source) => source.id === 'old-url-credentials').request.url, 'https://***:***@example.com/quota')
+  assert.equal(resGetConfig.data.config.quotaSources.find((source) => source.id === 'old-invalid-url').request.url, '')
   assert.equal(resGetConfig.data.config.warningThreshold, 10)
   assert.equal(resGetConfig.data.config.dangerThreshold, 5)
   assert.equal(resGetConfig.data.config.currency, 'CNY')

@@ -2421,10 +2421,15 @@ export function apply(ctx, config) {
         ...(source.request ?? {}),
         url: (() => {
           if (!source.request?.url) return source.request?.url
-          const url = new URL(source.request.url)
-          if (url.username) url.username = '***'
-          if (url.password) url.password = '***'
-          return url.toString()
+          try {
+            const url = new URL(source.request.url)
+            if (!url.username && !url.password) return source.request.url
+            if (url.username) url.username = '***'
+            if (url.password) url.password = '***'
+            return url.toString()
+          } catch {
+            return ''
+          }
         })(),
         authValue: '',
         credentialConfigured: await describeQuotaCredential(source.request),
