@@ -491,6 +491,17 @@ assert.equal(resGetConfig.data.config.showPopover, true)
   assert.equal(customRequests.at(-1).url, 'https://custom-error.example.com/quota', 'disabled draft must be tested directly instead of falling back to DeepSeek')
   console.log('disabled provider draft / redacted HTTP diagnostics passed')
 
+  const beforeInvalidJsonFetch = globalThis.fetch
+  globalThis.fetch = async () => ({ ok: true, status: 200, headers: new Headers(), text: async () => 'not-json' })
+  try {
+    const invalidJson = await invokeRoute('/query-credits/test-connection', 'POST', { binding: customBinding })
+    assert.equal(invalidJson.data.ok, false)
+    assert.equal(invalidJson.data.error, 'quota-invalid-json', 'errors must be language-neutral for client i18n')
+    assert.ok(invalidJson.data.diagnostics, 'invalid JSON must retain response diagnostics')
+  } finally {
+    globalThis.fetch = beforeInvalidJsonFetch
+  }
+
   const overwriteBinding = structuredClone(customBinding)
   overwriteBinding.source.request.authValue = '__SF_auth.session-token=replaced-secret'
   const resOverwrite = await invokeRoute('/query-credits/config', 'POST', { providerQuotas: [overwriteBinding] })

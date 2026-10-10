@@ -481,6 +481,7 @@ window.__ModuleLoader__.load({
 			if (error === "api-key-missing") return t("balanceMissing");
 			if (error === "deepseek-account-signed-out") return t("quota.accountSignedOut");
 			if (error === "quota-credential-missing") return t("quota.credentialMissing");
+			if (error === "quota-invalid-json") return t("quota.invalidJson");
 			if (error === "quota-url-missing") return t("quota.urlMissing");
 			if (/quota-header-credential-missing/.test(error)) return t("quota.credentialMissing");
 			if (!error) return fallback;
@@ -940,6 +941,53 @@ window.__ModuleLoader__.load({
 		//#region locale
 		const NS = "queryBalance";
 		const zh = {
+			"settings.thresholdDangerTitle": "告急阈值：{value}",
+			"settings.thresholdWarningTitle": "预警阈值：{value}",
+			"settings.thresholdDangerLegend": "🔴 告急线",
+			"settings.thresholdWarningLegend": "🟡 预警线",
+			"settings.thresholdSuccessLegend": "🟢 充足区间",
+			"settings.currencyCny": "CNY (人民币 ¥)",
+			"settings.currencyUsd": "USD (美元 $)",
+			"settings.defaultQuotaName": "{name} 额度",
+			"settings.defaultRemaining": "剩余额度",
+			"settings.metricUnitPlaceholder": "CNY / USD / 次",
+			"quota.invalidJson": "额度接口返回的不是有效 JSON。",
+			"template.deepseek.name": "DeepSeek 官方余额",
+			"template.deepseek.description": "查询 DeepSeek 官方账户余额（CNY / USD）",
+			"template.deepseek.sourceName": "DeepSeek 官方余额",
+			"template.deepseek-account.name": "DeepSeek 登录账号余额",
+			"template.deepseek-account.description": "复用 DSH 登录账号，查询充值与赠送余额，无需 API Key",
+			"template.deepseek-account.sourceName": "DeepSeek 登录账号余额",
+			"template.opencode-go.name": "OpenCode Go 订阅用量",
+			"template.opencode-go.description": "查询 OpenCode Go 的 5 小时、每周与每月用量窗口",
+			"template.opencode-go.sourceName": "OpenCode Go 订阅用量",
+			"template.stepfun-balance.name": "StepFun 余额",
+			"template.stepfun-balance.description": "查询阶跃星辰账户余额（CNY）",
+			"template.stepfun-balance.sourceName": "StepFun 余额",
+			"template.stepfun-balance.metric.balance": "账户余额",
+			"template.openrouter-balance.name": "OpenRouter 余额",
+			"template.openrouter-balance.description": "用总充值减去总用量得到可用余额（USD）",
+			"template.openrouter-balance.sourceName": "OpenRouter 余额",
+			"template.openrouter-balance.metric.credits": "可用余额",
+			"template.novita-balance.name": "Novita AI 余额",
+			"template.novita-balance.description": "查询 Novita AI 可用余额（USD）",
+			"template.novita-balance.sourceName": "Novita AI 余额",
+			"template.novita-balance.metric.balance": "可用余额",
+			"template.kimi-coding.name": "Kimi For Coding",
+			"template.kimi-coding.description": "自动解析 5 小时与周用量窗口",
+			"template.kimi-coding.sourceName": "Kimi For Coding 套餐",
+			"template.zhipu-cn-coding.name": "智谱 GLM Coding",
+			"template.zhipu-cn-coding.description": "解析国内站 5 小时与周用量窗口",
+			"template.zhipu-cn-coding.sourceName": "智谱 GLM Coding 套餐",
+			"template.zhipu-en-coding.name": "Z.AI Coding Plan",
+			"template.zhipu-en-coding.description": "解析国际站 5 小时与周用量窗口",
+			"template.zhipu-en-coding.sourceName": "Z.AI Coding Plan",
+			"template.minimax-cn-coding.name": "MiniMax Coding Plan（国内）",
+			"template.minimax-cn-coding.description": "解析国内站 5 小时与周用量窗口",
+			"template.minimax-cn-coding.sourceName": "MiniMax Coding Plan",
+			"template.minimax-en-coding.name": "MiniMax Coding Plan（国际）",
+			"template.minimax-en-coding.description": "解析国际站 5 小时与周用量窗口",
+			"template.minimax-en-coding.sourceName": "MiniMax Coding Plan",
 			"balance": "余额 {amount}",
 			"balance.readoutCustom": "{name} · 余额 {amount}",
 			"balanceError": "余额不可用",
@@ -1268,6 +1316,53 @@ window.__ModuleLoader__.load({
 			"spend.close": "收起"
 		};
 		const en = {
+			"settings.thresholdDangerTitle": "Critical threshold: {value}",
+			"settings.thresholdWarningTitle": "Warning threshold: {value}",
+			"settings.thresholdDangerLegend": "🔴 Critical threshold",
+			"settings.thresholdWarningLegend": "🟡 Warning threshold",
+			"settings.thresholdSuccessLegend": "🟢 Sufficient range",
+			"settings.currencyCny": "CNY (Chinese yuan ¥)",
+			"settings.currencyUsd": "USD (US dollar $)",
+			"settings.defaultQuotaName": "{name} quota",
+			"settings.defaultRemaining": "Remaining quota",
+			"settings.metricUnitPlaceholder": "CNY / USD / requests",
+			"quota.invalidJson": "The quota API returned invalid JSON.",
+			"template.deepseek.name": "DeepSeek balance",
+			"template.deepseek.description": "Query official DeepSeek account balances (CNY / USD)",
+			"template.deepseek.sourceName": "DeepSeek balance",
+			"template.deepseek-account.name": "DeepSeek account balance",
+			"template.deepseek-account.description": "Use the DSH login to query paid and bonus balances; no API key required",
+			"template.deepseek-account.sourceName": "DeepSeek account balance",
+			"template.opencode-go.name": "OpenCode Go usage",
+			"template.opencode-go.description": "Query the 5-hour, weekly, and monthly usage windows",
+			"template.opencode-go.sourceName": "OpenCode Go usage",
+			"template.stepfun-balance.name": "StepFun balance",
+			"template.stepfun-balance.description": "Query the StepFun account balance (CNY)",
+			"template.stepfun-balance.sourceName": "StepFun balance",
+			"template.stepfun-balance.metric.balance": "Account balance",
+			"template.openrouter-balance.name": "OpenRouter balance",
+			"template.openrouter-balance.description": "Calculate available balance from total credits minus total usage (USD)",
+			"template.openrouter-balance.sourceName": "OpenRouter balance",
+			"template.openrouter-balance.metric.credits": "Available balance",
+			"template.novita-balance.name": "Novita AI balance",
+			"template.novita-balance.description": "Query the available Novita AI balance (USD)",
+			"template.novita-balance.sourceName": "Novita AI balance",
+			"template.novita-balance.metric.balance": "Available balance",
+			"template.kimi-coding.name": "Kimi For Coding",
+			"template.kimi-coding.description": "Read the 5-hour and weekly usage windows",
+			"template.kimi-coding.sourceName": "Kimi For Coding plan",
+			"template.zhipu-cn-coding.name": "GLM Coding (China)",
+			"template.zhipu-cn-coding.description": "Read the 5-hour and weekly usage windows for the China service",
+			"template.zhipu-cn-coding.sourceName": "GLM Coding plan",
+			"template.zhipu-en-coding.name": "Z.AI Coding Plan",
+			"template.zhipu-en-coding.description": "Read the 5-hour and weekly usage windows for the international service",
+			"template.zhipu-en-coding.sourceName": "Z.AI Coding Plan",
+			"template.minimax-cn-coding.name": "MiniMax Coding Plan (China)",
+			"template.minimax-cn-coding.description": "Read the 5-hour and weekly usage windows for the China service",
+			"template.minimax-cn-coding.sourceName": "MiniMax Coding Plan",
+			"template.minimax-en-coding.name": "MiniMax Coding Plan (International)",
+			"template.minimax-en-coding.description": "Read the 5-hour and weekly usage windows for the international service",
+			"template.minimax-en-coding.sourceName": "MiniMax Coding Plan",
 			"balance": "Balance {amount}",
 			"balance.readoutCustom": "{name} · Balance {amount}",
 			"balanceError": "Balance unavailable",
@@ -1596,6 +1691,34 @@ window.__ModuleLoader__.load({
 		};
 		//#endregion
 
+		function localizeQuotaTemplate(template, t) {
+			const prefix = "template." + template.id + ".";
+			const text = (field, fallback) => Object.hasOwn(en, prefix + field) ? t(prefix + field) : fallback;
+			return { ...template, name: text("name", template.name), description: text("description", template.description), source: template.source ? {
+				...template.source, name: text("sourceName", template.source.name), response: {
+					...template.source.response, metrics: template.source.response?.metrics?.map((metric) => ({ ...metric, label: text("metric." + metric.key, metric.label) }))
+				}
+			} : undefined };
+		}
+		function localizeQuotaView(info, t) {
+			const prefix = "template." + (info.template || info.provider) + ".";
+			return { ...info,
+				name: Object.hasOwn(en, prefix + "sourceName") && info.name === zh[prefix + "sourceName"] ? t(prefix + "sourceName") : info.name,
+				metrics: info.metrics?.map((metric) => {
+					const key = prefix + "metric." + metric.key;
+					return metric.label === zh[key] && Object.hasOwn(en, key) ? { ...metric, label: t(key) } : metric;
+				})
+			};
+		}
+		function localizeQuotaError(error, t) {
+			if (error === "quota-invalid-json") return t("quota.invalidJson");
+			let message = error || t("quota.requestFailed");
+			for (const key of Object.keys(zh).filter((key) => key.startsWith("template.") && key.endsWith(".sourceName"))) {
+				if (message.startsWith(zh[key] + " API ")) return t(key) + message.slice(zh[key].length);
+			}
+			return message;
+		}
+
 		//#region settings modal component
 		/** 当前时点生效的官方价；设置页按它判断"已改"。 */
 		function officialPricesFor(currency) {
@@ -1778,7 +1901,7 @@ window.__ModuleLoader__.load({
 							setDragging("danger");
 						},
 						key: "handle_danger",
-						title: "告急阈值: " + fmt(danger)
+						title: t("settings.thresholdDangerTitle", { value: fmt(danger) })
 					}, [
 						react.createElement("span", { className: "dshqb_slider_badge", key: "badge" }, "🔴 " + fmt(danger))
 					]),
@@ -1791,7 +1914,7 @@ window.__ModuleLoader__.load({
 							setDragging("warning");
 						},
 						key: "handle_warning",
-						title: "预警阈值: " + fmt(warning)
+						title: t("settings.thresholdWarningTitle", { value: fmt(warning) })
 					}, [
 						react.createElement("span", { className: "dshqb_slider_badge", key: "badge" }, "🟡 " + fmt(warning))
 					])
@@ -1799,9 +1922,9 @@ window.__ModuleLoader__.load({
 				// 刻度说明
 				react.createElement("div", { className: "dshqb_slider_legend", key: "legend" }, [
 					react.createElement("span", { key: "l0" }, fmt(0)),
-					react.createElement("span", { key: "ld" }, "🔴 告急线"),
-					react.createElement("span", { key: "lw" }, "🟡 预警线"),
-					react.createElement("span", { key: "ls" }, "🟢 充足区间"),
+					react.createElement("span", { key: "ld" }, t("settings.thresholdDangerLegend")),
+					react.createElement("span", { key: "lw" }, t("settings.thresholdWarningLegend")),
+					react.createElement("span", { key: "ls" }, t("settings.thresholdSuccessLegend")),
 					react.createElement("span", { key: "lmax" }, fmt(maxScale) + (percentMode ? "" : "+"))
 				])
 			]);
@@ -2419,7 +2542,7 @@ window.__ModuleLoader__.load({
 				}
 			};
 
-			const quotaTemplates = Array.isArray(view.quotaTemplates) ? view.quotaTemplates : [];
+			const quotaTemplates = (Array.isArray(view.quotaTemplates) ? view.quotaTemplates : []).map((template) => localizeQuotaTemplate(template, t));
 			const dshProviderDirectory = Array.isArray(view.dshProviders) ? view.dshProviders : [];
 			const currency = view.currency ?? "CNY";
 			const providerQuotaBindings = Array.isArray(view.providerQuotas) ? view.providerQuotas : [];
@@ -2434,7 +2557,7 @@ window.__ModuleLoader__.load({
 			};
 			const emptyProviderCustomSource = (provider) => ({
 				id: safeProviderSourceId(provider.id),
-				name: (provider.name || provider.id) + " 额度",
+				name: t("settings.defaultQuotaName", { name: provider.name || provider.id }),
 				kind: "metric",
 				template: "",
 				providerIds: [provider.id],
@@ -2442,7 +2565,7 @@ window.__ModuleLoader__.load({
 				enabled: true,
 				request: { method: "GET", url: "", dshProvider: "", credentialMode: "direct", authRef: "", authValue: "", credentialConfigured: false, authStyle: "bearer", authHeader: "Authorization", authParam: "api_key", headers: {}, bodyType: "none", body: "" },
 				response: {
-					metrics: [{ key: "remaining", label: "剩余额度", calculation: "direct", valuePath: "", usedPath: "", totalPath: "", unit: "", resetsAtPath: "", aggregate: "value", scale: 1, offset: 0 }],
+					metrics: [{ key: "remaining", label: t("settings.defaultRemaining"), calculation: "direct", valuePath: "", usedPath: "", totalPath: "", unit: "", resetsAtPath: "", aggregate: "value", scale: 1, offset: 0 }],
 				},
 			});
 			const defaultProviderBinding = (provider) => ({
@@ -2518,7 +2641,7 @@ window.__ModuleLoader__.load({
 					});
 					const data = await res.json();
 					if (!data.ok) {
-						const message = data.error || "connection failed";
+						const message = localizeQuotaError(data.error, t);
 						setSourceTest({ state: "error", fields: [], message, diagnostics: data.diagnostics ?? null, providerId: provider.id });
 						showToast(t("settings.providerQuota.testFailedToast", { error: message }), "error", 5000);
 						return;
@@ -2526,7 +2649,7 @@ window.__ModuleLoader__.load({
 					const fields = Array.isArray(data.availableFields) ? data.availableFields : [];
 					const details = [
 						...Object.entries(data.usage ?? {}).map(([key, window]) => opencodeWindowName(key, t) + " " + formatPercent(window?.percent)),
-						...(data.metrics ?? []).map((metric) => (metric?.label || metric?.key || "Quota") + " " + formatMetricSummary(metric)),
+						...(localizeQuotaView({ ...data, template: binding.templateId || provider.templateId }, t).metrics ?? []).map((metric) => (metric?.label || metric?.key || "Quota") + " " + formatMetricSummary(metric)),
 						...(data.balances ?? []).map((wallet) => (wallet?.currency || "") + " " + String(wallet?.total ?? 0)),
 					].filter(Boolean);
 					setSourceTest({
@@ -2555,7 +2678,7 @@ window.__ModuleLoader__.load({
 				enabled: true,
 				request: { method: "GET", url: "", dshProvider: "", credentialMode: "direct", authRef: "", authValue: "", credentialConfigured: false, authStyle: "bearer", authHeader: "Authorization", authParam: "api_key", headers: {}, bodyType: "none", body: "" },
 				response: {
-					metrics: [{ key: "remaining", label: "剩余额度", calculation: "direct", valuePath: "", usedPath: "", totalPath: "", unit: "", resetsAtPath: "", aggregate: "value", scale: 1, offset: 0 }],
+					metrics: [{ key: "remaining", label: t("settings.defaultRemaining"), calculation: "direct", valuePath: "", usedPath: "", totalPath: "", unit: "", resetsAtPath: "", aggregate: "value", scale: 1, offset: 0 }],
 				},
 			});
 			const sourceToDraft = (source) => ({
@@ -2595,7 +2718,7 @@ window.__ModuleLoader__.load({
 				if (dshProvider) {
 					const routeId = String(dshProvider.id).toLowerCase().replace(/[^a-z0-9._-]+/g, "-");
 					source.id = routeId || source.id;
-					source.name = dshProvider.name + (template.category === "subscription" ? " 套餐" : " 余额");
+					source.name = t("settings.defaultQuotaName", { name: dshProvider.name });
 					source.providerIds = [...new Set([dshProvider.id, ...(source.providerIds ?? [])])];
 					source.request = { ...(source.request ?? {}), dshProvider: dshProvider.id };
 				}
@@ -2665,7 +2788,7 @@ window.__ModuleLoader__.load({
 					});
 					const data = await res.json();
 					if (!data.ok) {
-						const message = data.error || "connection failed";
+						const message = localizeQuotaError(data.error, t);
 						setSourceTest({ state: "error", fields: [], message, diagnostics: data.diagnostics ?? null });
 						showToast(t("settings.providerQuota.testFailedToast", { error: message }), "error", 5000);
 						return;
@@ -2819,7 +2942,7 @@ window.__ModuleLoader__.load({
 						const source = binding.source ?? emptyProviderCustomSource(provider);
 						const metrics = Array.isArray(source.response?.metrics) && source.response.metrics.length
 							? source.response.metrics
-							: [{ key: "remaining", label: "剩余额度", calculation: "direct", valuePath: "", usedPath: "", totalPath: "", unit: "", resetsAtPath: "", aggregate: "value", scale: 1, offset: 0 }];
+							: [{ key: "remaining", label: t("settings.defaultRemaining"), calculation: "direct", valuePath: "", usedPath: "", totalPath: "", unit: "", resetsAtPath: "", aggregate: "value", scale: 1, offset: 0 }];
 						const testState = sourceTest.providerId === provider.id ? sourceTest : { state: "idle", fields: [], message: "" };
 						const otherProviders = visibleDshProviders.filter((item) => item.id !== provider.id);
 						const sourceTypes = [
@@ -3055,7 +3178,7 @@ window.__ModuleLoader__.load({
 											]),
 											react.createElement(FieldGrid, { key: "grid" }, [
 												react.createElement(FieldRow, { t, key: "label", label: t("settings.metricLabel"), disabled: savingCard === "quota" }, react.createElement("input", { className: "dshqb_input", value: metric.label || "", onChange: (e) => patchMetric(metricIndex, "label", e.target.value) })),
-												react.createElement(FieldRow, { t, key: "unit", label: t("settings.metricUnit"), hint: t("settings.metricUnitHint"), disabled: savingCard === "quota" }, react.createElement("input", { className: "dshqb_input", value: metric.unit || "", placeholder: "CNY / USD / 次", onChange: (e) => patchMetric(metricIndex, "unit", e.target.value) })),
+												react.createElement(FieldRow, { t, key: "unit", label: t("settings.metricUnit"), hint: t("settings.metricUnitHint"), disabled: savingCard === "quota" }, react.createElement("input", { className: "dshqb_input", value: metric.unit || "", placeholder: t("settings.metricUnitPlaceholder"), onChange: (e) => patchMetric(metricIndex, "unit", e.target.value) })),
 												react.createElement(FieldRow, { t, key: "calculation", label: t("settings.metricCalculation"), hint: t("settings.metricCalculationHint"), disabled: savingCard === "quota" }, react.createElement("select", { className: "dshqb_select", value: calculation, onChange: (e) => patchMetricCalculation(metricIndex, e.target.value) }, [
 													react.createElement("option", { value: "direct", key: "direct" }, t("settings.metricCalculation.direct")),
 													react.createElement("option", { value: "subtract", key: "subtract" }, t("settings.metricCalculation.subtract")),
@@ -3071,7 +3194,7 @@ window.__ModuleLoader__.load({
 											])
 										]);
 									})),
-									react.createElement("div", { className: "dshqb_source_actions", key: "add_metric" }, react.createElement("button", { type: "button", className: "dshqb_btn dshqb_btn_outline", onClick: () => patchSource("response", { metrics: [...metrics, { key: nextMetricKey, label: "指标 " + nextMetricIndex, calculation: "direct", valuePath: "", usedPath: "", totalPath: "", resetsAtPath: "", unit: "", aggregate: "value", scale: 1, offset: 0 }] }, true) }, t("settings.addMetric")))
+									react.createElement("div", { className: "dshqb_source_actions", key: "add_metric" }, react.createElement("button", { type: "button", className: "dshqb_btn dshqb_btn_outline", onClick: () => patchSource("response", { metrics: [...metrics, { key: nextMetricKey, label: t("settings.metricItem", { index: nextMetricIndex }), calculation: "direct", valuePath: "", usedPath: "", totalPath: "", resetsAtPath: "", unit: "", aggregate: "value", scale: 1, offset: 0 }] }, true) }, t("settings.addMetric")))
 								])
 							]) : react.createElement("div", { className: "dshqb_provider_template_test", key: "template_test" }, [
 								selectedTemplate?.autoEnable === false && selectedTemplate.description
@@ -3295,8 +3418,8 @@ window.__ModuleLoader__.load({
 							patchCard("pricing", { currency: nextCurrency, prices: nextPrices, defaultPrices: officialDefaultPrices(nextCurrency) });
 						}
 					}, [
-						react.createElement("option", { value: "CNY", key: "cny" }, "CNY (人民币 ¥)"),
-						react.createElement("option", { value: "USD", key: "usd" }, "USD (美元 $)")
+						react.createElement("option", { value: "CNY", key: "cny" }, t("settings.currencyCny")),
+						react.createElement("option", { value: "USD", key: "usd" }, t("settings.currencyUsd"))
 					]))
 				]),
 				react.createElement("table", { className: "dshqb_pricing_table", key: "p_table" }, [
@@ -3932,7 +4055,7 @@ window.__ModuleLoader__.load({
 
 			// 1. 账户余额读数节点与左栏卡片内容
 			if (balance.status === "ok" && quotaSource !== null) {
-				const info = mergeQuotaView(balance.payload, quotaSource);
+				const info = localizeQuotaView(mergeQuotaView(balance.payload, quotaSource), t);
 				if (info.ok === true && info.usage && (quotaSourceKind === "usage" || info.kind === "usage")) {
 					const usage = info.usage || {};
 					const windowKeys = usageWindowKeys(usage);

@@ -2125,7 +2125,7 @@ export function apply(ctx, config) {
       try {
         data = responseBody ? JSON.parse(responseBody) : null
       } catch {
-        const error = new Error(`${adapter.name || adapter.id} API 返回的不是有效 JSON`)
+        const error = new Error('quota-invalid-json')
         error.diagnostics = buildHttpDiagnostics(customRequest, request, res, responseBody, diagnosticSecrets)
         throw error
       }

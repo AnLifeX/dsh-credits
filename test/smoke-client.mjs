@@ -6,6 +6,7 @@
 import { readFileSync } from 'node:fs'
 import assert from 'node:assert/strict'
 import { HOLIDAY_CALENDAR, isPeakBeijing } from '../src/pricing.js'
+import { QUOTA_SOURCE_TEMPLATES } from '../src/index.js'
 
 const bundlePath = new URL('../client/client.js', import.meta.url)
 for (const language of ['zh', 'en']) {
@@ -108,7 +109,8 @@ function stubPrimitives(React) {
 const code = readFileSync(bundlePath, 'utf8')
 
 // 以 CJS 方式执行 bundle
-new Function('window', 'require', code)(globalThis.window, (id) => {
+const i18nCode = code.replace('exports.apply = apply;', 'exports.i18nTest = { zh, en, localizeQuotaTemplate, localizeQuotaView, localizeQuotaError, quotaErrorMessage }; exports.apply = apply;')
+new Function('window', 'require', i18nCode)(globalThis.window, (id) => {
   if (id === 'react') return ReactMock
   if (id === '@deepseek-ai/dsh-client-ui-primitives') return stubPrimitives(ReactMock)
   throw new Error('unexpected require: ' + id)
@@ -123,6 +125,39 @@ const factoryResult = captured.factory((id) => {
   throw new Error('unexpected require: ' + id)
 })
 const api = factoryResult ?? {}
+const translator = (language) => (key, params = {}) => {
+  let text = api.i18nTest[language][key] ?? key
+  for (const [name, value] of Object.entries(params)) text = text.replaceAll('{' + name + '}', String(value))
+  return text
+}
+for (const language of ['zh', 'en']) {
+  const t = translator(language)
+  for (const template of QUOTA_SOURCE_TEMPLATES) {
+    const original = structuredClone(template)
+    const translated = api.i18nTest.localizeQuotaTemplate(template, t)
+    assert.deepEqual(template, original, 'translation must not change saved template data')
+    assert.ok(translated.name && translated.description && translated.source.name)
+    if (language === 'en') {
+      assert.doesNotMatch(JSON.stringify([translated.name, translated.description, translated.source.name, translated.source.response.metrics]), /[\u4e00-\u9fff]/)
+    } else {
+      assert.equal(translated.name, template.name)
+      assert.equal(translated.description, template.description)
+    }
+  }
+  assert.equal(api.i18nTest.quotaErrorMessage({ error: 'quota-invalid-json' }, t, ''), t('quota.invalidJson'))
+  assert.equal(api.i18nTest.localizeQuotaError('quota-invalid-json', t), t('quota.invalidJson'))
+}
+assert.equal(api.i18nTest.localizeQuotaError('DeepSeek 官方余额 API HTTP 403', translator('en')), 'DeepSeek balance API HTTP 403')
+assert.equal(api.i18nTest.localizeQuotaError('Custom name API HTTP 403', translator('en')), 'Custom name API HTTP 403')
+assert.equal(translator('en')('settings.defaultQuotaName', { name: 'My provider' }), 'My provider quota')
+assert.equal(translator('en')('settings.metricItem', { index: 2 }), 'Metric 2')
+const chineseView = { template: 'stepfun-balance', name: 'StepFun 余额', metrics: [{ key: 'balance', label: '账户余额', value: 10 }, { key: 'custom', label: '我的标签', value: 2 }] }
+const englishView = api.i18nTest.localizeQuotaView(chineseView, translator('en'))
+assert.equal(englishView.name, 'StepFun balance')
+assert.equal(englishView.metrics[0].label, 'Account balance')
+assert.equal(englishView.metrics[1].label, '我的标签', 'user labels must remain unchanged')
+assert.equal(chineseView.metrics[0].label, '账户余额', 'cached server view must remain unchanged')
+console.log('QUOTA I18N TEST PASSED (ZH / EN)')
 console.log('exports:', Object.keys(api))
 function makeSlotCtx(regs, injectFn) {
   const ctx = {
@@ -560,6 +595,10 @@ function loadClientFactory() {
   draftApi.apply(makeSlotCtx(draftRegs))
   const draftSettings = slotOf(draftRegs, 'settings.section')
   const htmlDraft = renderToStaticMarkup(ReactMock.createElement(draftSettings.comp, { t: settingsT }))
+  const htmlEnglishDraft = renderToStaticMarkup(ReactMock.createElement(draftSettings.comp, { t: translator('en') }))
+  assert.ok(htmlEnglishDraft.includes('CNY (Chinese yuan ¥)'), 'currency options must follow the page language')
+  assert.ok(htmlEnglishDraft.includes('USD (US dollar $)'))
+  assert.doesNotMatch(htmlEnglishDraft, /人民币|美元|告急线|预警线|充足区间/)
   if (!htmlDraft.includes('未保存')) throw new Error('dirty draft should show unsaved badge')
 if (!htmlDraft.includes('放弃修改')) throw new Error('dirty draft should show discard')
   if (!htmlDraft.includes('生成 TPS')) throw new Error('TPS display toggle missing from open display settings card')
