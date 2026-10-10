@@ -1145,6 +1145,7 @@ window.__ModuleLoader__.load({
 			"settings.providerQuota.reuseSummary": "复用 · {name}",
 			"settings.providerQuota.templateSelect": "内置模板",
 			"settings.providerQuota.reuseSelect": "额度来自",
+			"settings.providerQuota.reuseHint": "复用来源的余额、状态阈值和刷新频率；在来源供应商中修改这些设置。",
 			"settings.providerQuota.credential": "请求凭证",
 			"settings.providerQuota.credentialCurrent": "当前供应商：{name}",
 			"settings.providerQuota.credentialOther": "DSH 供应商：{name}",
@@ -1523,6 +1524,7 @@ window.__ModuleLoader__.load({
 			"settings.providerQuota.reuseSummary": "Reuse · {name}",
 			"settings.providerQuota.templateSelect": "Built-in template",
 			"settings.providerQuota.reuseSelect": "Quota comes from",
+			"settings.providerQuota.reuseHint": "Uses the source provider's balance, status thresholds, and refresh interval. Edit these settings on the source provider.",
 			"settings.providerQuota.credential": "Request credentials",
 			"settings.providerQuota.credentialCurrent": "Current provider: {name}",
 			"settings.providerQuota.credentialOther": "DSH provider: {name}",
@@ -3077,7 +3079,7 @@ window.__ModuleLoader__.load({
 								)
 							]) : null,
 							currentSourceType === "provider" ? react.createElement(FieldGrid, { key: "reuse_grid" }, [
-								react.createElement(FieldRow, { t, key: "reuse", wide: true, label: t("settings.providerQuota.reuseSelect"), disabled: savingCard === "quota" },
+								react.createElement(FieldRow, { t, key: "reuse", wide: true, label: t("settings.providerQuota.reuseSelect"), hint: t("settings.providerQuota.reuseHint"), disabled: savingCard === "quota" },
 									react.createElement("select", {
 										className: "dshqb_select", value: binding.sourceProviderId || otherProviders[0]?.id || "",
 										onChange: (e) => updateProviderBinding(provider, { sourceProviderId: e.target.value, sourceType: "provider", enabled: true })
