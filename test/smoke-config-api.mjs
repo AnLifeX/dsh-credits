@@ -13,6 +13,8 @@ import {
   matchQuotaTemplateForProvider,
   normalizeCustomMetrics,
   normalizeTemplateUsage,
+  readFetchResponseBody,
+  MAX_QUOTA_RESPONSE_BYTES,
   quotaSourceFromProvider,
   resolveProviderQuotaSource,
   resolveQuotaSource,
@@ -267,6 +269,16 @@ function invokeRoute(path, method, body = null, query = '') {
 }
 
 async function runTests() {
+  assert.equal(await readFetchResponseBody(new Response('余额')), '余额')
+  assert.equal((await readFetchResponseBody(new Response('a'.repeat(MAX_QUOTA_RESPONSE_BYTES)))).length, MAX_QUOTA_RESPONSE_BYTES)
+  let oversizedCancelled = false
+  const oversized = new Response(new ReadableStream({
+    pull(controller) { controller.enqueue(new Uint8Array(65536)) },
+    cancel() { oversizedCancelled = true },
+  }))
+  await assert.rejects(readFetchResponseBody(oversized), /quota-response-too-large/)
+  assert.equal(oversizedCancelled, true)
+  await assert.rejects(readFetchResponseBody(new Response('x', { headers: { 'content-length': String(MAX_QUOTA_RESPONSE_BYTES + 1) } })), /quota-response-too-large/)
   for (const baseURL of ['https://api.deepseek.com', 'https://api.deepseek.com/v1/', 'https://api.deepseek.com/user/balance']) {
     const adapter = buildProviderQuotaAdapter({ id: 'deepseek', templateId: 'deepseek', baseURL }, { providerId: 'deepseek', sourceType: 'auto' })
     assert.equal(adapter.request.url, 'https://api.deepseek.com/user/balance')

@@ -899,10 +899,36 @@ const buildHttpDiagnostics = (customRequest, request, response, responseBody, se
   }
 }
 
-const readFetchResponseBody = async (response) => {
-  if (typeof response?.text === 'function') return response.text()
-  if (typeof response?.json === 'function') return JSON.stringify(await response.json())
-  return ''
+export const MAX_QUOTA_RESPONSE_BYTES = 1024 * 1024
+export const readFetchResponseBody = async (response) => {
+  if (Number(response?.headers?.get?.('content-length')) > MAX_QUOTA_RESPONSE_BYTES) {
+    await response.body?.cancel?.()
+    throw new Error('quota-response-too-large')
+  }
+  if (response?.body?.getReader) {
+    const reader = response.body.getReader()
+    const chunks = []
+    let size = 0
+    try {
+      while (true) {
+        const { done, value } = await reader.read()
+        if (done) break
+        size += value.byteLength
+        if (size > MAX_QUOTA_RESPONSE_BYTES) {
+          await reader.cancel()
+          throw new Error('quota-response-too-large')
+        }
+        chunks.push(value)
+      }
+      return Buffer.concat(chunks, size).toString('utf8')
+    } finally {
+      reader.releaseLock()
+    }
+  }
+  const text = typeof response?.text === 'function' ? await response.text()
+    : (typeof response?.json === 'function' ? JSON.stringify(await response.json()) : '')
+  if (Buffer.byteLength(text, 'utf8') > MAX_QUOTA_RESPONSE_BYTES) throw new Error('quota-response-too-large')
+  return text
 }
 
 const upstreamErrorSummary = (body) => {

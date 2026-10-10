@@ -481,6 +481,7 @@ window.__ModuleLoader__.load({
 			if (error === "api-key-missing") return t("balanceMissing");
 			if (error === "deepseek-account-signed-out") return t("quota.accountSignedOut");
 			if (error === "quota-credential-missing") return t("quota.credentialMissing");
+			if (error === "quota-response-too-large") return t("quota.responseTooLarge");
 			if (error === "quota-invalid-json") return t("quota.invalidJson");
 			if (error === "quota-url-missing") return t("quota.urlMissing");
 			if (/quota-header-credential-missing/.test(error)) return t("quota.credentialMissing");
@@ -951,6 +952,7 @@ window.__ModuleLoader__.load({
 			"settings.defaultQuotaName": "{name} 额度",
 			"settings.defaultRemaining": "剩余额度",
 			"settings.metricUnitPlaceholder": "CNY / USD / 次",
+			"quota.responseTooLarge": "额度接口响应超过 1 MiB，请使用返回内容更精简的接口。",
 			"quota.invalidJson": "额度接口返回的不是有效 JSON。",
 			"quota.urlCredentialsForbidden": "接口地址不能包含用户名或密码，请使用凭证输入框与 Basic 鉴权。",
 			"settings.providerQuota.missing": "供应商未配置",
@@ -1328,6 +1330,7 @@ window.__ModuleLoader__.load({
 			"settings.defaultQuotaName": "{name} quota",
 			"settings.defaultRemaining": "Remaining quota",
 			"settings.metricUnitPlaceholder": "CNY / USD / requests",
+			"quota.responseTooLarge": "The quota API response exceeds 1 MiB. Use an endpoint with a smaller response.",
 			"quota.invalidJson": "The quota API returned invalid JSON.",
 			"quota.urlCredentialsForbidden": "URLs cannot contain a username or password. Use the credential field with Basic authentication.",
 			"settings.providerQuota.missing": "Provider not configured",
@@ -1716,6 +1719,7 @@ window.__ModuleLoader__.load({
 		}
 		function localizeQuotaError(error, t) {
 			if (error === "quota-url-credentials-forbidden") return t("quota.urlCredentialsForbidden");
+			if (error === "quota-response-too-large") return t("quota.responseTooLarge");
 			if (error === "quota-invalid-json") return t("quota.invalidJson");
 			let message = error || t("quota.requestFailed");
 			for (const key of Object.keys(zh).filter((key) => key.startsWith("template.") && key.endsWith(".sourceName"))) {
