@@ -14,6 +14,9 @@ for (const language of ['zh', 'en']) {
   const { meta } = JSON.parse(readFileSync(new URL(resource), 'utf8'))
   assert.equal(meta.title, language === 'zh' ? '额度与消耗' : 'Credits & spend')
   assert.ok(meta.description.trim(), 'plugin list description must be translated')
+  assert.equal(meta.detail, `locale/detail.${language}.md`)
+  const detail = readFileSync(new URL(`../${meta.detail}`, import.meta.url), 'utf8')
+  assert.ok(detail.includes('https://github.com/AnLifeX/dsh-credits#readme'), 'plugin details must link to full documentation')
 }
 
 let captured = null
