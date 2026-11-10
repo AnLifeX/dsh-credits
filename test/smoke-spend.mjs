@@ -47,6 +47,17 @@ const month = resolveSpendRange('month', null, null, monday)
 assert.equal(new Date(month.from).getDate(), 1)
 assert.deepEqual(resolveSpendRange('all', null, null, monday), { ok: true, range: 'all', from: 0, to: monday })
 
+const rangeNow = new Date('2026-10-10T12:00:00').getTime()
+const rangeSamples = ['2026-08-01', '2026-10-01', '2026-10-06', '2026-10-10'].map((date) => ({
+  t: new Date(date + 'T10:00:00').getTime(), model: 'metered',
+  buckets: { uncachedInputTokens: 1e6, cacheReadTokens: 0, cacheWriteTokens: 0, outputTokens: 0 },
+}))
+for (const [range, expected] of [['today', 1], ['week', 2], ['month', 3], ['all', 4]]) {
+  const window = resolveSpendRange(range, null, null, rangeNow)
+  const total = aggregateSpend(rangeSamples, { prices: { metered: { cacheHit: 0, cacheMiss: 1, output: 0 } } }, window.from, window.to)
+  assert.equal(total.cost, expected, `${range} must include every sample in its window`)
+}
+
 const custom = resolveSpendRange('custom', '2026-08-01', '2026-08-02', monday)
 assert.equal(custom.ok, true)
 assert.ok(custom.to > custom.from)

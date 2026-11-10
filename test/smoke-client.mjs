@@ -1308,5 +1308,48 @@ if (signedOutView.balances !== undefined || signedOutView.isAvailable !== undefi
 if (accountHelpers.quotaErrorMessage(signedOut, (key) => key) !== 'quota.accountSignedOut') throw new Error('account error must prompt sign-in')
 if (accountHelpers.quotaErrorShort(signedOut, (key) => key) !== 'quota.accountSignedOut') throw new Error('account readout must prompt sign-in')
 console.log('ACCOUNT SIGN-OUT CLIENT SMOKE TEST PASSED')
+
+// Range changes must neither relabel an old result nor accept an old host's fallback to today.
+new Function('window', code.replace('exports.apply = apply;', 'exports.spendStore = spendStore; exports.SpendCapsule = SpendCapsule; exports.apply = apply;'))(globalThis.window)
+const spendApi = captured.factory((id) => {
+  if (id === 'react') return ReactMock
+  if (id === '@deepseek-ai/dsh-client-ui-primitives') return stubPrimitives(ReactMock)
+  throw new Error('unexpected require: ' + id)
+})
+const pendingSpend = []
+globalThis.fetch = (url) => new Promise((resolve, reject) => pendingSpend.push({ url, resolve, reject }))
+const store = spendApi.spendStore
+const weekRequest = store.setRange('week')
+const allRequest = store.setRange('all')
+assert.equal(store.getSnapshot().status, 'loading')
+assert.equal(store.getSnapshot().payload, null, 'a new range must not display the previous amount')
+assert.match(pendingSpend[1].url, /range=all/)
+pendingSpend[1].resolve({ ok: true, json: async () => ({ ok: true, range: 'all', cost: 163.102845 }) })
+await allRequest
+pendingSpend[0].resolve({ ok: true, json: async () => ({ ok: true, range: 'week', cost: 1.214385 }) })
+await weekRequest
+assert.equal(store.getSnapshot().range, 'all')
+assert.equal(store.getSnapshot().payload.cost, 163.102845, 'a late response must not overwrite the selected range')
+pendingSpend.length = 0
+const staleFailure = store.refresh()
+const latestRequest = store.refresh()
+pendingSpend[1].resolve({ ok: true, json: async () => ({ ok: true, range: 'all', cost: 164 }) })
+await latestRequest
+pendingSpend[0].reject(new Error('obsolete request failed'))
+await staleFailure
+assert.equal(store.getSnapshot().status, 'ok', 'a late error must not discard the latest result')
+pendingSpend.length = 0
+const oldHostRequest = store.setRange('all')
+pendingSpend[0].resolve({ ok: true, json: async () => ({ ok: true, range: 'today', cost: 0.318293 }) })
+await oldHostRequest
+assert.equal(store.getSnapshot().status, 'error')
+assert.equal(store.getSnapshot().payload.error, 'spend-range-mismatch')
+const savedSyncExternalStore = ReactMock.useSyncExternalStore
+ReactMock.useSyncExternalStore = (_subscribe, getSnapshot) => getSnapshot()
+const mismatchMarkup = renderToStaticMarkup(ReactMock.createElement(spendApi.SpendCapsule, { t: translator('zh') }))
+ReactMock.useSyncExternalStore = savedSyncExternalStore
+assert.ok(mismatchMarkup.includes(translator('zh')('spend.restart')), 'an old host must show the restart instruction')
+assert.ok(!mismatchMarkup.includes('¥0.32'), 'today must not be shown as all-time spend')
+console.log('SPEND RANGE / REQUEST ORDER / OLD HOST CLIENT TEST PASSED')
 console.log('CLIENT SMOKE TEST PASSED (ZERO-DEPENDENCY)')
 process.exit(0)

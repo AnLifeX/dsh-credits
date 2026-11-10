@@ -869,10 +869,12 @@ window.__ModuleLoader__.load({
 		const spendListeners = new Set();
 		let spendTimer = null;
 		let spendStarted = false;
+		let spendRequestId = 0;
 		function notifySpend() {
 			for (const fn of [...spendListeners]) fn();
 		}
 		async function refreshSpend() {
+			const requestId = ++spendRequestId;
 			try {
 				const q = new URLSearchParams({ range: spendSnap.range });
 				if (spendSnap.range === "custom") {
@@ -885,8 +887,11 @@ window.__ModuleLoader__.load({
 				});
 				if (!res.ok) throw new Error("HTTP " + res.status);
 				const data = await res.json();
+				if (requestId !== spendRequestId) return;
+				if (data?.ok && data.range !== q.get("range")) throw new Error("spend-range-mismatch");
 				spendSnap = { ...spendSnap, status: data && data.ok ? "ok" : "error", payload: data };
 			} catch (error) {
+				if (requestId !== spendRequestId) return;
 				spendSnap = {
 					...spendSnap,
 					status: "error",
@@ -925,7 +930,7 @@ window.__ModuleLoader__.load({
 				return spendSnap;
 			},
 			setRange(range, from, to) {
-				spendSnap = { ...spendSnap, range, from: from ?? "", to: to ?? "" };
+				spendSnap = { ...spendSnap, range, from: from ?? "", to: to ?? "", status: "loading", payload: null };
 				writeCapState({ range: spendSnap.range, from: spendSnap.from, to: spendSnap.to });
 				notifySpend();
 				return refreshSpend();
@@ -1321,6 +1326,9 @@ window.__ModuleLoader__.load({
 			"spend.to": "结束时间",
 			"spend.meta": "{calls} 次调用 · {sessions} 个会话",
 			"spend.empty": "该区间暂无消耗",
+			"spend.loading": "加载中…",
+			"spend.error": "统计加载失败",
+			"spend.restart": "请完全退出并重启 DSH，加载新版统计服务",
 			"spend.open": "打开累计消耗",
 			"spend.close": "收起"
 		};
@@ -1708,6 +1716,9 @@ window.__ModuleLoader__.load({
 			"spend.to": "To",
 			"spend.meta": "{calls} calls · {sessions} sessions",
 			"spend.empty": "No spend in this range",
+			"spend.loading": "Loading…",
+			"spend.error": "Failed to load spend",
+			"spend.restart": "Fully quit and restart DSH to load the updated spend service",
 			"spend.open": "Open spend tracker",
 			"spend.close": "Collapse"
 		};
@@ -3701,7 +3712,8 @@ window.__ModuleLoader__.load({
 			const capRef = react.useRef(null);
 			const [panelPos, setPanelPos] = react.useState(null);
 			const payload = snap.status === "ok" ? snap.payload : null;
-			const amount = formatMoney(payload?.cost ?? 0, payload?.currency ?? "CNY");
+			const amount = payload ? formatMoney(payload.cost ?? 0, payload.currency ?? "CNY")
+				: t(snap.status === "error" ? (snap.payload?.error === "spend-range-mismatch" ? "spend.restart" : "spend.error") : "spend.loading");
 			const chips = [
 				["all", t("spend.all")],
 				["today", t("spend.today")],
@@ -3811,7 +3823,7 @@ window.__ModuleLoader__.load({
 						: null,
 					payload && payload.calls > 0
 						? react.createElement("div", { key: "meta", className: "dshqb_card_sub" }, t("spend.meta", { calls: payload.calls, sessions: payload.sessions }))
-						: react.createElement("div", { key: "empty", className: "dshqb_card_sub" }, t("spend.empty")),
+						: payload ? react.createElement("div", { key: "empty", className: "dshqb_card_sub" }, t("spend.empty")) : null,
 					payload && payload.costByModel
 						? react.createElement("ul", { className: "dshqb_card_models", key: "models" },
 							Object.entries(payload.costByModel).map(([m, c]) =>
